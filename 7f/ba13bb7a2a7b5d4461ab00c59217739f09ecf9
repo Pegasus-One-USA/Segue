@@ -1,0 +1,104 @@
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.component.html
+  s_d1b985c75f92bc::t_eb36b8ca8d349a 6-8,12,16-17,19-50
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_651f2fdc7bbe93 576-577
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.component.spec.ts
+  s_d1b985c75f92bc::t_f1a336410afef8 6,12-32,96,114-115,117-120,122,124-125,127-136,139-145,148-154,157-163,166-170,172-203,206-215,218-220,224-225,230,256-261,271-273,279,281,283-286,292-294,319-358,362-368,371
+  s_d1b985c75f92bc::t_f26b8f7a65027f 223,226-229,231-255,359-361,369-370
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d1b985c75f92bc::t_f92c5f25c59fa1 1310-1311,1315,1317-1325,4902
+  s_d1b985c75f92bc::t_436cfbca655017 40-55,561,924-926,1298,1300-1309,1312-1314,1316,1326-1332,2547,2568-2570,2572,2574-2575,2884-2889,2892,3020,3034-3035,4849-4850,4852-4901,4903-4905,4950,4954-4968
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-kind-list.component.ts
+  s_d1b985c75f92bc::t_2acd56c3f3c1b4 1-76
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.spec.ts
+  s_d1b985c75f92bc::t_d3c6bc6e75e3af 191-192,368,415-416,419,422-426,428-443
+  s_d1b985c75f92bc::t_9c53fef9eab0da 83-84,115-116,488-577,584-590
+  s_d1b985c75f92bc::t_ad1e972b6e0c13 468
+  s_d1b985c75f92bc::t_a2e07f09938393 62-64,85
+  s_d1b985c75f92bc::t_7ff482296558d0 578-583,591
+  s_d1b985c75f92bc::t_25bfa56fb411ee 592
+docs/user-guide/ehr-write-back.md
+  s_d1b985c75f92bc::t_f7ce53f512ac25 155-158,163,168-170
+  s_d1b985c75f92bc::t_651f2fdc7bbe93 177-178,187-189,192-196,200-202,207,217,226-227
+  s_d1b985c75f92bc::t_7dac0db4cf3041 190-191,197-199
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-athena-write-options.component.ts
+  s_d1b985c75f92bc::t_096ab4d90e1ff4 46
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-kinds.model.ts
+  s_d1b985c75f92bc::t_11a0068d155851 65-68,182-190,195,202,204-217
+  s_d1b985c75f92bc::t_60d1fdb2a34cfa 1-64,69-181,191-194,196-201,203,218-233
+portal/src/app/execution-history/models/ehr-write-report.spec.ts
+  s_d1b985c75f92bc::t_2a9d88ec5373fc 113,158
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-connection-picker.component.ts
+  s_d1b985c75f92bc::t_096ab4d90e1ff4 69
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.ehr-writeback.spec.ts
+  s_d1b985c75f92bc::t_f26b8f7a65027f 384-410,423
+  s_d1b985c75f92bc::t_e130a9e0f6f66d 9,15,17-18,25,33-37,124-126,139,154,254-383,411-422
+  s_d1b985c75f92bc::t_cdc179060f45f3 424-425
+docs/backend/21-source-destination-consistency.md
+  s_d1b985c75f92bc::t_651f2fdc7bbe93 149-152,155-159,164,173,222-225
+  s_d1b985c75f92bc::t_f7ce53f512ac25 201-207
+  s_d1b985c75f92bc::t_3893f3c4790be5 228
+  s_d1b985c75f92bc::t_7dac0db4cf3041 153-154,160-163,165-166
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-capabilities.fixtures.ts
+  s_d1b985c75f92bc::t_9a44029f6583db 1-73
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_d1b985c75f92bc::t_ed950a42d3013c 284,353-354,359-361,1214-1218
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-back.model.ts
+  s_d1b985c75f92bc::t_effacc023167d9 87-103
+  s_d1b985c75f92bc::t_f261b79f7074dd 34-35,39
+  s_d1b985c75f92bc::t_fed5530668826a 132-133,135
+portal/src/app/execution-history/models/ehr-write-report.ts
+  s_d1b985c75f92bc::t_bb85b787fbdf2c 119,156
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.resource-pretick.spec.ts
+  s_d1b985c75f92bc::t_b18e91fc0e3b40 23,111-118,122-133
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.component.ts
+  s_d1b985c75f92bc::t_86ac2ca7139b12 61
+  s_d1b985c75f92bc::t_eb36b8ca8d349a 3-10,15-17,22,31-32,34,42-52,55-57,59-60,62-63,78-80
+  s_d1b985c75f92bc::t_c08683170706ed 54,58
+  s_d1b985c75f92bc::t_035b58d46e1600 53,81
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-kind-list.component.scss
+  s_d1b985c75f92bc::t_ddf467514aef03 1-47
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.model.ts
+  s_d1b985c75f92bc::t_f06d0437a61da7 3,15,18-19,51,94,96,105-106,114,119,122,128-129,132-133
+  s_d1b985c75f92bc::t_6a7eb86c5b4a0c 14
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-review-resource-types.component.ts
+  s_d1b985c75f92bc::t_49c52fd38ed212 1-21
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-type-grid.component.scss
+  s_d1b985c75f92bc::t_eb36b8ca8d349a 28,34,53-70,76-78
+  s_d1b985c75f92bc::t_8bbe0dce7f5517 79
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-review-resource-types.component.spec.ts
+  s_d1b985c75f92bc::t_0ad51e14cd1488 1-25
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-kind-list.component.spec.ts
+  s_d1b985c75f92bc::t_f7a649c1f9427b 1-25,39-71
+  s_d1b985c75f92bc::t_f26b8f7a65027f 28-38
+  s_d1b985c75f92bc::t_59df5f66ee8f10 26-27
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-ecw-write-options.component.ts
+  s_d1b985c75f92bc::t_38fe7fb65bb268 1,4-5
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.ts
+  s_d1b985c75f92bc::t_38fe7fb65bb268 12-13,20,51-54,56-58,91-92,129,170,172-173,186,193-194,207-210,247,291-294,297-299,336-342,351,368-372,417-418,439,477-479,481,484-486,511
+  s_d1b985c75f92bc::t_a2e07f09938393 171,471-472,476,480
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-back.model.spec.ts
+  s_d1b985c75f92bc::t_9c53fef9eab0da 4,78-90,111-112
+  s_d1b985c75f92bc::t_e7277068446914 113-114
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form-api.ts
+  s_d1b985c75f92bc::t_4686cd766754f9 5-160
+  s_d1b985c75f92bc::t_dd6621c1bf9345 1-4
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.source-types.spec.ts
+  s_d1b985c75f92bc::t_869359b7bbc578 89-90,106-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7fba13bb7a2a7b5d4461ab00c59217739f09ecf9",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

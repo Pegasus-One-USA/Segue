@@ -1,0 +1,192 @@
+portal/src/app/source-connections/components/ehr-read-connection-kind/ehr-read-connection-kind.component.ts
+  s_d1b985c75f92bc::t_e2e8376cb75606 36,77
+  s_d1b985c75f92bc::t_adc8e8cbb6a810 1-35,37-76,78-90,95-288
+  s_d1b985c75f92bc::t_5d49ae4b566f74 91-94
+portal/src/app/connections/components/connection-list-toolbar/connection-list-toolbar.component.scss
+  s_d1b985c75f92bc::t_e04560107a35cd 1-24
+portal/src/app/destination-connections/services/destination-configuration.service.spec.ts
+  s_d1b985c75f92bc::t_bd46b2efe50f89 68-69,77-82,84-99
+  s_d1b985c75f92bc::t_8733937d210bf7 66-67,70-76,83,100-102
+portal/src/app/source-connections/components/source-connection-filters/source-connection-filters.component.scss
+  s_d1b985c75f92bc::t_3470454a1aed2d 1-6
+portal/src/app/source-connections/components/database-connection-kind/database-connection-kind.component.scss
+  s_d1b985c75f92bc::t_3fa7fd464049f5 1-56
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.spec.ts
+  s_d1b985c75f92bc::t_c584f299026971 1-145,173
+  s_d1b985c75f92bc::t_5cdb19f7c013a8 146-172
+portal/src/app/source-connections/services/i-source-connection.service.ts
+  s_d1b985c75f92bc::t_0d2b57a57b67c8 21-23
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_d1b985c75f92bc::t_d794d808a96b33 3-17,23-36,38,40,42,48-55,58-61
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_d1b985c75f92bc::t_69e9c50f79de77 1-9,11-15,18-21,28-33,38-74
+portal/src/app/destination-connections/components/generic-fhir-write-connection-form/generic-fhir-write-connection-form.component.ts
+  s_d1b985c75f92bc::t_d8ee6e86eb8ff9 12
+  s_d1b985c75f92bc::t_55a9db2241b256 30-31,72,75
+portal/src/app/source-connections/services/api-source-connection.service.ts
+  s_d1b985c75f92bc::t_0d2b57a57b67c8 83-90
+portal/src/app/destination-connections/components/destination-configuration-kind/destination-configuration-kind.component.spec.ts
+  s_d1b985c75f92bc::t_053bbe778edd1a 1-19,21-24,26-50,52-54,56-60,67-106
+  s_d1b985c75f92bc::t_bd46b2efe50f89 20,25,51,55,61-66
+portal/src/app/connections/components/connection-list-table/connection-list-table.component.spec.ts
+  s_d1b985c75f92bc::t_0f7306feab14d1 1-92
+portal/src/app/destination-connections/components/generic-fhir-write-connection-form/generic-fhir-write-connection-form.component.spec.ts
+  s_d1b985c75f92bc::t_d2d602db7ce54b 45-57
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.scss
+  s_d1b985c75f92bc::t_4412ee7b83c324 3-7
+portal/src/app/connections/connection-labels.ts
+  s_d1b985c75f92bc::t_296bf87b8a8fda 4,6-7,9-11
+  s_d1b985c75f92bc::t_1d3009b0372fe7 23
+  s_d1b985c75f92bc::t_fd3ac1ce6aa072 1-3,5,8,12-22,24-57
+portal/src/app/connections/connection-permissions.ts
+  s_d1b985c75f92bc::t_0bede703b6475e 1,4-5,7-18,43
+  s_d1b985c75f92bc::t_0a33b191164757 2-3,6,19-42
+portal/src/app/source-connections/components/ehr-read-connection-kind/ehr-read-connection-kind.component.spec.ts
+  s_d1b985c75f92bc::t_774f5f5abe7646 1-86,93-174,176-178,180-181,183-184
+  s_d1b985c75f92bc::t_36efc9d8312526 87-92
+  s_d1b985c75f92bc::t_e785f88a1aa279 175,179,182
+portal/src/app/connections/connection-permissions.spec.ts
+  s_d1b985c75f92bc::t_94ff1dbf1fdc42 39
+  s_d1b985c75f92bc::t_0a33b191164757 1-7,32-38,40-63
+  s_d1b985c75f92bc::t_37da66b11d87b5 8-31,64-65
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.scss
+  s_d1b985c75f92bc::t_35faf535912301 3-8
+portal/src/app/connections/connection-list-query.ts
+  s_d1b985c75f92bc::t_cc9748bbdbe4aa 7,58
+  s_d1b985c75f92bc::t_85cf3848adde5d 1-6,8-57,59-77
+portal/src/app/connections/components/connection-kind-picker/connection-kind-picker.component.ts
+  s_d1b985c75f92bc::t_62139d01420c97 1-35
+portal/src/app/source-connections/components/source-connection-filters/source-connection-filters.component.html
+  s_d1b985c75f92bc::t_242ffdf45d07c7 1-31,34-38
+  s_d1b985c75f92bc::t_cc9748bbdbe4aa 32-33
+portal/src/app/destination-connections/components/destination-connection-filters/destination-connection-filters.component.ts
+  s_d1b985c75f92bc::t_d777efb22fb2a8 1-91
+portal/src/app/connections/connection-labels.spec.ts
+  s_d1b985c75f92bc::t_106e9490be11a9 1-38
+portal/src/app/source-connections/components/ehr-read-connection-kind/ehr-read-connection-kind.component.scss
+  s_d1b985c75f92bc::t_5e44470ec997e6 1-56
+portal/src/app/source-connections/components/database-connection-kind/database-connection-kind.component.spec.ts
+  s_d1b985c75f92bc::t_7130dba5a2c236 1-130
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.spec.ts
+  s_d1b985c75f92bc::t_6da95cd870a861 1-138,177
+  s_d1b985c75f92bc::t_5cdb19f7c013a8 139-176
+portal/src/app/destination-connections/components/ehr-write-connection-kind/ehr-write-connection-kind.component.html
+  s_d1b985c75f92bc::t_975ce3e9cb7e4e 1
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.ts
+  s_d1b985c75f92bc::t_43bb026aace48e 28-30,100-122,154,164-165,246,278
+portal/src/app/connections/components/connection-list-table/connection-list-table.component.scss
+  s_d1b985c75f92bc::t_b761015c9cf2ef 1-56
+portal/src/app/connections/components/connection-list-table/connection-list-table.component.ts
+  s_d1b985c75f92bc::t_dafe0a968952ae 47-50
+  s_d1b985c75f92bc::t_ace736cda7cd9f 1-46,51-64
+portal/src/app/destination-connections/components/ehr-write-connection-kind/ehr-write-connection-kind.component.scss
+  s_d1b985c75f92bc::t_1f711603276b60 1-4
+portal/src/app/destination-connections/components/destination-connection-filters/destination-connection-filters.component.spec.ts
+  s_d1b985c75f92bc::t_700a06c332cd67 1-68
+portal/src/app/connections/components/connection-kind-picker/connection-kind-picker.component.scss
+  s_d1b985c75f92bc::t_bafce38a5716fc 1-121
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_748fedc292b4df 927-959
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.html
+  s_d1b985c75f92bc::t_a74f07ccacbba2 3-17,23-36,38,40,42,48-61
+portal/src/app/source-connections/models/source-connection.model.ts
+  s_d1b985c75f92bc::t_b675122e0ff5b6 123-124
+portal/src/app/source-connections/components/database-connection-kind/database-connection-kind.component.html
+  s_d1b985c75f92bc::t_8ebb8b88930349 1-15
+portal/src/app/destination-connections/components/ehr-write-connection-editor/ehr-write-connection-editor.component.html
+  s_d1b985c75f92bc::t_372ca9dcf89116 18
+  s_d1b985c75f92bc::t_7225351c0f1e70 1-17,19-20
+portal/src/app/connections/connection-list-page.ts
+  s_d1b985c75f92bc::t_f4548ef487a7e2 1-143
+portal/src/app/destination-connections/components/ehr-write-connection-editor/ehr-write-connection-editor.component.spec.ts
+  s_d1b985c75f92bc::t_e785f88a1aa279 125,128,131
+  s_d1b985c75f92bc::t_774f5f5abe7646 1-20,23-24,26-27,29-37,40-84,86-88,122-124,126-127,129-130,132-149
+  s_d1b985c75f92bc::t_2507e81877003f 21-22,28,85,89-108,110-121
+  s_d1b985c75f92bc::t_4dea913b2758bb 25,38-39,109
+portal/src/app/connections/_connection-filter-select.scss
+  s_d1b985c75f92bc::t_a453fb06c16575 1-21
+portal/src/app/source-connections/components/source-connection-filters/source-connection-filters.component.ts
+  s_d1b985c75f92bc::t_48179a1bd47e19 1-39,41-43,45-59
+  s_d1b985c75f92bc::t_cc9748bbdbe4aa 40,44
+portal/src/app/connections/components/connection-list-toolbar/connection-list-toolbar.component.html
+  s_d1b985c75f92bc::t_172260061d14e6 1-37
+portal/src/app/source-connections/pages/source-connection-list/connection-lists.search-focus.spec.ts
+  s_d1b985c75f92bc::t_3f4102432ef6ad 4,15-18,20-32,34-42,44,57-59,61-64,67-74,82-83
+  s_d1b985c75f92bc::t_e4b2c5adc6e91a 33
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationCatalogController.cs
+  s_d1b985c75f92bc::t_b675122e0ff5b6 52
+portal/src/app/destination-connections/components/ehr-write-connection-kind/ehr-write-connection-kind.component.ts
+  s_d1b985c75f92bc::t_d5562f54b44c07 72-74
+  s_d1b985c75f92bc::t_1fde9ab154a443 22-28,33,63,99-100,102-103,108,152
+  s_d1b985c75f92bc::t_582f86c716d799 1-21,29-32,34-62,64-71,75-98,101,104-107,109-151,153-187
+portal/src/app/destination-connections/components/ehr-write-connection-editor/ehr-write-connection-editor.component.ts
+  s_d1b985c75f92bc::t_10ac7b0ff6d2c4 2-30,35-52,54-56,58-61,67-99,101-102,104,107-112
+  s_d1b985c75f92bc::t_372ca9dcf89116 1,31-34,53,57,62-66,100,103,105-106
+tests/FHIRBridge.Api.IntegrationTests/Tests/EhrWriteConnectionTests.cs
+  s_d1b985c75f92bc::t_680b14f0967faa 373-444
+portal/src/app/source-connections/components/database-connection-kind/database-connection-kind.component.ts
+  s_d1b985c75f92bc::t_398887a3e56b13 1-167
+portal/src/app/destination-connections/components/destination-connection-filters/destination-connection-filters.component.scss
+  s_d1b985c75f92bc::t_51cc1a6c34e6b8 1-6
+portal/src/app/destination-connections/components/ehr-write-connection-editor/ehr-write-connection-editor.component.scss
+  s_d1b985c75f92bc::t_ec68ecb2b3e03d 1-58
+portal/src/app/source-connections/components/source-connection-filters/source-connection-filters.component.spec.ts
+  s_d1b985c75f92bc::t_cc9748bbdbe4aa 43-44,51,56
+  s_d1b985c75f92bc::t_11e1958cb0fcaf 1-42,45-50,52-55,57-64
+portal/src/app/connections/components/connection-list-table/connection-list-table.component.html
+  s_d1b985c75f92bc::t_554e38955fd4d3 6-8,12-13
+  s_d1b985c75f92bc::t_df8236a68c1532 1-5,9-11,14-84
+portal/src/app/destination-connections/components/ehr-write-connection-kind/ehr-write-connection-kind.component.spec.ts
+  s_d1b985c75f92bc::t_420cc95f4a6130 32-33,47
+  s_d1b985c75f92bc::t_cd8e3afec2fc55 1-31,34-46,48-175
+portal/src/app/connections/components/connection-list-toolbar/connection-list-toolbar.component.ts
+  s_d1b985c75f92bc::t_a553e327b5a87d 1-23
+portal/src/app/connections/components/connection-kind-picker/connection-kind-picker.component.html
+  s_d1b985c75f92bc::t_980ab710d1aeab 1-30
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_d1b985c75f92bc::t_479d425f70d744 1-23,29-34,39-67,69
+portal/src/app/destination-connections/components/destination-configuration-kind/destination-configuration-kind.component.scss
+  s_d1b985c75f92bc::t_e1593aaccc5ce5 1-4
+portal/src/app/core/api-endpoints.ts
+  s_d1b985c75f92bc::t_0d2b57a57b67c8 114-115
+portal/src/app/destination-connections/components/destination-configuration-kind/destination-configuration-kind.component.ts
+  s_d1b985c75f92bc::t_b0f410038b8ea0 1-66,68-228
+  s_d1b985c75f92bc::t_bd46b2efe50f89 67
+portal/src/app/destination-connections/components/destination-connection-filters/destination-connection-filters.component.html
+  s_d1b985c75f92bc::t_701dfffbe844e7 1-24
+portal/src/app/connections/connection-row.model.ts
+  s_d1b985c75f92bc::t_e2e8376cb75606 5
+  s_d1b985c75f92bc::t_a0b44333a33e99 1-4,6-91
+portal/src/app/connections/components/connection-kind-picker/connection-kind-picker.component.spec.ts
+  s_d1b985c75f92bc::t_98d5f53078d14a 1-54
+portal/src/app/connections/connection-list-query.spec.ts
+  s_d1b985c75f92bc::t_05614612b1a03e 1-41,46-86
+  s_d1b985c75f92bc::t_92fce96a8f002a 42-45
+portal/src/app/source-connections/components/ehr-read-connection-kind/ehr-read-connection-kind.component.html
+  s_d1b985c75f92bc::t_95842a03c5c178 1-19
+portal/src/app/destination-connections/services/destination-configuration.service.ts
+  s_d1b985c75f92bc::t_bd46b2efe50f89 4-5,45-56
+  s_d1b985c75f92bc::t_0d2b57a57b67c8 57-58
+portal/src/app/connections/ehr-write-vendors.ts
+  s_d1b985c75f92bc::t_da15c0892c9217 1-70
+portal/src/app/connections/testing/fake-connection-kind.ts
+  s_d1b985c75f92bc::t_e17cf3cbd0b98b 1-82
+portal/src/app/destination-connections/dialogs/destination-connection-dialog/destination-connection-dialog.component.spec.ts
+  s_d1b985c75f92bc::t_24325bdd99b5d3 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9abd43cf996d073bad49f9531ef4048522a0eb4b",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

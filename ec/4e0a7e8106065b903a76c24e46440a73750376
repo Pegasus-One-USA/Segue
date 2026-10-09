@@ -1,0 +1,48 @@
+portal/src/app/system-settings/services/api-system-settings.service.ts
+  s_d1b985c75f92bc::t_cc6cce4e4d06a8 4,6,13-14,24,31,38
+tests/FHIRBridge.Api.IntegrationTests/Tests/EhrWriteVendorTargetTests.cs
+  s_d1b985c75f92bc::t_a2e07f09938393 70,72,77
+  s_d1b985c75f92bc::t_3e59ae48f6d898 71,73-76,78-79
+  s_d1b985c75f92bc::t_424ffb1ee92b3f 69
+src/FHIRBridge.Application/Services/EhrWriteBackSettings.cs
+  s_d1b985c75f92bc::t_320848877bed54 18-19
+  s_d1b985c75f92bc::t_306e57cc94a521 16,20-23
+  s_d1b985c75f92bc::t_a2e07f09938393 17,24
+src/FHIRBridge.Infrastructure/Persistence/SystemSettingsSeeder.cs
+  s_d1b985c75f92bc::t_320848877bed54 174
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-run-mode-picker.component.ts
+  s_d1b985c75f92bc::t_e9a797e23cf496 9-11,32-45,69-74,79
+tests/FHIRBridge.Runtime.UnitTests/Workflows/EhrWriteBackDestinationNodeExecutorTests.cs
+  s_d1b985c75f92bc::t_64e7017d6e9c50 128-146
+src/Api/FHIRBridge.Api/Controllers/V1/EhrWriteCapabilitiesController.cs
+  s_d1b985c75f92bc::t_7353d42d68166f 38-39
+  s_d1b985c75f92bc::t_218224c318a3e3 61
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-run-mode-picker.component.spec.ts
+  s_d1b985c75f92bc::t_9c53fef9eab0da 16-21,28-29,87-118
+tests/FHIRBridge.UnitTests/EhrWriteBack/EhrWriteBackDryRunSettingTests.cs
+  s_d1b985c75f92bc::t_a2e07f09938393 20,23,27,35,44,50,57,61,65,70-72
+  s_d1b985c75f92bc::t_9cd88a76674d60 1-19,21-22,24-26,28-34,36-43,45-49,51-56,58-60,62-64,66-69,73-109
+src/FHIRBridge.Application/DTOs/EhrWriteCapabilitiesDto.cs
+  s_d1b985c75f92bc::t_ff01d83dba7624 8-9
+  s_d1b985c75f92bc::t_e63c20f8ebebe4 16
+portal/src/app/services/ehr-write-capabilities.service.ts
+  s_d1b985c75f92bc::t_cc6cce4e4d06a8 74-79
+  s_d1b985c75f92bc::t_9f02c6b3393447 36,38
+  s_d1b985c75f92bc::t_a2e07f09938393 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ec4e0a7e8106065b903a76c24e46440a73750376",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
