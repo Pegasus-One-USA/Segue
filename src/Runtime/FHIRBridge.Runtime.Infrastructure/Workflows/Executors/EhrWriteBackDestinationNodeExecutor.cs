@@ -101,7 +101,7 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
         if (!connection.Access.AllowsWrite())
         {
             throw new InvalidOperationException(
-                $"The EHR connection '{connection.Name}' is read-only. Choose a connection listed under Destination Connections > EHR write connections.");
+                $"The EHR connection '{connection.Name}' is read-only. Choose a write connection listed under Destination Connections.");
         }
 
         var vendor = EhrWriteCapabilities.VendorProfile(connection.SourceSystemType)

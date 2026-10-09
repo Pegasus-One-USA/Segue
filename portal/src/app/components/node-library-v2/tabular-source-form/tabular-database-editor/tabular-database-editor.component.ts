@@ -13,7 +13,7 @@ export const TABULAR_SQL_ENGINES = [
 /**
  * Creates a saved database, or renames one / replaces its connection string. The connection string goes straight to
  * the API, which stores it as a secret; it is cleared from the form once saved and never returned. Used by the source
- * form's database picker and by the Database connections panel on Source Connections.
+ * form's database picker and by the database kind on Source Connections.
  */
 @Component({
   selector: 'app-tabular-database-editor',

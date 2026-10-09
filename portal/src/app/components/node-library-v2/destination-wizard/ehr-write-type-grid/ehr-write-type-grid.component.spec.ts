@@ -8,6 +8,7 @@ import {
   NOT_READ_BY_SOURCE_REASON,
   PATIENT_OPT_IN_NOTE,
   classifyEhrWriteTypes,
+  missingOptInsFor,
 } from './ehr-write-type-grid.model';
 
 const capability = (resourceType: string, extra: Partial<EhrWriteCapability> = {}): EhrWriteCapability => ({
@@ -90,7 +91,7 @@ describe('classifyEhrWriteTypes', () => {
     );
   });
 
-  describe('Step 1 opt-ins', () => {
+  describe('opt-ins under Options', () => {
     const optInCaps = [
       capability('Procedure', { variant: 'external-radiotherapy-summary', requiresVariantOptIn: true }),
       capability('Condition', { variant: 'medical-history', createsHolderEncounter: true }),
@@ -100,8 +101,9 @@ describe('classifyEhrWriteTypes', () => {
       enabledVariants?: string[];
       createHolderEncounter?: boolean;
       createPatientIfMissing?: boolean;
-    }) =>
+    }, optInsLater = false) =>
       classifyEhrWriteTypes({
+        optInsLater,
         candidates: ['Procedure', 'Condition', 'Patient'],
         capabilities: optInCaps,
         vendor: 'Epic',
@@ -117,9 +119,23 @@ describe('classifyEhrWriteTypes', () => {
     it('greys a type whose only API needs a variant or a holder encounter that is off, naming the opt-in', () => {
       const [procedure, condition] = classifyWith({});
       expect(procedure).toEqual(
-        jasmine.objectContaining({ selectable: false, reason: 'Enable "External radiotherapy summaries" in Step 1' }),
+        jasmine.objectContaining({ selectable: false, reason: 'Enable "External radiotherapy summaries" under Options' }),
       );
       expect(condition).toEqual(jasmine.objectContaining({ selectable: false, reason: HOLDER_ENCOUNTER_REASON }));
+      expect(HOLDER_ENCOUNTER_REASON).toContain('under Options');
+    });
+
+    it('keeps them selectable with a note when the opt-ins come later, under Options', () => {
+      const [procedure, condition, patient] = classifyWith({}, true);
+      expect(procedure).toEqual(jasmine.objectContaining({
+        selectable: true, reason: null,
+        note: 'Needs "External radiotherapy summaries" turned on under Options (next step)',
+      }));
+      expect(condition).toEqual(jasmine.objectContaining({
+        selectable: true,
+        note: 'Needs "File medical and surgical history on a new telephone encounter" turned on under Options (next step)',
+      }));
+      expect(patient.note).toBe(PATIENT_OPT_IN_NOTE);
     });
 
     it('offers them once the opt-in is on', () => {
@@ -134,6 +150,36 @@ describe('classifyEhrWriteTypes', () => {
     it('notes that a Patient is created only through its opt-in', () => {
       expect(classifyWith({})[2]).toEqual(jasmine.objectContaining({ selectable: true, note: PATIENT_OPT_IN_NOTE }));
       expect(classifyWith({ createPatientIfMissing: true })[2].note).toBeNull();
+    });
+
+    describe('missingOptInsFor', () => {
+      const none = { enabledVariants: [] as string[], createHolderEncounter: false, createPatientIfMissing: false };
+
+      it('lists a selected type whose only ways need a variant or a holder encounter that is off', () => {
+        expect(missingOptInsFor(['Procedure', 'Condition', 'AllergyIntolerance'], optInCaps, none, false)).toEqual([
+          { resourceType: 'Procedure', variants: ['external-radiotherapy-summary'], holderEncounter: false },
+          { resourceType: 'Condition', variants: [], holderEncounter: true },
+        ]);
+      });
+
+      it('drops a type once its opt-in is on', () => {
+        expect(missingOptInsFor(['Procedure', 'Condition'], optInCaps,
+          { ...none, enabledVariants: ['external-radiotherapy-summary'], createHolderEncounter: true }, false)).toEqual([]);
+      });
+
+      it('never blocks a Patient created only through its opt-in', () => {
+        expect(missingOptInsFor(['Patient'], optInCaps, none, false)).toEqual([]);
+      });
+
+      it('ignores a way that needs a CSV / SQL source unless the source is one', () => {
+        const caps = [capability('QuestionnaireResponse', {
+          variant: 'patient-entered-questionnaire', requiresVariantOptIn: true, requiresTargetReferences: true,
+        })];
+        expect(missingOptInsFor(['QuestionnaireResponse'], caps, none, false)).toEqual([]);
+        expect(missingOptInsFor(['QuestionnaireResponse'], caps, none, true)).toEqual([
+          { resourceType: 'QuestionnaireResponse', variants: ['patient-entered-questionnaire'], holderEncounter: false },
+        ]);
+      });
     });
   });
 });

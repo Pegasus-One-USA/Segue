@@ -23,7 +23,7 @@ interface FormInternals {
 }
 
 /**
- * The v1 vendor form (Settings > Source Connections, and Destination Connections > EHR write connections). Sources
+ * The v1 vendor form (the Source Connections page, and EHR write connections on the Destination Connections page). Sources
  * only read: in read purpose the form must never emit Access, activation or Department ID (WizardService then sends
  * null and the server keeps the saved values). In write purpose it emits them, and a new connection is Backend System
  * with Access Write.

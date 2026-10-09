@@ -114,7 +114,7 @@ const REASON_LABELS: Record<string, string> = {
   // Recorded only by runs before the live-write release setting was removed.
   'live-write-not-released': 'Type was not released for live writes (older run)',
   'write-cap-reached': 'Max writes per run reached',
-  'not-selected': 'Type not selected in Data groups',
+  'not-selected': 'Type not selected under Resource types',
   'not-writable': 'This EHR does not accept this type',
   'variant-not-enabled': 'Goes through an API this destination has not turned on (tick it under "Also write through")',
   'target-references-unmappable': "Needs the target EHR's own ids, which only a CSV / SQL Table source can give",
@@ -137,7 +137,7 @@ const REASON_LABELS: Record<string, string> = {
   'patient-match-failed': 'Patient match failed',
   'patient-identifier-ambiguous': 'Identifier matches more than one patient',
   'patient-not-yet-created': 'Waiting for the patient to be created',
-  'patient-not-selected': 'Patient not selected in Data groups, so the patient cannot be created',
+  'patient-not-selected': 'Patient not selected under Resource types, so the patient cannot be created',
   'patient-not-created': 'Patient could not be created',
   'patient-created': 'Patient created earlier in this run',
   'patient-already-in-ehr': 'Patient already in the EHR',

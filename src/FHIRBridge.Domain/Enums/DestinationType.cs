@@ -112,7 +112,7 @@ public enum DestinationType
     ///
     /// <para>It has no secret of its own: it writes over the credentials of the source connection named by
     /// <c>dest_sourceConnectionId</c>, whose Access must include Write: one of the connections listed under
-    /// Destination Connections &gt; EHR write connections. Which resources a vendor accepts is
+    /// Destination Connections. Which resources a vendor accepts is
     /// <c>EhrWriteCapabilities</c>. See <c>docs/backend/20-epic-r4-write-back.md</c>.</para>
     /// </summary>
     EhrWriteBack = 29

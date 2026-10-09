@@ -458,7 +458,7 @@ export class WorkflowBuildAssemblerServiceV2 {
         authentication: { authenticationType: 'None', scopes: [] },
         applicationType: null,
         // A source node only reads: null (Read on create, keep saved on update) even when an older node still carries
-        // an 'Access' field. EHR write connections are managed under Destination Connections.
+        // an 'Access' field. EHR write connections are managed on the Destination Connections page.
         access: null,
         vendorWriteApisActivated: null,
         interactive: null,

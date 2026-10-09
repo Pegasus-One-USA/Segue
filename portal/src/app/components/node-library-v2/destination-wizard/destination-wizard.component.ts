@@ -39,6 +39,11 @@ import { EhrWriteCapabilitiesService } from '../../../services/ehr-write-capabil
 import { EhrWriteTypeGridComponent } from './ehr-write-type-grid/ehr-write-type-grid.component';
 import { EhrWriteTarget, classifyEhrWriteTypes } from './ehr-write-type-grid/ehr-write-type-grid.model';
 import { EhrWriteTargetService } from './ehr-write-type-grid/ehr-write-target.service';
+import {
+  EhrWriteVendor,
+  savedWriteVendorOf,
+  vendorLabel,
+} from './destination-forms/ehr-write-back/ehr-write-back.model';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import {
   CreateDestinationConfigurationRequest,
@@ -603,6 +608,12 @@ export class DestinationWizardComponent implements OnInit {
    *  as it pins Warehouse from the destination type, so the row the user clicked and the surface the form
    *  configures cannot disagree. */
   readonly fabricLandingMode = input<string | null>(null);
+  /** EHR Write-Back only: the vendor the Node Library tile presets (Epic, eClinicalWorks, athenahealth or a FHIR
+   *  server). Null for every other destination, and for a write-back node whose vendor could not be recovered. The
+   *  dialog rebinds it on this same instance when the user switches between two EHR tiles (see the ehrVendor effect). */
+  readonly ehrVendor = input<EhrWriteVendor | null>(null);
+  /** How the tile's EHR reads ("athenahealth"), or "an EHR" when there is none. */
+  readonly ehrLabel = computed(() => vendorLabel(this.ehrVendor()) || 'an EHR');
   readonly attachNode = input.required<CanvasNode>();
   readonly editNode = input<CanvasNode | null>(null);
   /** FHIR resource types the upstream source declares it reads ("Resource types to read") — Step 2 offers only
@@ -651,6 +662,9 @@ export class DestinationWizardComponent implements OnInit {
   // when the user switches destination type on an already-open Step 1 (see its "Switch to X?" confirm flow)
   // rather than destroying/recreating this component.
   private _lastDestType: WizardDestType | null = null;
+  // Same pattern for ehrVendor(): two EHR tiles share destType 'ehrwriteback', so a switch between them keeps this
+  // instance and only rebinds the vendor. Undefined until the first effect run records the starting vendor.
+  private _lastEhrVendor: EhrWriteVendor | null | undefined = undefined;
   // Same pattern, passed straight through to the mapping canvas — its "Load JSON payload"/"Preview
   // output" actions now live in the dialog header (see NodeLibraryDialogComponent), not this canvas's
   // own toolbar, so the wizard just forwards these without reacting to them itself.
@@ -705,7 +719,13 @@ export class DestinationWizardComponent implements OnInit {
   // ── step state ────────────────────────────────────────────────────────────
   readonly step = signal(1);
   readonly TOTAL_STEPS = 4;
-  readonly STEP_LABELS = ['Configure', 'Data groups', 'Map fields', 'Review'];
+  /** Every destination's steps: Connection → Resource types → Map fields → Review. Kept for anything that reads the
+   *  plain list; the stepper uses stepLabels(). */
+  readonly STEP_LABELS = ['Connection', 'Resource types', 'Map fields', 'Review'];
+  /** An EHR write-back has nothing to map: its Step 3 holds the write options instead. */
+  readonly stepLabels = computed(() =>
+    this.isEhrWriteBack() ? ['Connection', 'Resource types', 'Options', 'Review'] : this.STEP_LABELS,
+  );
 
   // ── Step-3 config tabs (V2) ───────────────────────────────────────────────
   // Step 3's resource list hosts three configuration surfaces, one per canvas node in V2's chain
@@ -880,6 +900,18 @@ export class DestinationWizardComponent implements OnInit {
       // And which surface WITHIN that type, for the one type serving more than one: DataFabricAzure covers
       // both OneLake Files and Lakehouse Delta, so the type alone cannot say which row was picked.
       fabricLandingMode: this.fabricLandingMode(),
+      // EHR Write-Back only (no other form declares these inputs): the tile's vendor, which half of the form to show
+      // (the options on Step 3, except for a chain node, which shows Step 3's information block instead), and what
+      // the options need to name the opt-ins the chosen resource types still need. selectedResources() keeps its
+      // identity between passes, so the form's signal input is not re-triggered on every change detection.
+      ...(this.isEhrWriteBack()
+        ? {
+            ehrVendor: this.ehrVendor(),
+            section: this.step() === 3 && !this.chainNodeEntry() ? 'options' : 'connection',
+            selectedResourceTypes: this.selectedResources(),
+            sourceIsTabular: this.sourceIsTabular(),
+          }
+        : {}),
     };
   }
 
@@ -899,6 +931,13 @@ export class DestinationWizardComponent implements OnInit {
    *  sqlForm.value/csvForm.value/mongoForm.value directly. */
   activeFormConfig(): Record<string, string> {
     return this.activeForm()?.getFullConfig() ?? {};
+  }
+
+  /** EHR Write-Back's Review lines (where it writes and in which run mode), worked out by the form itself; null
+   *  before the form exists. */
+  ehrReviewLines(): { writesTo: string; mode: string } | null {
+    const form = this.activeForm();
+    return isEhrWriteBackForm(form) ? form.reviewLines() : null;
   }
 
   // A saved node's fields (editing) or a picked existing connection's metadata can arrive before the Step 1
@@ -1224,7 +1263,8 @@ export class DestinationWizardComponent implements OnInit {
    *  Next (or, on reopen, fetched for the saved dest_ehrVendor). Takes precedence over the upstream source's
    *  discovery/vendor lists in strictAvailableGroups: what matters is what can be written, not what can be read. */
   readonly ehrWritableResourceTypes = signal<string[] | null>(null);
-  /** EHR Write-Back only: what the target EHR accepts, its activation and Step 1 opt-ins (EhrWriteTargetService). */
+  /** EHR Write-Back only: what the target EHR accepts and its activation (EhrWriteTargetService). Its opt-ins are
+   *  the ones saved so far; they are chosen under Options (Step 3), after this step. */
   private readonly ehrWriteTarget = signal<EhrWriteTarget | null>(null);
   /** EHR Write-Back Step 2 rows: the source's types (or, for a legacy source with no declared list, what the EHR
    *  accepts), each tickable or greyed with the reason, plus any selected type outside them (greyed, so it can be
@@ -1240,6 +1280,9 @@ export class DestinationWizardComponent implements OnInit {
       sourceIsTabular: this.sourceIsTabular(),
       selected: this.selectedResources(),
       sourceDeclaresTypes: declared.length > 0,
+      // Options come after Resource types: a type that only needs an option stays selectable, with a note, and
+      // Step 3's Next waits until that option is on.
+      optInsLater: true,
     });
   });
   /** Narrows a candidate list to what the upstream source declares it reads; unchanged for a legacy source. */
@@ -1972,6 +2015,14 @@ export class DestinationWizardComponent implements OnInit {
     () => !this.editNode() || this.connectionMode() === 'existing',
   );
   readonly existingOptions = signal<DestinationConfigurationDto[]>([]);
+  /** What the "existing" dropdown offers: existingOptions, narrowed for an EHR tile to destinations that write to
+   *  (or, in a test run, stand in for) that tile's vendor. A record whose settings cannot be read is left out. */
+  readonly shownExistingOptions = computed(() => {
+    const options = this.existingOptions();
+    const vendor = this.ehrVendor();
+    if (!this.isEhrWriteBack() || !vendor) return options;
+    return options.filter((o) => DestinationWizardComponent.ehrVendorOfDestination(o) === vendor);
+  });
   readonly existingOptionsLoading = signal(false);
   readonly selectedExistingId = signal<string | null>(null);
 
@@ -2060,6 +2111,15 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly FABRIC_WAREHOUSE_TYPES: DestinationTypeV2[] = ['DataFabricWarehouse'];
   private static readonly APIENDPOINT_TYPES: DestinationTypeV2[] = ['ApiEndpoint'];
   private static readonly EHR_WRITEBACK_TYPES: DestinationTypeV2[] = ['EhrWriteBack'];
+  /** The vendor a saved EHR write-back destination writes as (savedWriteVendorOf: the vendor a test run stands in
+   *  for, else its own); null when its settings cannot be read or name no write vendor. */
+  private static ehrVendorOfDestination(o: DestinationConfigurationDto): EhrWriteVendor | null {
+    try {
+      return savedWriteVendorOf(JSON.parse(o.connectionMetadataJson || '{}') as Record<string, string>);
+    } catch {
+      return null;
+    }
+  }
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -2400,6 +2460,28 @@ export class DestinationWizardComponent implements OnInit {
       });
     });
 
+    // A switch between two EHR tiles (same destType, so the effect above does not fire): nothing chosen for the old
+    // EHR fits the new one, so the wizard starts over on Step 1. The form clears a connection the new tile does not
+    // offer by itself; the existing-destination list is filtered by vendor at render time (shownExistingOptions), so
+    // it needs no reload. The dialog already confirmed before discarding progress.
+    effect(() => {
+      const vendor = this.ehrVendor();
+      if (this._lastEhrVendor === undefined) {
+        this._lastEhrVendor = vendor;
+        return;
+      }
+      if (vendor === this._lastEhrVendor) return;
+      this._lastEhrVendor = vendor;
+      untracked(() => {
+        this.clearExistingConnection();
+        this.step.set(1);
+        this.selectedResources.set([]);
+        this.ehrWritableResourceTypes.set(null);
+        this.ehrWriteTarget.set(null);
+        this._hasProgressed.set(false);
+      });
+    });
+
     // Fetch the array-aware FHIR catalog for every data group on offer. The field picker prefers it
     // over the built-in fallback once loaded. Deduped via _requested, keyed on sourceConnectionId too —
     // so if that only becomes known partway through this session (e.g. after a save/build round-trip
@@ -2700,6 +2782,11 @@ export class DestinationWizardComponent implements OnInit {
       return !form || !form.isValid();
     }
     if (s === 2) return this.selectedResources().length === 0;
+    // EHR Write-Back Options: valid, and no selected type still needing an option the writer would skip it without.
+    if (s === 3 && this.isEhrWriteBack() && !this.chainNodeEntry()) {
+      const f = this.activeForm();
+      return !f || !isEhrWriteBackForm(f) || !f.optionsValid() || f.missingOptIns().length > 0;
+    }
     return false;
   }
 
@@ -2775,8 +2862,8 @@ export class DestinationWizardComponent implements OnInit {
       // above only fires on a stale/idle probe, so this is the other place collections needs copying.
       if (isMongoForm(form)) this.mongoCollections.set(form.collections());
       if (isCosmosDbFabricForm(form)) this.cosmosContainers.set(form.containers());
-      // EHR Write-Back: Step 2 offers only what the chosen target EHR accepts, and the form is unmounted after
-      // this step, so its answer is copied into the wizard now.
+      // EHR Write-Back: Step 2 offers only what the chosen target EHR accepts, and the form is hidden (its options
+      // half shows again in Step 3), so its answer is copied into the wizard now.
       if (isEhrWriteBackForm(form)) {
         this.ehrWritableResourceTypes.set(form.writableResourceTypes());
         const writable = new Set(form.writableResourceTypes());
@@ -2810,9 +2897,28 @@ export class DestinationWizardComponent implements OnInit {
       }
       const metadata = form.getMetadata();
       if (!metadata) return;
+      // EHR Write-Back: its record is saved once, on leaving Options (Step 3), so a new write-back is a single create
+      // that already holds the real options — never a create here and an update there, which would need the edit
+      // right as well as the create right the wizard was opened with.
+      if (isEhrWriteBackForm(form)) {
+        this._advancePastStep1();
+        return;
+      }
       this.provisionDestinationConnection(metadata, () =>
         this._advancePastStep1(),
       );
+      return;
+    }
+    // EHR Write-Back Options (3): saves the destination record with the real options before Review — a create for a
+    // new write-back, an update for a reopened one (the node already has its record). In "existing" mode provisioning
+    // is a no-op; changed options then fork a new record at save (hasExistingChanged), exactly like a changed Step 1.
+    if (this.step() === 3 && this.isEhrWriteBack() && !this.chainNodeEntry()) {
+      const metadata = this.activeForm()?.getMetadata();
+      if (!metadata) return;
+      this.provisionDestinationConnection(metadata, () => {
+        this.step.set(4);
+        this._hasProgressed.set(true);
+      });
       return;
     }
     if (this.step() < this.TOTAL_STEPS) {
@@ -3891,7 +3997,7 @@ export class DestinationWizardComponent implements OnInit {
       if (!selectedResources.has(parent)) {
         warnings.push({
           resource, parent,
-          message: `"${resource}" requires a reference to "${parent}", but "${parent}" isn't selected as a data group in this workflow — add it in the previous step.`,
+          message: `"${resource}" requires a reference to "${parent}", but "${parent}" isn't selected as a resource type in this workflow — add it in the previous step.`,
           sourceFieldPath: null, sourceFieldLabel: null, existingRow: null,
           destinationColumns: [], selectedDestinationColumn: null,
         });
@@ -4276,7 +4382,14 @@ export class DestinationWizardComponent implements OnInit {
   private _loadExistingOptions(): void {
     this.existingOptionsLoading.set(true);
     this.destinationConfigSvc
-      .getPaged({ isEnabled: true, page: 1, pageSize: 100 })
+      // EHR Write-Back asks the server for its own type only, so its first page is not crowded out by other types
+      // (shownExistingOptions then narrows it to the tile's vendor).
+      .getPaged({
+        isEnabled: true,
+        page: 1,
+        pageSize: 100,
+        ...(this.isEhrWriteBack() ? { destinationType: 'EhrWriteBack' as DestinationTypeV2 } : {}),
+      })
       .pipe(
         map((page) => {
           // Each SQL-family destType configures exactly one specific engine, never "any SQL flavor" — a
@@ -4627,8 +4740,8 @@ export class DestinationWizardComponent implements OnInit {
   });
 
   /** EHR Write-Back: what the Step 2 grid's greyed rows and notes need about the target (EhrWriteTargetService). */
-  private _loadEhrWriteTarget(fields: Record<string, string>): void {
-    this.ehrWriteTargetSvc.load(fields).subscribe((target) => this.ehrWriteTarget.set(target));
+  private _loadEhrWriteTarget(fields: Record<string, string>, vendor: EhrWriteVendor | null = null): void {
+    this.ehrWriteTargetSvc.load(fields, vendor).subscribe((target) => this.ehrWriteTarget.set(target));
   }
 
   addRecommendedResource(r: string): void {
@@ -5034,13 +5147,17 @@ export class DestinationWizardComponent implements OnInit {
         f['dest_resources'].split(',').filter(Boolean),
       );
     }
-    // EHR Write-Back reopened (possibly straight on a later step, with Step 1's form never mounted): Step 2's
-    // filter needs the target's writable types, which only the saved vendor can tell us now.
+    // EHR Write-Back reopened (possibly straight on a later step, before the hidden Step 1 form has loaded its
+    // connections): Step 2's filter needs the target's writable types, which only the saved vendor can tell us now.
+    // A test run saves the vendor it stands in for as dest_ehrVendor, so that is the right list in every run mode.
+    // The tile's vendor when there is one, else the same rule the Node Library used to pick the tile (savedWriteVendorOf):
+    // a test run saved before the fix recorded the test server's own vendor (GenericFhir) as dest_ehrVendor.
     if (this.isEhrWriteBack()) {
+      const vendor = this.ehrVendor() ?? savedWriteVendorOf(f);
       this.ehrWriteCapabilitiesSvc
-        .writableResourceTypes(f['dest_ehrVendor'] || null)
+        .writableResourceTypes(vendor)
         .subscribe((types) => this.ehrWritableResourceTypes.set(types));
-      this._loadEhrWriteTarget(f);
+      this._loadEhrWriteTarget(f, vendor);
     }
     // Seeded only once selectedResources() above is populated — the rules editor's resource tabs are driven
     // by it, so an earlier default would land on a resource that isn't in the restored selection.
@@ -5694,6 +5811,10 @@ export class DestinationWizardComponent implements OnInit {
                 };
 
     const existingId = this.resolvedDestinationId();
+    const failedTitle = existingId ? 'Destination not updated' : 'Destination not created';
+    const failedText = existingId
+      ? 'Failed to update the destination connection.'
+      : 'Failed to create the destination connection.';
     this.provisioningDestination.set(true);
     const obs = existingId
       ? this.destinationConfigSvc.update(existingId, request)
@@ -5712,13 +5833,8 @@ export class DestinationWizardComponent implements OnInit {
           err?.error?.title ??
           err?.error?.error ??
           err?.message ??
-          'Failed to create the destination connection.';
-        this.toast.show(
-          'Destination not created',
-          typeof msg === 'string'
-            ? msg
-            : 'Failed to create the destination connection.',
-        );
+          failedText;
+        this.toast.show(failedTitle, typeof msg === 'string' ? msg : failedText);
       },
     });
   }
@@ -5767,10 +5883,22 @@ export class DestinationWizardComponent implements OnInit {
     const type = this.destType();
     // FHIR bypasses the registry entirely (see isFhir()'s doc comment), so activeFormConfig() resolves to {}
     // for it (activeForm() is null, no outlet mounts) — reach its own full-config builder directly instead.
+    const formConfig = this.isFhir() ? this._getFhirFullConfig() : this.activeFormConfig();
     const config: Record<string, string> = {
       dest_resources: this.selectedResources().join(','),
-      ...(this.isFhir() ? this._getFhirFullConfig() : this.activeFormConfig()),
+      ...formConfig,
     };
+    // A chain node (Mapping / Transformation / De-identification) in front of an EHR write-back saves through here
+    // too, but never shows the write-back's own settings. Its form is mounted hidden and may not have been able to
+    // check its connection (no right to list connections, a failed request, a legacy test run that now reopens as a
+    // dry run), so every setting the form owns keeps the value the node was saved with: this save must never rewrite
+    // where, or how, the destination writes.
+    if (this.chainNodeEntry() && this.isEhrWriteBack()) {
+      const savedFields = this.editNode()?.fields ?? {};
+      for (const key of Object.keys(formConfig)) {
+        if (key in savedFields) config[key] = savedFields[key];
+      }
+    }
 
     // Reusing an existing DestinationConfiguration — three outcomes depending on what, if anything, the form
     // still differs from what selectExisting() patched in:

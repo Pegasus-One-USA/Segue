@@ -1,6 +1,8 @@
 import { Component, input, output } from '@angular/core';
 import { CanvasNode, TransformNode } from '../../../models/node-v2.model';
-import { TRANSFORMS } from '../../../data/transforms-v2.data';
+import { EHR_TILE_META, TRANSFORMS, ehrTileFor } from '../../../data/transforms-v2.data';
+import { savedWriteVendorOf } from '../../node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-back.model';
+import { Transform } from '../../../models/transform-v2.model';
 
 const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'fhir-validation':  { abbr: 'VAL', color: '#6366F1' },
@@ -30,6 +32,9 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
   'dest-azurefhir':   { abbr: 'AZF', color: '#0078D4' },
   'dest-ehr-writeback': { abbr: 'EWB', color: '#00A89D' },
+  // The EHR tiles' look (the same badges as the Node Library). A saved write-back node keeps 'dest-ehr-writeback'; it
+  // shows its tile's badge when its fields name the EHR (see ehrTile()).
+  ...EHR_TILE_META,
   // Microsoft Fabric surfaces. Spelled out here rather than left to a fallback: this map has none, so a
   // missing entry renders the node with no badge at all.
   'dest-fabric':      { abbr: 'OLF', color: '#117865' },
@@ -87,15 +92,29 @@ export class TransformNodeComponent {
     return (this.node() as TransformNode).transformId ?? '';
   }
 
+  /** Display only: the EHR tile an EHR Write-Back node writes to (the vendor a test run stands in for, else its own),
+   *  or null when the node is something else or its fields name no EHR. */
+  private ehrTile(): Transform | null {
+    if (this.transformId() !== 'dest-ehr-writeback') return null;
+    return ehrTileFor(savedWriteVendorOf(this.node().fields ?? {}));
+  }
+
+  /** The look the node takes: its tile's, for an EHR Write-Back that names its EHR, else its own. */
+  private metaId(): string {
+    return this.ehrTile()?.id ?? this.transformId();
+  }
+
   protected abbr(): string {
-    return TRANSFORM_META[this.transformId()]?.abbr ?? this.transformId().slice(0, 3).toUpperCase();
+    return TRANSFORM_META[this.metaId()]?.abbr ?? this.transformId().slice(0, 3).toUpperCase();
   }
 
   protected nodeColor(): string {
-    return TRANSFORM_META[this.transformId()]?.color ?? '#6366F1';
+    return TRANSFORM_META[this.metaId()]?.color ?? '#6366F1';
   }
 
   protected transformName(): string {
+    const tile = this.ehrTile();
+    if (tile) return `Write to ${tile.name}`;
     const t = TRANSFORMS.find(x => x.id === this.transformId());
     return t?.name ?? this.transformId();
   }

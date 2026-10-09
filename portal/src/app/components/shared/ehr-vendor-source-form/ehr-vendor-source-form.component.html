@@ -124,7 +124,7 @@
             <input id="eaf-audience-locked" class="eaf-input" type="text" [value]="audienceLabel(audience())" readonly
                    data-testid="src-audience-locked" />
             <p class="eaf-hint">This connection also writes (EHR Write-Back), which needs Backend System, so its audience
-              cannot change here. Its write access is managed under Destination Connections &gt; EHR write connections.</p>
+              cannot change here. Its write access is managed on the Destination Connections page.</p>
           </div>
         } @else {
         <div class="eaf-field" [class.eaf-field--error]="form.controls.audience.touched && form.controls.audience.invalid">
@@ -164,7 +164,7 @@
           <p class="eaf-hint">Decides which Client ID set applies. {{ displayVendor() }} issues separate IDs per environment.</p>
         </div>
 
-        <!-- No Access select: Source Connections only read and EHR write connections (Destination Connections) only
+        <!-- No Access select: Source Connections only read and EHR write connections (the Destination Connections page) only
              write. The access control still round-trips the saved value; see buildFieldsToSave. -->
         @if (showActivationSwitch()) {
           <div class="eaf-field">

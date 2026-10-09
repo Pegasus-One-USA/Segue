@@ -36,7 +36,7 @@ const EHR_VENDOR_TO_SOURCES_ID: Record<string, string> = {
 export type WizardMode = 'canvas' | 'entity';
 
 /** What an entity-mode connection is being opened for: 'read' (Settings > Source Connections; sources only
- *  read) or 'write' (Destination Connections > EHR write connections; Backend System only, Access = Write). */
+ *  read) or 'write' (an EHR write connection on the Destination Connections page; Backend System only, Access = Write). */
 export type WizardPurpose = 'read' | 'write';
 
 /** Fresh (keyVaultName, secretName) pair for a wizard-typed client secret, provisioned via
@@ -134,6 +134,9 @@ export class WizardService {
   readonly entityDto    = signal<SourceConnectionModel | null>(null);
   /** Bumped after every successful entity-mode save so list pages can react via an effect() without a dialog. */
   readonly saved        = signal(0);
+  /** The connection the last successful entity-mode save returned, set just before `saved` is bumped — so a caller
+   *  that opened the form to create a connection on the go (an EHR Write-Back destination) can pick it at once. */
+  readonly lastSavedEntity = signal<SourceConnectionModel | null>(null);
   /** Emits once per save() call, after the create/update HTTP call actually settles — save() itself is
    *  fire-and-forget (subscribes internally and returns immediately), so a caller that needs to know the
    *  real outcome (e.g. keep a dialog open and let the user fix a validation error, rather than assuming
@@ -654,12 +657,13 @@ export class WizardService {
     const obs = id ? this.sourceConnectionSvc.update(id, request) : this.sourceConnectionSvc.create(request);
 
     obs.subscribe({
-      next: () => {
+      next: (model) => {
         const noun = writePurpose ? 'EHR write connection' : 'Source Connection';
         this.toast.show(
           `${noun} saved`,
           id ? `${noun} updated successfully.` : `${noun} created successfully.`
         );
+        this.lastSavedEntity.set(model ?? null);
         this.saved.update(n => n + 1);
         this.saveOutcome$.next({ success: true });
         this.close();

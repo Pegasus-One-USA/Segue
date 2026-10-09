@@ -77,6 +77,19 @@ describe('WizardService — purpose', () => {
     expect(request.departmentId).toBe('150');
   });
 
+  it('publishes the saved connection before bumping saved, so a caller can pick it at once', () => {
+    const created = { id: 'w1', name: 'athena write', sourceSystemType: 'Athenahealth' } as SourceConnectionModel;
+    create.and.returnValue(of(created));
+    const before = wiz.saved();
+    wiz.openEntity(null, { purpose: 'write' });
+    wiz.ehrType.set('Athenahealth');
+
+    wiz.save(formValues, backendFields({ Access: 'Write' }));
+
+    expect(wiz.lastSavedEntity()).toBe(created);
+    expect(wiz.saved()).toBe(before + 1);
+  });
+
   it('editing a write connection keeps its saved access (null) and can clear the department', () => {
     wiz.openEntity({ id: 'w1', name: 'Conn', sourceSystemType: 'Athenahealth', baseUrl: 'https://x', isEnabled: true,
       authentication: { authenticationType: 'OAuthClientCredentials', scopes: [] }, access: 'ReadWrite',

@@ -81,7 +81,16 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-apiendpoint',
     // EHR write-back (Epic) — writer, node executor, validator, Step 1 form and wizard family are in place
     // (see MappedEhrWriteBackDestinationWriter). Dry run by default; live only for released types.
+    // Saved nodes keep this id, and id lookups and the connection type filter use it, so it stays enabled even
+    // though the picker offers the per-EHR tiles below instead.
     'dest-ehr-writeback',
+    // The EHR tiles. The heading must be enabled too, not just its tiles: it is filtered by the same allowlist,
+    // and a filtered-out heading takes its children with it (see filteredCategories).
+    'dest-ehr-group',
+    'dest-ehr-epic',
+    'dest-ehr-ecw',
+    'dest-ehr-athena',
+    'dest-ehr-fhir',
     // V2's chain steps — all three are the point of this builder, so none is phase-gated. (In V1 these
     // were 'field-mapping' plus the granular normalize/terminology/deid-* ids, all held back to a later
     // phase; V2 collapses them into these two consolidated steps — see transforms-v2.data.ts.)

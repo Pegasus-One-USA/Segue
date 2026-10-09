@@ -451,7 +451,7 @@ export class WizardServiceV2 {
       applicationType:  AUDIENCE_TO_APPLICATION_TYPE[audienceKey] ?? null,
       // A source node only reads: always null (Read on create, keep saved on update), even when an older node still
       // carries an 'Access' / 'Vendor write APIs activated' field — so re-saving it can never downgrade a
-      // Write/ReadWrite connection or clear its activation. EHR write connections live under Destination Connections.
+      // Write/ReadWrite connection or clear its activation. EHR write connections live on the Destination Connections page.
       access:           null,
       vendorWriteApisActivated: null,
       authentication: {

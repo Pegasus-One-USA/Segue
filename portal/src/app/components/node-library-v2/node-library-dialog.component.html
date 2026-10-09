@@ -334,6 +334,7 @@
           <app-destination-wizard
             [destType]="destWizardType()!"
             [fabricLandingMode]="destWizardFabricMode()"
+            [ehrVendor]="destWizardEhrVendor()"
             [attachNode]="destWizardAttach()!"
             [editNode]="destEditNode()"
             [sourceResources]="sourceResources()"
@@ -573,9 +574,9 @@
            (keydown.escape)="cancelDestSwitch()">
         <div class="nld-confirm-dialog">
           <div class="nld-confirm-icon">⚠</div>
-          <h3 class="nld-confirm-title">Switch to {{ destTypeLabel(switchType) }}?</h3>
+          <h3 class="nld-confirm-title">Switch to {{ destTypeLabel(switchType, pendingDestSwitchEhrVendor()) }}?</h3>
           <p class="nld-confirm-body">
-            Your {{ destTypeLabel(destWizardType()) }} configuration hasn't been saved yet.
+            Your {{ destTypeLabel(destWizardType(), destWizardEhrVendor()) }} configuration hasn't been saved yet.
             Switching destination type now will discard it.
           </p>
           <div class="nld-confirm-actions">
@@ -595,7 +596,7 @@
           <div class="nld-confirm-icon">⚠</div>
           <h3 class="nld-confirm-title">Discard changes?</h3>
           <p class="nld-confirm-body">
-            Your {{ destTypeLabel(destWizardType()) }} configuration hasn't been saved yet.
+            Your {{ destTypeLabel(destWizardType(), destWizardEhrVendor()) }} configuration hasn't been saved yet.
             Going back to the library now will discard it.
           </p>
           <div class="nld-confirm-actions">

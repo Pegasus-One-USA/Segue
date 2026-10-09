@@ -116,7 +116,7 @@ public sealed class DefaultWorkflowNodeCatalog : IWorkflowNodeCatalog
             WorkflowNodeTypes.EhrWriteBackDestination,
             "EHR Write-Back",
             "dest-ehr-writeback",
-            "Write FHIR resources back into an EHR (Epic): allergies, problems, vital signs, clinical notes and, opt-in, patients."),
+            "Write FHIR resources into an EHR (Epic, eClinicalWorks, athenahealth or a FHIR server): allergies, problems, vital signs, clinical notes and, opt-in, patients."),
         // GATED (SQL/CSV phase): only SqlServer + CSV + MySql + Mongo + PostgreSql + Medplum + FhirRepository +
         // AzureFhirService + Blob destinations are exposed in the palette. The writers below remain registered in
         // ConfiguredDestinationWriterFactory and can be re-listed here as each is productized.

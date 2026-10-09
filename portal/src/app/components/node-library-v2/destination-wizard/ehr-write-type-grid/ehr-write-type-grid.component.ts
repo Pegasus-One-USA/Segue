@@ -2,7 +2,7 @@ import { Component, computed, input, output } from '@angular/core';
 import { EhrWriteTypeRow } from './ehr-write-type-grid.model';
 
 /**
- * The EHR write-back destination's "Data groups" grid. Shows the types its source reads; those the target EHR does
+ * The EHR write-back destination's "Resource types" grid. Shows the types its source reads; those the target EHR does
  * not accept (or cannot take from this source) are greyed with the reason and cannot be ticked. A greyed type that
  * is somehow already selected (a destination saved before the rule) can still be unticked. Rows come from
  * classifyEhrWriteTypes, so the wizard's own offered list and recommendations agree with what is shown here.

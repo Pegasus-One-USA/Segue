@@ -41,7 +41,7 @@ public sealed class LicenseUsageCountsProvider : ILicenseUsageCountsProvider
         // Runtime plane's workflow definitions are combined into one number for display.
         var workflowCount = routes.Count + workflowDefinitions.Count;
 
-        // A write-only connection is an EHR Write-Back target (Destination Connections > EHR write connections), not
+        // A write-only connection is an EHR Write-Back target (listed under Destination Connections), not
         // a source, so it is not counted against the source-connection quota. Read & Write still counts.
         var sourceConnectionCount = sourceConnections.Count(connection => connection.Access != SourceConnectionAccess.Write);
 

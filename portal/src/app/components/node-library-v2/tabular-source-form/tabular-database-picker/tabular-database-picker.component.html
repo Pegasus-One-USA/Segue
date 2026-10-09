@@ -1,5 +1,5 @@
 <div class="tab-field">
-  <label class="tab-label" for="tab-conn">Database <span class="tab-req">*</span></label>
+  <label class="tab-label" for="tab-conn">Read from database <span class="tab-req">*</span></label>
   <div class="tab-inline">
     <select id="tab-conn" class="tab-input" [value]="current() ?? ''" (change)="choose($any($event.target).value)">
       <option value="">{{ connections().length ? 'Choose a saved database' : 'No saved databases yet' }}</option>

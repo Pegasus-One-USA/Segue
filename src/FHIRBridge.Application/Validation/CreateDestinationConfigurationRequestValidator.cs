@@ -147,7 +147,7 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         if (metadata.TryGetValue("dest_testAsVendor", out var testAs) && !string.IsNullOrWhiteSpace(testAs)
             && !(EhrWriteCapabilities.TryParseVendor(testAs, out var tested) && EhrWriteCapabilities.TestableVendors.Contains(tested)))
         {
-            context.AddFailure("dest_testAsVendor", "Test as Epic, eClinicalWorks (Healow) or athenahealth, or leave it empty.");
+            context.AddFailure("dest_testAsVendor", "Test on FHIR server can stand in for Epic, eClinicalWorks (Healow) or athenahealth only.");
         }
 
         if (metadata.TryGetValue("dest_enabledVariants", out var variants) && !string.IsNullOrWhiteSpace(variants))

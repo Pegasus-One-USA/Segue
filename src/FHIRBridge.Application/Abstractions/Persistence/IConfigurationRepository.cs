@@ -108,7 +108,7 @@ public sealed record SourceConnectionFilter(
     SourceConnectionAccessFilter? Access = null);
 
 /// <summary>Which side of a connection a list asks for: Source Connections lists the connections that can be read,
-/// Destination Connections' EHR write connections the ones that can be written to. A Read &amp; Write connection is in
+/// Destination Connections the ones that can be written to. A Read &amp; Write connection is in
 /// both.</summary>
 public enum SourceConnectionAccessFilter
 {

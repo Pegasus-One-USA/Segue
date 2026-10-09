@@ -55,7 +55,7 @@
              need yet. Always visible (no New/Existing toggle) — leaving it unselected just means "New Source". -->
         @if (showSourcePicker()) {
           <div class="eaf-field">
-            <label class="eaf-label" for="eaf-existingConnection">Existing {{ displayVendor() }} Connection</label>
+            <label class="eaf-label" for="eaf-existingConnection">Read from: saved {{ displayVendor() }} connection</label>
             <div class="eaf-existing-connection-row">
               <div class="eaf-select-wrap">
                 <!-- existingConnections() loads async — on reopen, selectedExistingId() is already restored
@@ -147,7 +147,7 @@
         </div>
 
         <!-- No Access select or vendor-activation switch: a source node only reads. EHR write connections are managed
-             under Destination Connections > EHR write connections. -->
+             on the Destination Connections page. -->
       </div>
     </div>
 

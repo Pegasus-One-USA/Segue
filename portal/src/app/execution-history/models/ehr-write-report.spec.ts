@@ -95,7 +95,7 @@ describe('ehrWriteReasonLabel', () => {
   it('names dry-run-only types, and still reads the retired release reason on older runs', () => {
     expect(ehrWriteReasonLabel('live-write-not-supported')).toBe('This EHR accepts dry runs only for this type');
     expect(ehrWriteReasonLabel('live-write-not-released')).toBe('Type was not released for live writes (older run)');
-    expect(ehrWriteReasonLabel('patient-not-selected')).toBe('Patient not selected in Data groups, so the patient cannot be created');
+    expect(ehrWriteReasonLabel('patient-not-selected')).toBe('Patient not selected under Resource types, so the patient cannot be created');
   });
 
   it('names why a linked note could not be read from the source', () => {

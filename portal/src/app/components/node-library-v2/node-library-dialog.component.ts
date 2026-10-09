@@ -9,7 +9,7 @@ import { WorkflowGraphMapperServiceV2 } from '../../services/workflow-graph-mapp
 import { PermissionService } from '../../auth/services/permission.service';
 import { ToastService } from '../../services/toast.service';
 import { SOURCES } from '../../data/sources-v2.data';
-import { TRANSFORMS } from '../../data/transforms-v2.data';
+import { EHR_TILE_META, TRANSFORMS, ehrTileFor } from '../../data/transforms-v2.data';
 import { RANK_LABEL } from '../../models/transform-v2.model';
 import { CanvasNode, SourceNode, TransformNode, isSourceNode } from '../../models/node-v2.model';
 import { MergeNodeOption } from '../../models/wizard-state-v2.model';
@@ -25,6 +25,11 @@ import { HealowSourceFormComponent } from './healow-source-form/healow-source-fo
 import { MeditechSourceFormComponent } from './meditech-source-form/meditech-source-form.component';
 import { SampleSourceFormComponent } from './sample-source-form/sample-source-form.component';
 import { DestinationWizardComponent, ConfigTab } from './destination-wizard/destination-wizard.component';
+import {
+  EhrWriteVendor,
+  savedWriteVendorOf,
+  vendorLabel,
+} from './destination-wizard/destination-forms/ehr-write-back/ehr-write-back.model';
 import { ZoomDockComponent } from '../canvas-v2/zoom-dock/zoom-dock.component';
 
 // SELF_CONTAINED_SOURCE_FORM_KEYS (imported above) distinguishes the WizardServiceV2-backed vendor forms (Epic,
@@ -37,6 +42,11 @@ import { ZoomDockComponent } from '../canvas-v2/zoom-dock/zoom-dock.component';
 // toggleMaximizeRequest outputs can stay ordinary, statically-checked Angular bindings.
 
 export type LibraryMode = 'source' | 'transform';
+
+/** The destination wizard families a Node Library row can open. */
+export type DestWizardType =
+  | 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake'
+  | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback';
 
 export interface AddTransformEvent {
   attachNode: CanvasNode;
@@ -117,6 +127,10 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
   'dest-azurefhir':   { abbr: 'AZF', color: '#0078D4' },
   'dest-ehr-writeback': { abbr: 'EWB', color: '#00A89D' },
+  // The EHR heading and its tiles (each tile's badge comes from its write vendor, so a vendor reads the same as a
+  // source and as a write connection).
+  'dest-ehr-group':   { abbr: 'EHR', color: '#00A89D' },
+  ...EHR_TILE_META,
   'dest-csv':         { abbr: 'CSV', color: '#374151' },
   'dest-xlsx':        { abbr: 'XLS', color: '#217346' },
   'dest-ndjson':      { abbr: 'NDJ', color: '#475569' },
@@ -288,13 +302,17 @@ export class NodeLibraryDialogComponent {
 
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
-  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' | null>(null);
+  readonly destWizardType   = signal<DestWizardType | null>(null);
 
   /** Landing mode to pin when the picked row is a Fabric SURFACE rather than its own destination type — today
    *  only Lakehouse Delta (see Transform.fabricMode for why it is a mode and Warehouse is a type). Null for
    *  every other row, including OneLake Files, which is the Fabric form's own default. Read straight from the
    *  catalog entry so the picker row and the form cannot disagree about which surface was chosen. */
   readonly destWizardFabricMode = signal<string | null>(null);
+  /** The EHR an EHR tile presets (Epic, eClinicalWorks, athenahealth or a FHIR server); null for every other row, and
+   *  for a reopened write-back node whose vendor cannot be recovered. Like the Fabric mode, it is what tells two rows
+   *  of one wizard type apart, so it travels with the type everywhere below. Never saved on a node. */
+  readonly destWizardEhrVendor = signal<EhrWriteVendor | null>(null);
   readonly destWizardAttach = signal<CanvasNode | null>(null);
   readonly destEditNode     = signal<CanvasNode | null>(null);
   // Queried directly (rather than threading another output through) so both onDestWizardCancelled() and
@@ -455,15 +473,34 @@ export class NodeLibraryDialogComponent {
   // Delegates to destTypeLabel() below so the two never drift again — this used to be its own
   // 'sql'-or-'CSV' ternary, predating MySQL/PostgreSQL/Mongo/etc. support, which meant every
   // non-SQL-Server destination's mapping canvas header wrongly showed "CSV".
-  readonly destMappingTypeLabel = computed(() => this.destTypeLabel(this.destWizardType()));
+  readonly destMappingTypeLabel = computed(() => this.destTypeLabel(this.destWizardType(), this.destWizardEhrVendor()));
   readonly destMappingCount = signal(0);
 
-  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' | null>(null);
+  readonly pendingDestSwitch      = signal<DestWizardType | null>(null);
 
   /** The Fabric landing mode awaiting the same confirmation as pendingDestSwitch. Held separately because a
    *  switch between two rows of one type (OneLake Files → Lakehouse Delta) differs only by mode, so the type
    *  alone does not describe what the user picked. */
   readonly pendingDestSwitchFabricMode = signal<string | null>(null);
+  /** The EHR tile's vendor awaiting the same confirmation (two EHR tiles share a wizard type). */
+  readonly pendingDestSwitchEhrVendor = signal<EhrWriteVendor | null>(null);
+
+  /** Which wizard each destination row opens. The EHR tiles are not listed: any row whose destinationType is
+   *  EhrWriteBack opens the write-back wizard (see destWizardTypeFor). */
+  private static readonly DEST_WIZARD_TYPE_BY_ID: Readonly<Record<string, DestWizardType>> = {
+    'dest-sqlserver': 'sql', 'dest-csv': 'csv', 'dest-mysql': 'mysql', 'dest-mongo': 'mongo', 'dest-postgres': 'postgres',
+    'dest-fhir': 'fhir', 'dest-blob': 'blob', 'dest-medplum': 'medplum', 'dest-azurefhir': 'azurefhir',
+    'dest-datalake-webhook': 'datalake', 'dest-fabric': 'fabric', 'dest-fabric-lakehouse-table': 'fabric',
+    'dest-fabric-warehouse': 'fabricwarehouse', 'dest-fabric-cosmos': 'cosmosfabric', 'dest-apiendpoint': 'apiendpoint',
+    'dest-ehr-writeback': 'ehrwriteback',
+  };
+
+  /** The wizard a row opens: its own entry; else 'ehrwriteback' for any catalogue row writing into an EHR (the EHR
+   *  tiles); else null (not a destination with a wizard). */
+  static destWizardTypeFor(id: string): DestWizardType | null {
+    return NodeLibraryDialogComponent.DEST_WIZARD_TYPE_BY_ID[id]
+      ?? (TRANSFORMS.find(t => t.id === id)?.destinationType === 'EhrWriteBack' ? 'ehrwriteback' : null);
+  }
 
   // Guards the dest wizard's own "← Back to library" button — same "don't silently discard progress"
   // intent as pendingDestSwitch above, just for backing out to the library instead of switching type.
@@ -501,7 +538,7 @@ export class NodeLibraryDialogComponent {
             if (!untracked(() => this.showDestWizard())) { untracked(() => this._close()); }
             return;
           }
-          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir' || tId === 'dest-blob' || tId === 'dest-medplum' || tId === 'dest-azurefhir' || tId === 'dest-datalake-webhook' || tId === 'dest-fabric' || tId === 'dest-fabric-warehouse' || tId === 'dest-fabric-cosmos' || tId === 'dest-apiendpoint' || tId === 'dest-ehr-writeback') {
+          if (NodeLibraryDialogComponent.destWizardTypeFor(tId)) {
             untracked(() => this._openDestWizardEdit(node));
             // _openDestWizardEdit's own canOpenDestWizard() check already showed a toast and returned
             // without setting showDestWizard() true if the permission check failed — stopping there would
@@ -580,6 +617,8 @@ export class NodeLibraryDialogComponent {
     const pickerMap = new Map(pm?.items.map(i => [i.id, i]) ?? []);
 
     TRANSFORMS.forEach(t => {
+      // A row kept only for lookups by id (the saved EHR Write-Back id, offered as one tile per EHR instead).
+      if (t.pickerHidden) return;
       // Skip entire rank categories hidden by phase config
       if (this.phaseCfg.isRankHidden(t.rank)) return;
       // Hide items not enabled in this phase (don't show as disabled)
@@ -620,7 +659,7 @@ export class NodeLibraryDialogComponent {
 
         // Lock the other destination type while mid-way through configuring one —
         // switching would silently discard the in-progress form.
-        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-fhir' || t.id === 'dest-blob' || t.id === 'dest-medplum' || t.id === 'dest-azurefhir' || t.id === 'dest-datalake-webhook' || t.id === 'dest-fabric' || t.id === 'dest-fabric-warehouse' || t.id === 'dest-fabric-cosmos' || t.id === 'dest-apiendpoint' || t.id === 'dest-ehr-writeback') && this.destTypeLocked()) {
+        if (NodeLibraryDialogComponent.destWizardTypeFor(t.id) && this.destTypeLocked()) {
           status = 'disabled';
           reason = 'Finish or go back to Configure before switching destination type.';
         }
@@ -703,7 +742,11 @@ export class NodeLibraryDialogComponent {
 
     return this.allCategories()
       .map(cat => {
-        const kept = cat.items.filter(i => isSelectable(i) && matches(i));
+        // A heading that matches keeps all of its selectable children, so searching a heading's name ("EHR",
+        // "Fabric") lists what is under it even when no child's own name or subtitle contains the query.
+        const parentMatches = new Set(cat.items.filter(i => i.isParent && matches(i)).map(i => i.id));
+        const kept = cat.items.filter(i =>
+          isSelectable(i) && (matches(i) || (!!i.parentId && parentMatches.has(i.parentId))));
         // A child that survived the filter must keep its heading, even when the heading's own name doesn't
         // match the query ("warehouse" matches the surface, not "Microsoft Fabric"). Equally, a heading whose
         // children were all filtered out is dropped — an expandable row that expands to nothing is worse
@@ -777,51 +820,58 @@ export class NodeLibraryDialogComponent {
       return;
     }
 
-    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-fhir' || item.id === 'dest-blob' || item.id === 'dest-medplum' || item.id === 'dest-azurefhir' || item.id === 'dest-datalake-webhook' || item.id === 'dest-fabric' || item.id === 'dest-fabric-lakehouse-table' || item.id === 'dest-fabric-warehouse' || item.id === 'dest-fabric-cosmos' || item.id === 'dest-apiendpoint' || item.id === 'dest-ehr-writeback') {
-      const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' =
-        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : item.id === 'dest-fhir' ? 'fhir' : item.id === 'dest-blob' ? 'blob' : item.id === 'dest-azurefhir' ? 'azurefhir' : item.id === 'dest-datalake-webhook' ? 'datalake' : item.id === 'dest-fabric-warehouse' ? 'fabricwarehouse' : item.id === 'dest-fabric-cosmos' ? 'cosmosfabric' : (item.id === 'dest-fabric' || item.id === 'dest-fabric-lakehouse-table') ? 'fabric' : item.id === 'dest-apiendpoint' ? 'apiendpoint' : item.id === 'dest-ehr-writeback' ? 'ehrwriteback' : 'csv';
+    const type = NodeLibraryDialogComponent.destWizardTypeFor(item.id);
+    if (type) {
       // Both Fabric FILE-surface rows (OneLake Files and Lakehouse Delta) open the same wizard TYPE, so the
       // landing mode is what distinguishes them and has to travel alongside the type everywhere below —
-      // including through the switch-confirm detour, which resumes with whatever was pending.
+      // including through the switch-confirm detour, which resumes with whatever was pending. The EHR tiles are
+      // the same case: one wizard type, told apart by the vendor each presets.
       const fabricMode = item.fabricMode ?? null;
+      const ehrVendor = TRANSFORMS.find(t => t.id === item.id)?.ehrVendor ?? null;
 
       if (this.showDestWizard()) {
         // Already showing this exact surface — _openDestWizard() unconditionally resets step, attach node and
         // mapping state, which would wipe the form for no reason. No-op instead. The mode is part of "exact"
         // here: OneLake Files and Lakehouse Delta share a type, so comparing type alone would treat a switch
         // between those two rows as a no-op and silently leave the wrong surface selected.
-        if (this.destWizardType() === type && this.destWizardFabricMode() === fabricMode) return;
+        if (this.destWizardType() === type && this.destWizardFabricMode() === fabricMode
+          && this.destWizardEhrVendor() === ehrVendor) return;
         // Switching to a *different* surface after the user has already filled in later steps — or just typed
         // into Step 1 without ever clicking Next/Save (destWizardHasProgressed alone misses that; see
         // DestinationWizardComponent.isStep1Dirty()) — would silently discard that progress. Confirm first.
         if (this.destWizardHasProgressed() || this.destWizardRef()?.isStep1Dirty()) {
           this.pendingDestSwitch.set(type);
           this.pendingDestSwitchFabricMode.set(fabricMode);
+          this.pendingDestSwitchEhrVendor.set(ehrVendor);
           return;
         }
       }
-      this._openDestWizard(type, fabricMode);
+      this._openDestWizard(type, fabricMode, ehrVendor);
       return;
     }
 
     this.selectedId.set(item.id);
   }
 
-  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' | null): string {
+  destTypeLabel(type: DestWizardType | null, ehrVendor: EhrWriteVendor | null = null): string {
+    if (type === 'ehrwriteback') return ehrVendor ? `Write to ${vendorLabel(ehrVendor)}` : 'EHR write-back';
     // 'datalake'/'fabric' previously fell through to 'CSV' here — the same class of gap this method's own
     // doc comment above describes for MySQL/PostgreSQL. Named explicitly now, alongside the new Warehouse type.
-    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : type === 'fhir' ? 'FHIR Repository (Aidbox)' : type === 'azurefhir' ? 'Azure FHIR Service' : type === 'blob' ? 'Azure Blob Storage' : type === 'datalake' ? 'Data Lake Webhook' : type === 'fabricwarehouse' ? 'Microsoft Fabric (Warehouse)' : type === 'cosmosfabric' ? 'Cosmos DB in Fabric' : type === 'fabric' ? 'Microsoft Fabric' : type === 'apiendpoint' ? 'API Endpoint' : type === 'ehrwriteback' ? 'EHR Write-Back' : 'CSV';
+    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : type === 'fhir' ? 'FHIR Repository (Aidbox)' : type === 'azurefhir' ? 'Azure FHIR Service' : type === 'blob' ? 'Azure Blob Storage' : type === 'datalake' ? 'Data Lake Webhook' : type === 'fabricwarehouse' ? 'Microsoft Fabric (Warehouse)' : type === 'cosmosfabric' ? 'Cosmos DB in Fabric' : type === 'fabric' ? 'Microsoft Fabric' : type === 'apiendpoint' ? 'API Endpoint' : 'CSV';
   }
 
   confirmDestSwitch(): void {
     const type = this.pendingDestSwitch();
-    if (type) this._openDestWizard(type, this.pendingDestSwitchFabricMode());
+    if (type) this._openDestWizard(type, this.pendingDestSwitchFabricMode(), this.pendingDestSwitchEhrVendor());
     this.pendingDestSwitch.set(null);
     this.pendingDestSwitchFabricMode.set(null);
+    this.pendingDestSwitchEhrVendor.set(null);
   }
 
   cancelDestSwitch(): void {
     this.pendingDestSwitch.set(null);
+    this.pendingDestSwitchFabricMode.set(null);
+    this.pendingDestSwitchEhrVendor.set(null);
   }
 
   onConfirmSwitchBackdropClick(e: MouseEvent): void {
@@ -929,7 +979,7 @@ export class NodeLibraryDialogComponent {
   // create/edit/delete request for either of these DestinationType values comes in. So the backend already
   // requires sourceconnections.create/.edit/.delete for these two — checking it here (instead of an empty
   // prefix list) is closing a UI/backend mismatch, not inventing a new code.
-  private destWizardPermissionPrefixes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback'): string[] {
+  private destWizardPermissionPrefixes(type: DestWizardType): string[] {
     switch (type) {
       case 'sql':      return ['sqlserver', 'azuresql'];
       case 'csv':      return ['csv'];
@@ -956,7 +1006,7 @@ export class NodeLibraryDialogComponent {
     }
   }
 
-  private canOpenDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback', action: 'create' | 'edit'): boolean {
+  private canOpenDestWizard(type: DestWizardType, action: 'create' | 'edit'): boolean {
     const prefixes = this.destWizardPermissionPrefixes(type);
     if (!prefixes.length) return true;
     if (prefixes.some(prefix => this.permissions.hasPermission(`${prefix}.${action}`))) return true;
@@ -965,11 +1015,13 @@ export class NodeLibraryDialogComponent {
   }
 
   private _openDestWizard(
-    type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback',
+    type: DestWizardType,
     fabricMode: string | null = null,
+    ehrVendor: EhrWriteVendor | null = null,
   ): void {
     if (!this.canOpenDestWizard(type, 'create')) return;
     this.destWizardFabricMode.set(fabricMode);
+    this.destWizardEhrVendor.set(ehrVendor);
     const pm = this.pickerModel();
     if (!pm) return;
     // An ordinary destination add starts at Step 1 on the Mapping tab — only a chain node opens
@@ -995,9 +1047,16 @@ export class NodeLibraryDialogComponent {
 
   private _openDestWizardEdit(node: CanvasNode): void {
     const tId = (node as TransformNode).transformId;
-    const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' =
-      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : tId === 'dest-blob' ? 'blob' : tId === 'dest-azurefhir' ? 'azurefhir' : tId === 'dest-datalake-webhook' ? 'datalake' : tId === 'dest-fabric-warehouse' ? 'fabricwarehouse' : tId === 'dest-fabric-cosmos' ? 'cosmosfabric' : (tId === 'dest-fabric' || tId === 'dest-fabric-lakehouse-table') ? 'fabric' : tId === 'dest-apiendpoint' ? 'apiendpoint' : tId === 'dest-ehr-writeback' ? 'ehrwriteback' : 'csv';
+    const type: DestWizardType = NodeLibraryDialogComponent.destWizardTypeFor(tId) ?? 'csv';
     if (!this.canOpenDestWizard(type, 'edit')) return;
+    // A saved write-back node always has transformId 'dest-ehr-writeback'; its tile is recovered from its fields
+    // (savedWriteVendorOf: the vendor a test run stands in for, else the vendor it writes to). Null when neither names
+    // one (a form opened without a tile then offers every write connection).
+    if (type === 'ehrwriteback') {
+      this.destWizardEhrVendor.set(ehrTileFor(savedWriteVendorOf(node.fields ?? {}))?.ehrVendor ?? null);
+    } else {
+      this.destWizardEhrVendor.set(null);
+    }
     // Re-opening a saved node: the mode comes from the catalog row the node was created from, so a Delta
     // destination re-opens on Delta rather than falling back to the form's OneLake Files default. The form
     // also patches its own mode from saved metadata, so this only has to be right for a node whose metadata

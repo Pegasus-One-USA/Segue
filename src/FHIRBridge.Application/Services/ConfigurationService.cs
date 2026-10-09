@@ -1388,11 +1388,11 @@ public sealed class ConfigurationService : IConfigurationService
                 _ when !EhrWriteCapabilities.HasAnyWriteCapability(target.SourceSystemType) =>
                     $"{target.SourceSystemType} connections can only be read from; choose a connection to an EHR that accepts writes.",
                 _ when !target.Access.AllowsWrite() =>
-                    "The chosen EHR connection is read-only. Choose a connection listed under Destination Connections > EHR write connections.",
+                    "The chosen EHR connection is read-only. Choose a write connection listed under Destination Connections.",
                 // A test run writes only to a Generic FHIR test server, never to the EHR it stands in for.
                 _ when !string.IsNullOrWhiteSpace(ReadMetadataString(connectionMetadataJson, "dest_testAsVendor"))
                        && target.SourceSystemType != EhrWriteCapabilities.TestServerType =>
-                    "A test run writes to a Generic FHIR test server. Choose a Generic FHIR connection, or turn off Test as.",
+                    "Test on FHIR server sends to a Generic FHIR test server. Choose a FHIR server connection, or set Run mode to Live or Dry run.",
                 _ => null,
             };
         }

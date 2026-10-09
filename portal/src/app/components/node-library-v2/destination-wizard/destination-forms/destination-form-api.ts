@@ -1,6 +1,8 @@
 import { Signal } from '@angular/core';
 import { DestinationConfigFormComponent } from '../../../shared-v2/config-form/config-form-v2.contract';
 import { DestinationProbeRequest, DestinationTable } from '../../../../services/destination-schema.service';
+import { EhrWriteOptIns } from '../ehr-write-type-grid/ehr-write-type-grid.model';
+import { EhrMissingOptIn, EhrRunMode } from './ehr-write-back/ehr-write-back.model';
 
 /**
  * Superset of DestinationConfigFormComponent implemented by every component under destination-forms/ that
@@ -128,13 +130,26 @@ export function isCosmosDbFabricForm(
 
 /** Extra members exposed only by EhrWriteBackDestinationFormComponent. The wizard copies the target's vendor and
  *  writable resource types into its own signals on Step 1's Next, because Step 2's resource picker shows the upstream
- *  source's types with the ones the TARGET EHR does not accept greyed out (EhrWriteTypeGridComponent). */
+ *  source's types with the ones the TARGET EHR does not accept greyed out (EhrWriteTypeGridComponent). The form's
+ *  options are shown in Step 3, after the resource types, and Step 3's Next waits for optionsValid() and for no
+ *  selected type still needing an option (missingOptIns). */
 export interface EhrWriteBackFormApi extends WizardDestinationFormApi {
   readonly kind: 'ehrWriteBack';
   /** SourceSystemType name of the selected target connection, or null before one is chosen. */
   readonly targetVendor: Signal<string | null>;
   /** Resource types the selected target accepts writes for; empty when none (or before a choice). */
   readonly writableResourceTypes: Signal<string[]>;
+  readonly runMode: Signal<EhrRunMode>;
+  /** The selected types the writer would skip until an option is turned on under Options. */
+  readonly missingOptIns: Signal<EhrMissingOptIn[]>;
+  /** The chosen connection's name, or null before one is chosen. */
+  connectionName(): string | null;
+  /** The opt-ins as they would be saved (the same shape as ehrWriteOptInsOf). */
+  optIns(): EhrWriteOptIns;
+  /** The options half (Step 3) is valid; isValid() covers the connection half (Step 1). */
+  optionsValid(): boolean;
+  /** The Review step's lines: where the destination writes and in which run mode. */
+  reviewLines(): { writesTo: string; mode: string };
 }
 
 /** Keyed on its own `kind` marker, for the same reason as isMongoForm. */

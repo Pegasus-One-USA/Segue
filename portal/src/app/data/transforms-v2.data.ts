@@ -1,4 +1,13 @@
 import { Transform } from '../models/transform-v2.model';
+import { EhrWriteVendor, WRITE_VENDOR_LABELS, writeVendorCard } from '../connections/ehr-write-vendors';
+
+/** One EHR tile under the "EHR" heading: named, and later badged, from the write vendor it presets. */
+function ehrTile(id: string, ehrVendor: EhrWriteVendor, sub: string): Transform {
+  return {
+    id, rank: 1, parentId: 'dest-ehr-group', category: 'Cloud / FHIR', destinationType: 'EhrWriteBack', ehrVendor,
+    name: WRITE_VENDOR_LABELS[ehrVendor], sub, permissionPrefix: 'ehrwriteback',
+  };
+}
 
 /** V2's simplified straight-chain catalog: Source(0) → Destination(1) → Mapping(2) → Transformation(3) →
  *  De-identification(4). Mapping only applies when the destination is SQL-family (see
@@ -42,9 +51,17 @@ export const TRANSFORMS: Transform[] = [
   { id: 'dest-fhir',        rank: 1, category: 'Cloud / FHIR', destinationType: 'FhirRepository', name: 'Aidbox',             sub: 'POST a transaction bundle to a FHIR store.', permissionPrefix: 'fhirrepository' },
   { id: 'dest-medplum',     rank: 1, category: 'Cloud / FHIR', destinationType: 'Medplum',        name: 'Medplum (FHIR)',     sub: 'Write FHIR resources to a Medplum store', permissionPrefix: 'medplum' },
   { id: 'dest-azurefhir',   rank: 1, category: 'Cloud / FHIR', destinationType: 'AzureFhirService', name: 'Azure FHIR Service', sub: 'Write FHIR resources to Azure Health Data Services.', permissionPrefix: 'azurefhirservice' },
-  // id must equal the backend catalog's TransformIdFor/hand-built entry ('dest-ehr-writeback'); permissionPrefix
-  // matches PermissionGroupCode.EhrWriteBack.
-  { id: 'dest-ehr-writeback', rank: 1, category: 'Cloud / FHIR', destinationType: 'EhrWriteBack', name: 'EHR Write-Back', sub: 'Write allergies, problems, vitals and notes back into an EHR.', permissionPrefix: 'ehrwriteback' },
+  // Saved nodes keep this id (it equals the backend catalog's hand-built entry; permissionPrefix matches
+  // PermissionGroupCode.EhrWriteBack), so it stays here for lookups by id and for the Destination Connections type
+  // filter, which takes the first row of a destinationType — keep it before the tiles. The EHR tiles below are
+  // picker-only presets that all save as this id.
+  { id: 'dest-ehr-writeback', rank: 1, category: 'Cloud / FHIR', destinationType: 'EhrWriteBack', name: 'EHR Write-Back', sub: 'Write allergies, problems, vitals and notes back into an EHR.', permissionPrefix: 'ehrwriteback', pickerHidden: true },
+  // One tile per EHR under an "EHR" heading (the Fabric parent/children pattern). The tile presets the vendor.
+  { id: 'dest-ehr-group',   rank: 1, category: 'Cloud / FHIR', name: 'EHR', sub: 'Write records back into an EHR.' },
+  ehrTile('dest-ehr-epic', 'Epic', 'Write to Epic.'),
+  ehrTile('dest-ehr-ecw', 'Healow', 'Write to eClinicalWorks.'),
+  ehrTile('dest-ehr-athena', 'Athenahealth', 'Write to athenahealth.'),
+  ehrTile('dest-ehr-fhir', 'GenericFhir', 'Write plain FHIR to a FHIR server.'),
   { id: 'dest-csv',         rank: 1, category: 'File',         destinationType: 'Csv',            name: 'CSV',                sub: 'Emit CSV files.',                   permissionPrefix: 'csv' },
   { id: 'dest-xlsx',        rank: 1, category: 'File',         destinationType: 'Excel',          name: 'Excel',              sub: 'Emit .xlsx workbooks.',             permissionPrefix: 'sourceconnections' },
   { id: 'dest-ndjson',      rank: 1, category: 'File',         destinationType: 'Ndjson',         name: 'NDJSON',             sub: 'Emit newline-delimited JSON.',      permissionPrefix: 'sourceconnections' },
@@ -63,3 +80,18 @@ export const TRANSFORMS: Transform[] = [
 ];
 
 export const REPEATABLE_TRANSFORMS = new Set<string>();
+
+/** The EHR tile whose ehrVendor is `vendor`, else null. */
+export function ehrTileFor(vendor: string | null | undefined): Transform | null {
+  if (!vendor) return null;
+  return TRANSFORMS.find(t => !!t.ehrVendor && t.ehrVendor === vendor) ?? null;
+}
+
+/** The EHR tiles' badges, keyed by tile id: each vendor's abbreviation and colour from its write vendor card, so a tile
+ *  looks the same in the Node Library, on the canvas and in the Destination Connections "New" picker. */
+export const EHR_TILE_META: Readonly<Record<string, { abbr: string; color: string }>> = Object.fromEntries(
+  TRANSFORMS.filter(t => !!t.ehrVendor).map(t => {
+    const card = writeVendorCard(t.ehrVendor);
+    return [t.id, { abbr: card?.abbr ?? 'EHR', color: card?.color ?? 'var(--color-primary)' }];
+  }),
+);

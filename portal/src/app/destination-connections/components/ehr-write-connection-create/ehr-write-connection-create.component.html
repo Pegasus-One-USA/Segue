@@ -1,0 +1,15 @@
+<!-- The vendor cards sit in a fixed layer of their own: the picker's backdrop is absolutely positioned, and here it
+     may be placed inside a dialog whose content box is much smaller than the screen. -->
+@if (choosing()) {
+  <div class="ewcc-layer">
+    <app-connection-kind-picker
+      title="New EHR write connection"
+      subtitle="Choose the EHR this connection writes to."
+      testIdPrefix="ewcc"
+      [groups]="cardGroups()"
+      (picked)="onCardPicked($event)"
+      (closed)="onPickerClosed()" />
+  </div>
+}
+
+<app-ehr-write-connection-editor (saved)="onSaved($event)" (closed)="onClosed()" />

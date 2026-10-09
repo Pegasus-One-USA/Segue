@@ -959,7 +959,7 @@ export class EhrVendorSourceFormComponent
     { initialValue: false },
   );
 
-  /** Opened from Destination Connections > EHR write connections (WizardService.purpose). Sources only read, so the
+  /** Opened from the Destination Connections page for an EHR write connection (WizardService.purpose). Sources only read, so the
    *  write-only bits (fixed Backend System audience, vendor activation, athena Department ID) show only here, and
    *  only here does this form emit Access at all. Decided at open time, never toggled within one session. */
   protected readonly isWritePurpose = computed(() => this.wiz.purpose() === 'write');
@@ -973,8 +973,8 @@ export class EhrVendorSourceFormComponent
 
   /** Source Connections editing a connection that also writes (saved Access Write / Read & Write). Its audience is
    *  shown as fixed text: write-back needs Backend System, and a read-purpose save sends no Access (the server keeps
-   *  the saved one), so a changed audience would only be refused. Write access is managed under Destination
-   *  Connections > EHR write connections. Decided once in ngOnInit. */
+   *  the saved one), so a changed audience would only be refused. Write access is managed on the Destination
+   *  Connections page. Decided once in ngOnInit. */
   protected readonly audienceLockedByWriteAccess = signal(false);
 
   protected audienceLabel(audience: EpicAudience): string {

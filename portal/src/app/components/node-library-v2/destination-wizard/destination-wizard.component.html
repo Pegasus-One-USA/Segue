@@ -54,14 +54,14 @@
     <!-- Not shown on the De-identification screen — see hideMapFieldsChrome(). -->
     @if (!hideMapFieldsChrome()) {
     <div class="dw-stepper">
-      @for (label of STEP_LABELS; track $index) {
+      @for (label of stepLabels(); track $index) {
         <div class="dw-step" [class.active]="isStepActive($index + 1)" [class.done]="isStepDone($index + 1)">
           <div class="dw-step-num">
             @if (isStepDone($index + 1)) { ✓ } @else { {{ $index + 1 }} }
           </div>
           <span class="dw-step-label">{{ label }}</span>
         </div>
-        @if ($index < STEP_LABELS.length - 1) {
+        @if ($index < stepLabels().length - 1) {
           <div class="dw-step-line" [class.done]="isStepDone($index + 1)"></div>
         }
       }
@@ -72,18 +72,28 @@
   <!-- ── Body ─────────────────────────────────────────────────────────────── -->
   <div class="dw-body" [class.dw-body--canvas]="!!activeMappingGroup()">
 
-    <!-- ═══ STEP 1: Configure ═══════════════════════════════════════════════ -->
+    <!-- ═══ STEP 1: Connection ══════════════════════════════════════════════ -->
     @if (isStepActive(1)) {
       <div class="dw-section-head">
         <span class="dw-section-num">1</span>
-        <span class="dw-section-title">Configure {{ destLabel() }}</span>
+        @if (isEhrWriteBack()) {
+          <span class="dw-section-title">Write to {{ ehrLabel() }}</span>
+        } @else {
+          <span class="dw-section-title">Write to {{ destLabel() }}</span>
+        }
       </div>
 
       <!-- No explicit New/Existing toggle — the dropdown is always offered (canvas create only, see
            showConnectionModeToggle); leaving it unselected just means "New connection". -->
       @if (showConnectionModeToggle()) {
         <div class="dw-field dw-field--full">
-          <label class="dw-label" for="dw-existing">Existing {{ destLabel() }} connection</label>
+          <label class="dw-label" for="dw-existing">
+            @if (isEhrWriteBack()) {
+              Copy settings from a saved {{ ehrLabel() }} destination (optional)
+            } @else {
+              Existing {{ destLabel() }} connection
+            }
+          </label>
           <div class="dw-existing-connection-row">
             <div class="dw-select-wrap">
               <!-- existingOptions() loads async (getPaged + a hasExecutionHistory check per candidate) — on
@@ -102,7 +112,7 @@
                 (change)="selectExisting($any($event.target).value)"
               >
                 <option value="" disabled [selected]="!selectedExistingId()">{{ existingOptionsLoading() ? 'Loading…' : 'Choose a connection…' }}</option>
-                @for (o of existingOptions(); track o.id) {
+                @for (o of shownExistingOptions(); track o.id) {
                   <option [value]="o.id" [selected]="o.id === selectedExistingId()">{{ o.name }} ({{ o.destinationType }})</option>
                 }
               </select>
@@ -112,7 +122,9 @@
                       (click)="clearExistingConnection()">✕</button>
             }
           </div>
-          @if (!existingOptionsLoading() && existingOptions().length === 0) {
+          @if (!existingOptionsLoading() && shownExistingOptions().length === 0 && isEhrWriteBack()) {
+            <span class="dw-hint">No saved {{ ehrLabel() }} destination to copy — set it up below.</span>
+          } @else if (!existingOptionsLoading() && shownExistingOptions().length === 0) {
             <span class="dw-hint">No reusable {{ destLabel() }} connections found (connections with execution history can't be reused here) — configure a new one below.</span>
           } @else {
             <span class="dw-hint">Selecting a connection copies its configuration below. Save without changing anything to reuse that exact connection; edit any field and Save creates a new, independent connection.</span>
@@ -267,17 +279,26 @@
          template now, instead of the wizard rendering them inline. FHIR is the one exception — its
          DESTINATION_FORM_REGISTRY entry is only a placeholder stub, so it's rendered by the hand-rolled
          fhirForm block above instead of this outlet (see isFhir() guard). ── -->
+    @if (isStepActive(3) && isEhrWriteBack() && !chainNodeEntry()) {
+      <!-- EHR Write-Back Options: the same form's options half (see activeFormInputs()'s `section`), shown after the
+           resource types so the options a chosen type needs can be named. The heading is here because the outlet
+           below comes before the Step 2 and Step 3 blocks. -->
+      <div class="dw-section-head">
+        <span class="dw-section-num">3</span>
+        <span class="dw-section-title">Options — how records are written to {{ ehrLabel() }}</span>
+      </div>
+    }
     @if (!isFhir()) {
-      <div [class.dw-hidden]="!isStepActive(1)">
+      <div [class.dw-hidden]="!isStepActive(1) && !(isStepActive(3) && isEhrWriteBack() && !chainNodeEntry())">
         <ng-container [ngComponentOutlet]="activeFormType()" [ngComponentOutletInputs]="activeFormInputs()" />
       </div>
     }
 
-    <!-- ═══ STEP 2: Data groups ═══════════════════════════════════════════ -->
+    <!-- ═══ STEP 2: Resource types ════════════════════════════════════════ -->
     @if (isStepActive(2)) {
       <div class="dw-section-head">
         <span class="dw-section-num">2</span>
-        <span class="dw-section-title">Select data groups</span>
+        <span class="dw-section-title">Select resource types</span>
         <div class="dw-section-spacer"></div>
         <div class="dw-group-search">
           <input
@@ -362,7 +383,7 @@
       }
       @if (selectedResources().length === 0) {
         <div class="dw-callout dw-callout--warn">
-          Select at least one data group to continue.
+          Select at least one resource type to continue.
         </div>
       }
       @if (recommendedResources().length > 0) {
@@ -713,10 +734,11 @@
           </div>
         }
       }
-    } @else if (isStepActive(3) && isEhrWriteBack()) {
-      <!-- ── EHR Write-Back: nothing to map. Each resource is shaped server-side by the EHR's own write profile
-           (the subset its API accepts), its patient and encounter are resolved to records already in the EHR,
-           and the idempotency ledger stops a record being filed twice. ── -->
+    } @else if (isStepActive(3) && isEhrWriteBack() && chainNodeEntry()) {
+      <!-- ── EHR Write-Back opened from a chain node (a Transformation in front of it): nothing to map, and its
+           options belong to the destination itself, so this is information only. Each resource is shaped
+           server-side by the EHR's own write profile (the subset its API accepts), its patient and encounter are
+           resolved to records already in the EHR, and the idempotency ledger stops a record being filed twice. ── -->
       <div class="dw-section-head">
         <span class="dw-section-num">3</span>
         <span class="dw-section-title">How records are written</span>
@@ -737,11 +759,6 @@
             <span class="dw-rc-scope">Each record's patient is found by identifier or a certain Patient.$match. An uncertain match is left for review.</span>
           </div>
         </div>
-      </div>
-      <div class="dw-callout dw-callout--warn">
-        Dry run is on by default: every run checks and resolves each record and reports what it would write,
-        without sending anything to the EHR. With Dry run off, every type selected in Data groups that the EHR supports
-        live is written (Epic today); eClinicalWorks and athenahealth stay dry runs.
       </div>
     } @else if (isStepActive(3) && (isMedplum() || isAzureFhir())) {
       <!-- ── Columnless FHIR server (Medplum / Azure FHIR Service): the whole normalized resource is written
@@ -777,16 +794,16 @@
           </button>
         </div>
       </div>
-    } @else if (isStepActive(3)) {
+    } @else if (isStepActive(3) && !isEhrWriteBack()) {
       @if (!activeMappingGroup()) {
-        <!-- ── Data group selection screen ── choose which group's canvas to open ── -->
+        <!-- ── Resource type selection screen ── choose which type's canvas to open ── -->
         @if (!hideMapFieldsChrome()) {
         <div class="dw-section-head">
           <span class="dw-section-num">3</span>
           <span class="dw-section-title">Map fields</span>
           <span class="dw-section-hint">
             {{ isSql() ? 'Map FHIR paths to SQL table columns.' : isMongo() ? 'Map FHIR paths to MongoDB collection fields.' : isMedplum() ? 'Map FHIR paths to Medplum resource fields.' : isFhir() ? 'Map FHIR paths to FHIR repository resource fields.' : isBlob() ? 'Map FHIR paths to blob NDJSON fields.' : isDataLake() ? 'Map FHIR paths to the fields sent in each webhook record.' : isFabric() ? 'Map FHIR paths to OneLake file columns.' : isApiEndpoint() ? 'Map FHIR paths to the fields sent in each request.' : 'Map FHIR paths to CSV file columns.' }}
-            Choose a data group to configure.
+            Choose a resource type to configure.
           </span>
         </div>
         }
@@ -799,7 +816,7 @@
         @if (configTab() !== 'mapping') {
           <p class="dw-chain-hint">
             Opening {{ configTab() === 'transformation' ? 'Transformation' : 'De-identification' }} —
-            choose a data group below. All three tabs (Mappings, Transformations, De-identification) stay
+            choose a resource type below. All three tabs (Mappings, Transformations, De-identification) stay
             available once its canvas is open.
           </p>
         }
@@ -813,7 +830,7 @@
           <thead class="data-table__header">
             <tr>
               <th class="dw-groups-drag-col"></th>
-              <th>Data group</th>
+              <th>Resource type</th>
               <th class="dw-groups-actions-col">Actions</th>
             </tr>
           </thead>
@@ -863,7 +880,7 @@
               </tr>
             }
             @if (resourceKeys().length === 0) {
-              <tr><td colspan="3" class="dw-groups-empty">No data groups selected — go back to Step 2 to choose some.</td></tr>
+              <tr><td colspan="3" class="dw-groups-empty">No resource types selected — go back to Step 2 to choose some.</td></tr>
             }
           </tbody>
         </table>
@@ -1146,14 +1163,16 @@
             <span class="dw-review-key">Name</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_name'] }}</span>
           </div>
-          <div class="dw-review-card">
-            <span class="dw-review-key">Writes to</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_ehrVendor'] || '—' }} connection</span>
-          </div>
-          <div class="dw-review-card">
-            <span class="dw-review-key">Mode</span>
-            <span class="dw-review-val">{{ activeFormConfig()['dest_dryRun'] === 'false' ? 'Live (supported types only)' : 'Dry run' }}, up to {{ activeFormConfig()['dest_maxWritesPerRun'] || '500' }} records per run</span>
-          </div>
+          @if (ehrReviewLines(); as lines) {
+            <div class="dw-review-card">
+              <span class="dw-review-key">Writes to</span>
+              <span class="dw-review-val" data-testid="ewb-review-writes-to">{{ lines.writesTo }}</span>
+            </div>
+            <div class="dw-review-card">
+              <span class="dw-review-key">Mode</span>
+              <span class="dw-review-val" data-testid="ewb-review-mode">{{ lines.mode }}</span>
+            </div>
+          }
           <div class="dw-review-card">
             <span class="dw-review-key">Patients</span>
             <span class="dw-review-val">{{ activeFormConfig()['dest_cloneMode'] === 'true' ? 'Clone mode: each patient written as a new synthetic test patient' : activeFormConfig()['dest_createPatientIfMissing'] === 'true' ? 'Matched, or created when the EHR has none' : 'Matched only' }}</span>
@@ -1186,7 +1205,7 @@
           </div>
         }
         <div class="dw-review-card">
-          <span class="dw-review-key">Data groups</span>
+          <span class="dw-review-key">Resource types</span>
           <span class="dw-review-val">{{ selectedResources().join(', ') || '—' }}</span>
         </div>
         @if (!isFhir() && !isAzureFhir() && !isEhrWriteBack()) {
@@ -1197,6 +1216,13 @@
         }
       </div>
 
+      @if (isEhrWriteBack()) {
+        <div class="dw-callout dw-callout--info">
+          Shaped by the EHR's write rules: only the elements its API accepts are sent, and inactive and
+          entered-in-error records are skipped. Patients are matched, never guessed: each record's patient is found by
+          identifier or a certain Patient.$match, and an uncertain match is left for review.
+        </div>
+      }
       <div class="dw-callout dw-callout--info">
         After adding to the workflow, the {{ destLabel() }} node will be connected automatically to the selected source.
       </div>
@@ -1236,6 +1262,7 @@
           @else if (step() === 1 && isSql()) { {{ probeState() === 'testing' ? 'Testing…' : (provisioningDestination() ? 'Creating…' : 'Test connection & Next') }} }
           @else if (step() === 1 && isFhir()) { {{ probeState() === 'testing' ? 'Testing…' : (provisioningDestination() ? 'Creating…' : 'Test connection & Next') }} }
           @else if (step() === 1 && provisioningDestination()) { Creating… }
+          @else if (step() === 3 && provisioningDestination()) { Saving… }
           @else { Next }
         </button>
         }

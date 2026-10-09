@@ -1,0 +1,6 @@
+// Covers the whole screen, above the dialog it is opened from, so the picker's absolute backdrop fills it.
+.ewcc-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+}
