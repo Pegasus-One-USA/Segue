@@ -7,6 +7,14 @@
 > **Living plan:** the Claude Doc "Epic FHIR R4 Write-Back — Implementation Plan"
 > (https://claude.ai/code/artifact/5cd4f8a3-f740-49b6-bd65-930953a45762) holds the full design, the workflow-builder
 > behaviour and the decisions still open. This file records the verified Epic facts the implementation depends on.
+>
+> **Set-up changed 2026-10-08 / 09 — see [21 — Source / destination consistency](21-source-destination-consistency.md)
+> and the [admin guide](../user-guide/ehr-write-back.md).** Write connections are now created and listed under
+> **Destination Connections** (Epic, eClinicalWorks, athenahealth, FHIR server); source forms have no Access field
+> and only read. The destination is one tile per EHR, and **Run mode** (Live / Dry run / Test on FHIR server)
+> replaced the separate Dry run checkbox and Test as dropdown; it is still saved as `dest_dryRun` +
+> `dest_testAsVendor`. Where sections below say "Access", "Dry run" or "Test as", read them in that light;
+> section 16 summarises the differences.
 
 Everything below comes from Epic's own published material, fetched 2026-09-30: the sandbox R4 CapabilityStatement
 (software "Epic August 2026"), the sandbox SMART configuration, the interface catalog at open.epic.com, and each
@@ -434,7 +442,8 @@ same read-only rules; a missing table, view or column, or a syntax error, comes 
 (only those error codes are passed on), and template columns the query does not return are listed. A CSV entry is
 checked against the header recorded at upload. The form saves only after a check of the current settings passed.
 **Saved databases** (`TabularSqlConnections`, migration `AddTabularSqlConnections`) are listed by name under Source
-Connections (Database connections: New, Test, Edit, Delete) and picked in any workflow; the connection string stays
+Connections (rows of type "SQL database": New, Test, Edit, Delete; one list since `9abd43cf`, doc 21) and picked in
+any workflow; the connection string stays
 a secret, and replacing it rewrites the same secret, so every workflow using that database follows.
 
 **Gate.** "A CSV of allergies lands in the Epic sandbox through the same writer, unchanged" is covered offline by
@@ -640,7 +649,9 @@ EHRs, so every write can be rehearsed end to end before it is pointed at the rea
   checks references would refuse the whole record. Contained (`#`) references stay. The patient is bound to the
   server's own.
 - A Generic FHIR connection gets an **Access** field (Read / Write / Read & Write) on its form; Write makes it a
-  write-back target. It has no authentication (anonymous, as the Generic FHIR source already was).
+  write-back target. It has no authentication (anonymous, as the Generic FHIR source already was). *Since
+  `7424a2a7` the Access field is gone from the source form; a FHIR server write connection is created under
+  Destination Connections → New → FHIR server (doc 21, section 5).*
 
 ### 14.2 Test runs ("Test as")
 
@@ -705,11 +716,13 @@ APIs (`IsFhir: false` in Epic's catalog), with no public spec, which a FHIR test
 
 ### 14.4 To test a write before going live
 
-1. Start a FHIR server (docker-compose `hapi-fhir`), add it as a Generic FHIR connection with Access **Write**.
-2. Point the EHR Write-Back destination at it, choose **Test as** (Epic, eClinicalWorks or athenahealth), select the
-   types (and tick the extra Epic APIs to try), untick Dry run, run.
+1. Start a FHIR server (docker-compose `hapi-fhir`) and add it under Destination Connections → **New** → **FHIR
+   server**.
+2. Add the EHR's destination tile (Epic, eClinicalWorks or athenahealth), choose Run mode **Test on a FHIR server**,
+   pick the server under **Test server**, select the types (and tick the extra Epic APIs to try), run.
 3. Read the test-run report, then the server: the records (or, for athena, the `Basic` call records).
-4. Point the same destination at the real connection, clear **Test as**, dry run once, then go live.
+4. Switch the same destination to Run mode **Dry run**, pick the real write connection under **Write to**, run once,
+   then switch to **Live**.
 
 ## 15. Sources
 
@@ -720,3 +733,19 @@ APIs (`IsFhir: false` in Epic's catalog), with no public spec, which a FHIR test
   for ids 945, 949, 1046, 963, 930, 10423, 962, 974, 10050, 10051, 10303, 10023, 10090, 878, and (Phase 7) 11040,
   11044, 11048, 11224
 - OAuth 2.0 documentation: https://fhir.epic.com/Documentation?docId=oauth2
+
+## 16. Set-up after the source / destination consistency work (2026-10-09)
+
+Full detail in [21](21-source-destination-consistency.md). In short, for this writer:
+
+| Before | Now |
+|---|---|
+| Access (Read / Write / Read & Write) on a source connection form | Gone from source forms; write connections are made under Destination Connections; `?access=read\|write` lists each side |
+| Athena department only on the node (`dest_targetDepartmentId`) | Also on the write connection (`SourceConnection.DepartmentId`); the node's value wins |
+| One "EHR Write-Back" tile | An EHR heading with Epic, eClinicalWorks, athenahealth and FHIR server tiles; saved nodes keep `dest-ehr-writeback` |
+| Dry run checkbox + Test as dropdown | Run mode: Live / Dry run / Test on FHIR server (`dest_dryRun`, `dest_testAsVendor`); an old dry-run + test node reopens as Dry run |
+| Destination chose any type | Source declares its types; the destination picks a subset (refused on save otherwise); types the EHR cannot take are greyed with the reason, and a type that only needs an option stays tickable with a note and holds Options' Next until that option is on |
+| Test-run report read "Live run to …" | The report dialog is titled "Test-run report" with a "Test run" badge (dry run: "Dry-run report" / "Dry run"; live: "Write-back report" / "Live"); the Copy report text says "Test run" |
+
+The writer's rules (profiles, patient resolution, ledger, report reasons) did not change in this work. The executor
+gained the department fallback, and the stored run report now carries `TestRun`.
