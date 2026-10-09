@@ -19,7 +19,12 @@ public sealed record MappingTestResultDto(
     /// transform-rule chain that genuinely needs every occurrence (ConcatenationTemplating,
     /// ArrayListOperations) can opt into the real array instead of the already-collapsed scalar — see
     /// MappingNodeExecutor.ApplyTransformRulesAsync / TransformationRuleService.PreviewAsync.</summary>
-    IReadOnlyDictionary<string, IReadOnlyList<object?>>? RawArrayValues = null);
+    IReadOnlyDictionary<string, IReadOnlyList<object?>>? RawArrayValues = null,
+    /// <summary>For a field whose path stops ON an array of plain values ("$.name[*].given", not "...given[*]"): the
+    /// array's ITEMS, narrowed by the same instance selection — where <see cref="RawArrayValues"/> holds the whole
+    /// array as one (", "-joined) value, its long-standing contract. Kept separate so existing transform chains are
+    /// unchanged; only a column whose De-identification rule runs after its Transformations reads these.</summary>
+    IReadOnlyDictionary<string, IReadOnlyList<object?>>? PrimitiveArrayItems = null);
 
 public sealed record MappingChildTableDto(
     string Name,

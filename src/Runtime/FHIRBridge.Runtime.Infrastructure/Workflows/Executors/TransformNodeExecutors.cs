@@ -413,6 +413,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
     private readonly ISystemSettingsCache? _settingsCache;
     private readonly IAppSecretAccessor? _secretAccessor;
     private readonly ILineageCaptureDispatcher? _lineageCaptureDispatcher;
+    private readonly IDeIdentificationService? _deIdentificationService;
 
     public MappingNodeExecutor(
         IJsonMappingEngine? mappingEngine = null,
@@ -423,9 +424,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         ISystemSettingsCache? settingsCache = null,
         IAppSecretAccessor? secretAccessor = null,
         ILineageCaptureDispatcher? lineageCaptureDispatcher = null,
-        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null)
+        Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null,
+        IDeIdentificationService? deIdentificationService = null)
         : base(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, loggerFactory)
     {
+        _deIdentificationService = deIdentificationService;
         _mappingEngine = mappingEngine;
         _mappingMaterializer = mappingMaterializer;
         _configurationRepository = configurationRepository;
@@ -704,6 +707,28 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     continue;
                 }
 
+                // A De-identification rule whose source feeds a column that has its own Transformations is applied
+                // AFTER those Transformations, to their result: given ["DB","Tester"] with Concatenation then a mask
+                // must become "DB Tester" → "*****ster", not "DB **ster" (each name masked, then joined). Those
+                // columns' unredacted inputs are read from the resource as it was before redaction and handed ONLY
+                // to their own chain (ApplyTransformRulesAsync) — `mapped` itself stays redacted, so any path that
+                // does not run the chain writes the redacted value: this fails safe, never open.
+                IReadOnlyDictionary<string, DeferredColumn>? deferredColumns = null;
+                // Columns that qualified for deferral but could not be read from the snapshot: written with
+                // redaction applied first instead (the value `mapped` already holds), and said so in lineage.
+                Dictionary<string, string>? deferralFallbacks = null;
+                // Null whenever this envelope has no snapshot or its payload changed since (see
+                // DeIdentificationSnapshots) — every column then keeps redaction-first.
+                var deferrableOriginal = DeIdentificationSnapshots.DeferrableOriginalIfCurrent(resource);
+                var deferredRedactions = await FindDeferredRedactionsAsync(
+                    deferrableOriginal, mapped, fields, preMappingHops, resourceType, sourceFieldByTarget, destinationType,
+                    sourceSystem, resourcePipelineRouteId, ruleCache, cancellationToken);
+                if (deferredRedactions is not null)
+                {
+                    (deferredColumns, deferralFallbacks) = ReadDeferredColumns(
+                        deferrableOriginal!, mapped, fields, deferredRedactions, systemValues, resource);
+                }
+
                 // ArrayPolicy.SeparateDestination child-table rows travel as MappedChildTableRecords attached to
                 // the parent row (not as separate flat records with their own DestinationObject) — the writer
                 // resolves a single target table per write call, so a flat child record would otherwise get
@@ -750,7 +775,7 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                         var (transformedRow, fhirWriteBackPatches, lineageEntries) = await ApplyTransformRulesAsync(
                             parentRow, resourceType, sourceFieldByTarget, destinationType, sourceSystem,
                             resourcePipelineRouteId, ruleCache, resource.ResourceId, sourceJson, preMappingHops,
-                            mapped.RawArrayValues, cancellationToken);
+                            mapped.RawArrayValues, cancellationToken, deferredColumns, deferralFallbacks);
                         var patchedSourceJson = fhirWriteBackPatches is { Count: > 0 }
                             ? FhirSourceJsonPatcher.ApplyPatches(sourceJson, fhirWriteBackPatches)
                             : sourceJson;
@@ -843,19 +868,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         foreach (var targetField in fields.Select(f => f.TargetField).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             sourceFieldByTarget.TryGetValue(targetField, out var sourceField);
-            var cacheKey = $"{resourceType}|{targetField}|{sourceField}";
-            if (!ruleCache.TryGetValue(cacheKey, out var rules))
-            {
-                rules = await _ruleResolver.ResolveAsync(
-                    // destinationConfigurationId is deliberately null at RUN time: null matches
-                    // permissively, so execution resolves exactly the rules it always has. Narrowing
-                    // here would change what already-running pipelines transform, which is a separate
-                    // decision from stopping a NEW destination inheriting an old one's rules in the UI.
-                    destinationType, resourceType, targetField, resourcePipelineRouteId, null, sourceSystem,
-                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
-                    workflowScopedOnly: resourcePipelineRouteId is not null);
-                ruleCache[cacheKey] = rules;
-            }
+            var rules = await ResolveFieldRulesAsync(
+                resourceType, targetField, sourceField, destinationType, sourceSystem, resourcePipelineRouteId,
+                ruleCache, cancellationToken);
 
             if (rules.Any(rule => rule.ExpectedValueType is not null))
             {
@@ -905,19 +920,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         foreach (var targetField in fields.Select(f => f.TargetField).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             sourceFieldByTarget.TryGetValue(targetField, out var sourceField);
-            var cacheKey = $"{resourceType}|{targetField}|{sourceField}";
-            if (!ruleCache.TryGetValue(cacheKey, out var rules))
-            {
-                rules = await _ruleResolver.ResolveAsync(
-                    // destinationConfigurationId is deliberately null at RUN time: null matches
-                    // permissively, so execution resolves exactly the rules it always has. Narrowing
-                    // here would change what already-running pipelines transform, which is a separate
-                    // decision from stopping a NEW destination inheriting an old one's rules in the UI.
-                    destinationType, resourceType, targetField, resourcePipelineRouteId, null, sourceSystem,
-                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
-                    workflowScopedOnly: resourcePipelineRouteId is not null);
-                ruleCache[cacheKey] = rules;
-            }
+            var rules = await ResolveFieldRulesAsync(
+                resourceType, targetField, sourceField, destinationType, sourceSystem, resourcePipelineRouteId,
+                ruleCache, cancellationToken);
 
             var codeableConceptRule = rules.FirstOrDefault(rule => rule.NodeType == TransformNodeType.CodeableConceptBuilder);
             if (codeableConceptRule is null)
@@ -1172,7 +1177,14 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         string? sourceJson,
         IReadOnlyList<DeIdentificationFieldHop> preMappingHops,
         IReadOnlyDictionary<string, IReadOnlyList<object?>>? rawArrayValues,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        // Columns whose De-identification redactions run AFTER their own Transformations (see
+        // FindDeferredRedactionsAsync): their unredacted chain input, and the redactions to apply to the chain's
+        // result. `row` still holds the REDACTED value for them — what is written if the chain never runs.
+        IReadOnlyDictionary<string, DeferredColumn>? deferredColumns = null,
+        // Columns that qualified for deferral but could not be read from the snapshot, with the reason — recorded
+        // in lineage so the fallback to redaction-first is visible, never a silent change of behavior.
+        IReadOnlyDictionary<string, string>? deferralFallbacks = null)
     {
         if (_ruleResolver is null || _transformNodeRegistry is null || destinationType is null || row.Count == 0)
         {
@@ -1193,13 +1205,14 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         foreach (var (destinationField, value) in row)
         {
             sourceFieldByTarget.TryGetValue(destinationField, out var sourceField);
-            var cacheKey = $"{resourceType}|{destinationField}|{sourceField}";
 
             // PreMapping de-identification hops for this field, if any — prepended ahead of whatever runs below
             // so the field's chain reads source-order: redaction first, then the PostMapping rule chain (or the
             // plain pass-through hop). Continues the same NodeOrder sequence so the whole chain stays contiguous.
             var nodeOrder = 0;
-            if (preMappingHops.Count > 0 && sourceField is not null)
+            // A deferred column's redaction is recorded after its chain instead, in the order it actually ran.
+            var deferred = deferredColumns?.GetValueOrDefault(destinationField);
+            if (preMappingHops.Count > 0 && sourceField is not null && deferred is null)
             {
                 foreach (var hop in preMappingHops)
                 {
@@ -1222,21 +1235,18 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 }
             }
 
-            if (!ruleCache.TryGetValue(cacheKey, out var rules))
+            if (deferralFallbacks?.GetValueOrDefault(destinationField) is { } fallbackReason)
             {
-                rules = await _ruleResolver.ResolveAsync(
-                    // destinationConfigurationId is deliberately null at RUN time: null matches
-                    // permissively, so execution resolves exactly the rules it always has. Narrowing
-                    // here would change what already-running pipelines transform, which is a separate
-                    // decision from stopping a NEW destination inheriting an old one's rules in the UI.
-                    destinationType.Value, resourceType, destinationField, resourcePipelineRouteId, null, sourceSystem,
-                    RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
-                    // A node carrying a workflow id was authored by the V2 builder, whose rules are
-                    // pipeline-private — so it must not inherit another workflow's. A V1 graph never carries
-                    // one, which leaves its five-tier resolution exactly as it was.
-                    workflowScopedOnly: resourcePipelineRouteId is not null);
-                ruleCache[cacheKey] = rules;
+                // Not a green hop: the column was meant to apply its redaction after its Transformations and could
+                // not, so it was written with the redaction applied first (still redacted — never the raw value).
+                lineageEntries?.Add(new LineageHopEntryDto(
+                    destinationField, sourceField, nodeOrder++, "DeIdentification:DeferralFallback", "{}",
+                    false, fallbackReason, null, DateTimeOffset.UtcNow));
             }
+
+            var rules = await ResolveFieldRulesAsync(
+                resourceType, destinationField, sourceField, destinationType.Value, sourceSystem,
+                resourcePipelineRouteId, ruleCache, cancellationToken);
 
             if (rules.Count == 0)
             {
@@ -1254,22 +1264,28 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                     null,
                     null,
                     DateTimeOffset.UtcNow));
+                // A deferred column whose chain resolves empty keeps the redacted value `row` already holds.
                 continue;
             }
 
-            // A rule chain LED by ConcatenationTemplating/ArrayListOperations exists specifically to
+            // A rule chain CONTAINING ConcatenationTemplating/ArrayListOperations exists specifically to
             // operate on every occurrence of a repeating field, not the single value ArrayPolicy already
             // collapsed `value` down to (see MappingTestResultDto.RawArrayValues's doc comment) — hand it
             // the real array instead, so its own operation/template/separator config becomes the actual
             // authority over which/how many items are used (superseding the field's Instance Selection,
             // which chose that single collapsed value in the first place).
-            var currentValue =
-                rules[0].NodeType is TransformNodeType.ConcatenationTemplating or TransformNodeType.ArrayListOperations
-                && rawArrayValues is not null
-                && rawArrayValues.TryGetValue(destinationField, out var rawItems)
-                && rawItems.Count > 1
-                    ? rawItems
-                    : value;
+            //
+            // Only a chain LED by a join receives the repeats — the existing contract, unchanged for every column
+            // that is not deferred. A DEFERRED column (its De-identification rule runs after these Transformations)
+            // is the one exception: its parts are the unredacted items, which must reach the join wherever it sits
+            // (e.g. StringNormalization → Concatenation), with each step before the join run once per item — so
+            // the redaction then applies to the joined result, not to items masked one by one.
+            var rawItems = deferred is null ? rawArrayValues?.GetValueOrDefault(destinationField) : deferred.Parts;
+            var holdsRawItems = rawItems is { Count: > 1 }
+                && (deferred is not null
+                    ? rules.Any(r => IsRepeatJoiningNode(r.NodeType))
+                    : IsRepeatJoiningNode(rules[0].NodeType));
+            object? currentValue = holdsRawItems ? rawItems : deferred is null ? value : deferred.Value;
             string? writeBackPath = null;
             // The last rule that actually SUCCEEDED and declares a type — assigned only once its own
             // Execute() call has genuinely returned Success (see below), never merely because the loop
@@ -1350,7 +1366,20 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 var hopInput = currentValue;
                 var hopExecutedAtUtc = DateTimeOffset.UtcNow;
                 var hopStopwatch = lineageEntries is null ? null : Stopwatch.StartNew();
-                var result = await TransformNodeApplier.ExecuteWithArrayModeAsync(node, currentValue, config, secret, rule.ArrayMode, cancellationToken);
+                // Until the chain's join step has run, currentValue is still the raw repeats: a step ahead of it
+                // (e.g. Masking) applies to each repeat, never once to the list as a whole.
+                // Only a DEFERRED column's steps ahead of its join run per item (they hold the unredacted repeats);
+                // every other column keeps each rule's own configured ArrayMode, exactly as before. A node that
+                // declares it reads collections (AcceptsCollections) always keeps its own mode.
+                var arrayMode = deferred is not null && holdsRawItems
+                    && !IsRepeatJoiningNode(rule.NodeType) && !node.AcceptsCollections
+                    ? TransformArrayMode.PerItem
+                    : rule.ArrayMode;
+                var result = await TransformNodeApplier.ExecuteWithArrayModeAsync(node, currentValue, config, secret, arrayMode, cancellationToken);
+                if (IsRepeatJoiningNode(rule.NodeType))
+                {
+                    holdsRawItems = false;
+                }
                 hopStopwatch?.Stop();
 
                 lineageEntries?.Add(new LineageHopEntryDto(
@@ -1363,7 +1392,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                         : WithResolvedSystemOverride(rule.ConfigJson, result.ResolvedSystemOverride),
                     // Before/After values deliberately NOT captured: they are the field's actual patient data.
                     result.Success,
-                    result.Success ? null : result.Error,
+                    // A deferred column's chain runs on its UNREDACTED value, and a node's error text may quote its
+                    // input ("'…' is not numeric"), so that text is never persisted for one.
+                    result.Success ? null : deferred is null ? result.Error : DeferredStepErrorWithheld,
                     hopStopwatch?.Elapsed.TotalMilliseconds,
                     hopExecutedAtUtc));
 
@@ -1386,6 +1417,32 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 if (rule.ErrorPolicy is TransformErrorPolicy.Fail or TransformErrorPolicy.RouteToDeadLetter)
                 {
                     break;
+                }
+            }
+
+            // The column's Transformations have run on the unredacted value; now its De-identification rule(s),
+            // on their result. Always applied — including after a failed or short-circuited chain — so a deferred
+            // column can never reach the destination unredacted.
+            if (deferred is not null)
+            {
+                foreach (var hop in deferred.Hops)
+                {
+                    var hadValue = currentValue is not null;
+                    currentValue = _deIdentificationService!.DeIdentifyValue(currentValue, hop);
+                    // DeIdentifyValue fails closed: a value it cannot redact is dropped. Remove drops it by design;
+                    // anything else that turned a value into null is a loss lineage must show, not a green hop.
+                    var dropped = hadValue && currentValue is null && hop.Strategy != DeIdentificationStrategyNames.Remove;
+                    lineageEntries?.Add(new LineageHopEntryDto(
+                        destinationField,
+                        sourceField,
+                        nodeOrder++,
+                        "DeIdentification:" + hop.Strategy,
+                        hop.ConfigJson,
+                        // Before/After values deliberately NOT captured: they are the field's actual patient data.
+                        !dropped,
+                        dropped ? DeferredRedactionDropped : null,
+                        null,
+                        DateTimeOffset.UtcNow));
                 }
             }
 
@@ -1735,6 +1792,244 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
         {
             return value.ToString();
         }
+    }
+
+    /// <summary>The steps that combine a repeating field's occurrences into one value, and so need every repeat
+    /// rather than the single item Instance Selection collapsed it to.</summary>
+    private static bool IsRepeatJoiningNode(TransformNodeType nodeType) =>
+        nodeType is TransformNodeType.ConcatenationTemplating or TransformNodeType.ArrayListOperations;
+
+    private const string DeferralUnreadable =
+        "This column's de-identification was meant to run after its Transformations, but the column could not be "
+        + "read from the pre-de-identification resource, so it was written with the redaction applied first.";
+
+    private const string DeferralReadFailed =
+        "This column's de-identification was meant to run after its Transformations, but reading the "
+        + "pre-de-identification resource failed, so it was written with the redaction applied first.";
+
+    /// <summary>
+    /// Reads each deferred column's unredacted value and parts from the snapshot, with an explicit outcome per column:
+    /// <list type="bullet">
+    /// <item>A value or parts → deferred: its Transformations run on them, then its redaction.</item>
+    /// <item>Nothing in the snapshot AND nothing in the redacted mapping either → a genuine null/absent value:
+    /// nothing to defer and nothing to report.</item>
+    /// <item>Nothing in the snapshot but a redacted value exists, or the read throws → not deferred: the column keeps
+    /// the redacted value already mapped (redaction-first, never raw), and the fallback is recorded in lineage.</item>
+    /// </list>
+    /// A deferred column's parts are the unredacted ITEMS of a primitive-array path where the engine produced them
+    /// (MappingTestResultDto.PrimitiveArrayItems), else its usual parts — so only deferred columns see items.
+    /// </summary>
+    private (IReadOnlyDictionary<string, DeferredColumn>? Deferred, Dictionary<string, string>? Fallbacks) ReadDeferredColumns(
+        string deferrableOriginal,
+        MappingTestResultDto mapped,
+        IReadOnlyCollection<MappingFieldDto> fields,
+        IReadOnlyDictionary<string, IReadOnlyList<DeIdentificationFieldHop>> deferredRedactions,
+        IReadOnlyDictionary<string, object?> systemValues,
+        ResourceEnvelope resource)
+    {
+        MappingTestResultDto unredacted;
+        try
+        {
+            var deferredFields = fields.Where(f => deferredRedactions.ContainsKey(f.TargetField)).ToArray();
+            unredacted = _mappingEngine!.Map(deferrableOriginal, deferredFields, systemValues);
+        }
+        catch (Exception exception)
+        {
+            // The exception type only: its message may quote the unredacted resource.
+            Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(
+                Logger,
+                "Reading deferred de-identification columns for {ResourceType}/{ResourceId} failed ({ExceptionType}); "
+                + "those columns were written with the redaction applied first.",
+                resource.ResourceType, resource.ResourceId, exception.GetType().Name);
+            return (null, deferredRedactions.Keys.ToDictionary(
+                column => column, _ => DeferralReadFailed, StringComparer.OrdinalIgnoreCase));
+        }
+
+        Dictionary<string, DeferredColumn>? deferred = null;
+        Dictionary<string, string>? fallbacks = null;
+        foreach (var (column, hops) in deferredRedactions)
+        {
+            var value = unredacted.Values.GetValueOrDefault(column);
+            var parts = unredacted.PrimitiveArrayItems?.GetValueOrDefault(column)
+                ?? unredacted.RawArrayValues?.GetValueOrDefault(column);
+            if (value is not null || parts is { Count: > 0 })
+            {
+                (deferred ??= new(StringComparer.OrdinalIgnoreCase))[column] = new DeferredColumn(value, parts, hops);
+            }
+            else if (mapped.Values.GetValueOrDefault(column) is not null)
+            {
+                (fallbacks ??= new(StringComparer.OrdinalIgnoreCase))[column] = DeferralUnreadable;
+            }
+        }
+
+        return (deferred, fallbacks);
+    }
+
+    /// <summary>
+    /// The PostMapping rule chain for one mapped column, resolved once per (resource type, column, source field)
+    /// for the lifetime of a Mapping run — the single place every caller here resolves a column's chain, so
+    /// "has a chain" means the same thing to the deferral check, typing, terminology pre-warm and the chain itself.
+    /// </summary>
+    private async Task<IReadOnlyList<TransformationRule>> ResolveFieldRulesAsync(
+        string resourceType,
+        string targetField,
+        string? sourceField,
+        DestinationType destinationType,
+        string? sourceSystem,
+        Guid? resourcePipelineRouteId,
+        Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
+        CancellationToken cancellationToken)
+    {
+        var cacheKey = $"{resourceType}|{targetField}|{sourceField}";
+        if (!ruleCache.TryGetValue(cacheKey, out var rules))
+        {
+            rules = await _ruleResolver!.ResolveAsync(
+                // destinationConfigurationId is deliberately null at RUN time: null matches permissively, so
+                // execution resolves exactly the rules it always has. Narrowing here would change what
+                // already-running pipelines transform, which is a separate decision from stopping a NEW destination
+                // inheriting an old one's rules in the UI.
+                destinationType, resourceType, targetField, resourcePipelineRouteId, null, sourceSystem,
+                RuleSourceFieldFormat.FromJsonPath(resourceType, sourceField), cancellationToken,
+                // A node carrying a workflow id was authored by the V2 builder, whose rules are pipeline-private —
+                // so it must not inherit another workflow's. A V1 graph never carries one, which leaves its
+                // five-tier resolution exactly as it was.
+                workflowScopedOnly: resourcePipelineRouteId is not null);
+            ruleCache[cacheKey] = rules;
+        }
+
+        return rules;
+    }
+
+    /// <summary>
+    /// The parent-row columns whose De-identification redactions must run AFTER their own Transformations, each
+    /// with the redaction hop(s) to apply: a column qualifies when it has a PostMapping rule chain and its source
+    /// path is covered by a redaction the upstream De-identification node actually applied to this resource.
+    /// Null when nothing qualifies, or when what deferral needs is missing — the unredacted resource, a way to
+    /// redact the result, or the rule engine — in which case every column keeps the redacted value exactly as
+    /// before. Not for child-table columns or a resource that fans out into several rows, which keep the
+    /// existing order (redaction first).
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, IReadOnlyList<DeIdentificationFieldHop>>?> FindDeferredRedactionsAsync(
+        string? unredactedPayload,
+        MappingTestResultDto mapped,
+        IReadOnlyCollection<MappingFieldDto> fields,
+        IReadOnlyList<DeIdentificationFieldHop> preMappingHops,
+        string resourceType,
+        IReadOnlyDictionary<string, string> sourceFieldByTarget,
+        DestinationType? destinationType,
+        string? sourceSystem,
+        Guid? resourcePipelineRouteId,
+        Dictionary<string, IReadOnlyList<TransformationRule>> ruleCache,
+        CancellationToken cancellationToken)
+    {
+        // Rows always holds at least the one parent row; MORE than one means the resource fanned out (RepeatParent).
+        if (unredactedPayload is null || preMappingHops.Count == 0 || mapped.Rows is { Count: > 1 }
+            || destinationType is null || _deIdentificationService is null || _mappingEngine is null
+            || _ruleResolver is null || _transformNodeRegistry is null)
+        {
+            return null;
+        }
+
+        // The redactions a column could defer at all — built once per resource, not once per field.
+        var fieldHops = preMappingHops
+            .Where(hop => hop.Success
+                && !hop.Strategy.EndsWith(DeIdentificationStrategyNames.ReferenceSuffix, StringComparison.Ordinal))
+            .ToArray();
+        if (fieldHops.Length == 0)
+        {
+            return null;
+        }
+
+        Dictionary<string, IReadOnlyList<DeIdentificationFieldHop>>? deferred = null;
+        foreach (var field in fields)
+        {
+            if (field.ArrayPolicy is ArrayPolicy.SeparateDestination or ArrayPolicy.RepeatParent
+                || !sourceFieldByTarget.TryGetValue(field.TargetField, out var sourceField))
+            {
+                continue;
+            }
+            // A joined column ("a|b") is deferred only when EVERY joined path is covered: applying one path's
+            // redaction to the joined result would also rewrite the parts it never covered. Otherwise it keeps
+            // the existing order — each covered part already redacted before the join — which is still redacted.
+            var paths = sourceField.Split('|');
+            if (!paths.All(path => fieldHops.Any(hop => DeIdentificationSourcePath.SameElement(path, hop.SourceField, resourceType))))
+            {
+                continue;
+            }
+
+            var hops = fieldHops
+                .Where(hop => paths.Any(path => DeIdentificationSourcePath.SameElement(path, hop.SourceField, resourceType)))
+                .ToArray();
+
+            // Only the redactions that mean the same thing on a transformed string as on the raw one. Hash would
+            // stop matching the hashed references every other column and resource carries (breaking linkage);
+            // GeneralizeDateToYear / GeneralizeZip3 read character positions of the RAW format, which a
+            // Transformation may have changed ("03/15/1980" → "03/1"). Any of those keeps redaction-first.
+            if (!hops.All(hop => DeIdentificationStrategyNames.DeferrableAfterTransformations.Contains(hop.Strategy)))
+            {
+                continue;
+            }
+
+            // A joined column's parts must all be covered by the SAME rule: applied to the joined result, two
+            // different rules would combine into a value neither produces (Remove would also drop the other part).
+            if (paths.Length > 1 && hops.Select(hop => (hop.Strategy, hop.ConfigJson)).Distinct().Count() > 1)
+            {
+                continue;
+            }
+
+            // The same resolution (and cache) ApplyTransformRulesAsync uses, so "has a chain" here means the chain
+            // that will actually run there.
+            var rules = await ResolveFieldRulesAsync(
+                resourceType, field.TargetField, sourceField, destinationType.Value, sourceSystem,
+                resourcePipelineRouteId, ruleCache, cancellationToken);
+
+            // The chain runs on the UNREDACTED value, so only steps that merely reshape text are allowed: they produce
+            // a string (or a list of strings) the redaction can still apply to, and they never parse the value, so a
+            // failure cannot quote it. A chain with any other step (dates, numbers, codes, parsers, …) keeps
+            // redaction-first.
+            if (rules.Count > 0 && rules.All(rule => DeferrableChainSteps.Contains(rule.NodeType)))
+            {
+                (deferred ??= new Dictionary<string, IReadOnlyList<DeIdentificationFieldHop>>(StringComparer.OrdinalIgnoreCase))
+                    [field.TargetField] = hops;
+            }
+        }
+
+        return deferred;
+    }
+
+    private const string DeferredStepErrorWithheld =
+        "This step failed. Its message is withheld because the column's value had not been de-identified yet.";
+
+    private const string DeferredRedactionDropped =
+        "The value could not be de-identified after its Transformations, so it was dropped (written as empty).";
+
+    /// <summary>Transformation steps that only reshape text — never parse, convert or look the value up — and so
+    /// are the only ones allowed to run on a deferred column's unredacted value.</summary>
+    private static readonly HashSet<TransformNodeType> DeferrableChainSteps =
+    [
+        TransformNodeType.ConcatenationTemplating,
+        TransformNodeType.ArrayListOperations,
+        TransformNodeType.StringNormalization,
+    ];
+
+    /// <summary>
+    /// A deferred column's unredacted chain input (its value and its transform-chain parts) and the redactions to
+    /// apply to the chain's result. Deliberately a plain class, not a record: a record's generated ToString would
+    /// print the patient values it holds into any log line or exception message it reached.
+    /// </summary>
+    private sealed class DeferredColumn
+    {
+        public DeferredColumn(object? value, IReadOnlyList<object?>? parts, IReadOnlyList<DeIdentificationFieldHop> hops)
+        {
+            Value = value;
+            Parts = parts;
+            Hops = hops;
+        }
+
+        public object? Value { get; }
+        public IReadOnlyList<object?>? Parts { get; }
+        public IReadOnlyList<DeIdentificationFieldHop> Hops { get; }
+        public override string ToString() => $"DeferredColumn ({Hops.Count} redaction(s))";
     }
 
     /// <summary>Appends a "resolvedSystem" note to the rule's config JSON for THIS lineage hop only — the

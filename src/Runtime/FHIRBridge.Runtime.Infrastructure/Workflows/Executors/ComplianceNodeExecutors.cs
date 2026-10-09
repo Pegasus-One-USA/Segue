@@ -222,10 +222,12 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
             var redactionsByResourceId = new Dictionary<string, IReadOnlyList<DeIdentificationFieldHop>>();
             foreach (var resource in resourceInputs)
             {
+                var originalJson = Convert.ToString(resource.Payload) ?? "{}";
                 string sourceJson;
+                string? deferrableOriginalJson = null;
                 if (_deIdentificationService is null)
                 {
-                    sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+                    sourceJson = originalJson;
                 }
                 else
                 {
@@ -233,7 +235,7 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                         new DeIdentificationRequest(
                             resource.ResourceType,
                             resource.ResourceId,
-                            Convert.ToString(resource.Payload) ?? "{}",
+                            originalJson,
                             [],
                             resolvedProfileId),
                         cancellationToken);
@@ -242,9 +244,20 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                     {
                         redactionsByResourceId[resource.ResourceId] = result.Hops;
                     }
+
+                    deferrableOriginalJson = result.DeferrableOriginalJson;
                 }
 
-                deIdentifiedResources.Add(resource with { Payload = sourceJson });
+                var redactedEnvelope = resource with { Payload = sourceJson };
+                // Held in memory against THIS envelope only (see DeIdentificationSnapshots), so a mapped column with its
+                // own Transformations can run them on real values and be redacted afterwards. It holds only the fields
+                // a deferrable rule (Mask/Redact/Remove) covered, and only when such a rule actually applied.
+                if (deferrableOriginalJson is not null)
+                {
+                    DeIdentificationSnapshots.Attach(redactedEnvelope, deferrableOriginalJson, sourceJson);
+                }
+
+                deIdentifiedResources.Add(redactedEnvelope);
             }
 
             // De-identification was asked for and nothing at all was redacted. Almost always a misconfiguration

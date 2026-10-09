@@ -419,7 +419,11 @@ export class CanvasComponent {
     const newId = node.kind === 'transform' ? this.store.nextTransformId()
                 : node.kind === 'merge'     ? this.store.nextMergeId()
                 : this.store.nextNodeId();
-    this.store.addNode({ ...node, id: newId, x: menu.flowX, y: menu.flowY } as CanvasNode);
+    // A pasted node is one the user placed: it must not inherit the "added automatically for rules" marker, which
+    // would let the builder remove it later (see WorkflowBuilderV2Component.removeChainStep).
+    const fields = { ...(node.fields ?? {}) };
+    delete fields['__autoAdded'];
+    this.store.addNode({ ...node, id: newId, x: menu.flowX, y: menu.flowY, fields } as CanvasNode);
     this.toast.show('Pasted', 'Node pasted onto canvas.');
     this.ctxMenu.set(null);
   }

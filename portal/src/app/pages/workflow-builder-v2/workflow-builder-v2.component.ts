@@ -25,6 +25,10 @@ import { APP_ORIGIN } from '../../core/api-endpoints';
  *  De-identification → Destination. Mirrors ApplicabilityServiceV2.CHAIN_STEP_IDS. */
 const CHAIN_STEP_IDS: string[] = ['field-mapping', 'transformation', 'deidentification'];
 
+/** Node field marking a chain step the builder added automatically for rules (ensureChainNode) — the only kind
+ *  removeChainStep may take away again. Saved with the node, so it survives reloading the workflow. */
+const AUTO_ADDED_FIELD = '__autoAdded';
+
 /** Destinations whose transformation rules are workflow-scoped (FhirResource phase), so "does this
  *  workflow have rules?" can be asked of the server directly. Everything else is still Field-scoped
  *  and has to be intersected with the node's own mapped fields — see syncChainNodes. */
@@ -96,6 +100,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   protected readonly payloadOpen  = signal(false);
   protected readonly confirmReset = signal(false);
   protected readonly currentWorkflowId = signal<string | null>(null);
+  /** Latest chain-sync generation per destination node id — see beginChainSync. */
+  private readonly chainSyncGeneration = new Map<string, number>();
   protected readonly workflowName = signal('');
   // True once the name field has been blurred or a save was attempted while empty — gates the invalid
   // (red border + inline message) state so it doesn't show before the user has had a chance to type.
@@ -625,6 +631,9 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       // destination, so without chainLabel this would confusingly report "SQL Server configuration
       // updated" after saving the Mapping/Transformation/De-identification node.
       this.toast.show('Updated', `${e.chainLabel ?? t.name} configuration updated.`);
+      // The user has now opened and saved this chain step themselves, so it is theirs: drop the marker that let
+      // the builder remove it automatically (see removeChainStep).
+      if (e.chainNodeId) this.claimChainStep(e.chainNodeId);
       const edited = this.store.byId(e.editNodeId);
       if (edited && e.transformId.startsWith('dest-')) this.syncChainNodes(edited);
       return;
@@ -697,6 +706,9 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
    */
   private syncChainNodes(destination: CanvasNode): void {
     const fields = destination.fields ?? {};
+    // Two quick "Map fields" saves can have their lookups answer out of order: only the latest sync for this
+    // destination may add or remove a step, so a stale "no rules" can never undo what a newer answer added.
+    const isLatest = this.beginChainSync(destination.id);
 
     let hasMappings = false;
     try {
@@ -712,7 +724,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       && SQL_FAMILY_DESTINATION_TYPES.has(destinationType);
 
     if (mappingApplies) this.ensureChainNode(destination, 'field-mapping');
-    this.syncDeIdentificationNode(destination);
+    this.syncDeIdentificationNode(destination, isLatest);
 
     // Transformation rules are the only step that lives server-side, so this is the one signal that has to be
     // asked for rather than read off the node. What it asks for is the part that matters: rules belonging to
@@ -729,11 +741,14 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         .list({ destinationType, executionPhase: 'FhirResource', resourcePipelineRouteId: workflowId })
         .subscribe({
           next: rules => {
+            if (!isLatest()) return;
             if (rules.some(rule => rule.resourcePipelineRouteId === workflowId)) {
               this.ensureChainNode(destination, 'transformation');
+            } else {
+              this.removeChainStep(destination, 'transformation');
             }
           },
-          error: () => { /* a rules lookup failure must not add a node on a guess */ },
+          error: () => { /* a rules lookup failure must not add — or remove — a node on a guess */ },
         });
       return;
     }
@@ -754,10 +769,13 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     if (!workflowId) return;
 
     const mappedKeys = this.mappedRuleKeys(fields);
+    // No mapped column yet: nothing to ask about. Nothing is removed here either — a step is only ever taken away
+    // on a CONFIRMED server answer below, never on a momentarily empty mapping list.
     if (mappedKeys.size === 0) return;
 
     this.transformationRules.list({ destinationType, resourcePipelineRouteId: workflowId }).subscribe({
       next: rules => {
+        if (!isLatest()) return;
         const appliesHere = rules.some(rule =>
           // Belt-and-braces against a server-side filter that ever widens: this node is only this workflow's
           // business when the rule actually belongs to it.
@@ -767,9 +785,15 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
           && mappedKeys.has(`${rule.resourceType}|${rule.destinationField}`)
           // A rule naming a different source field is about a different mapping of the same column.
           && (!rule.sourceField || mappedKeys.has(`${rule.resourceType}|${rule.destinationField}|${rule.sourceField}`)));
-        if (appliesHere) this.ensureChainNode(destination, 'transformation');
+        if (appliesHere) {
+          this.ensureChainNode(destination, 'transformation');
+        } else {
+          // Every rule was removed (or none applies to what is mapped any more): the step has nothing to do,
+          // so it leaves the canvas the same way it arrived — automatically.
+          this.removeChainStep(destination, 'transformation');
+        }
       },
-      error: () => { /* as above — never add a node on a guess */ },
+      error: () => { /* as above — never add or remove a node on a guess */ },
     });
   }
 
@@ -804,7 +828,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
    * as the Transformation gate right below: ask for what actually belongs to this pipeline, and add nothing
    * on a guess.
    */
-  private syncDeIdentificationNode(destination: CanvasNode): void {
+  private syncDeIdentificationNode(destination: CanvasNode, isLatest: () => boolean): void {
     const workflowId = this.currentWorkflowId();
     if (!workflowId) return;
     // Never in front of an EHR write-back: redacted data must not reach a patient's chart.
@@ -813,7 +837,10 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
     this.deIdentificationProfiles.list().subscribe({
       next: profiles => {
+        if (!isLatest()) return;
         const owned = profiles.find(profile => profile.name === workflowId);
+        // No policy named after this workflow says nothing about the step: it may use a shared or differently
+        // named policy (or the platform default), so it is never removed on that basis.
         if (!owned) return;
 
         // Filtered client-side: the rules endpoint has no deIdentificationProfileId parameter (it was built
@@ -821,11 +848,16 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         // wizard's own Review card makes.
         this.transformationRules.list({}).subscribe({
           next: rules => {
+            if (!isLatest()) return;
             if (rules.some(rule => rule.deIdentificationProfileId === owned.id && rule.isEnabled)) {
               this.ensureChainNode(destination, 'deidentification');
+            } else if (this.deIdentificationStepUsesPolicy(destination, owned.id)) {
+              // The step redacts with THIS workflow's own policy, and that policy has no enabled rule left: it
+              // would redact nothing. A step pointed at any other policy is left alone.
+              this.removeChainStep(destination, 'deidentification');
             }
           },
-          error: () => { /* a rules lookup failure must not add a node on a guess */ },
+          error: () => { /* a rules lookup failure must not add — or remove — a node on a guess */ },
         });
       },
       error: () => { /* nor a profile lookup failure */ },
@@ -834,7 +866,8 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
   private ensureChainNode(destination: CanvasNode, transformId: string): void {
     if (this.chainStepsBefore(destination).some(n => (n as TransformNode).transformId === transformId)) return;
-    this.insertChainStep(destination, transformId);
+    // Marked so removeChainStep can tell a step the builder added for rules from one the user placed.
+    this.insertChainStep(destination, transformId, { [AUTO_ADDED_FIELD]: 'true' });
   }
 
   /** The chain nodes currently sitting between the source and `destination`, in canvas order. */
@@ -897,7 +930,67 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       this.store.addEdge({ id: this.store.nextEdgeId(), from: sequence[i].id, to: sequence[i + 1].id });
     }
 
-    // Lay the segment out left-to-right from whatever feeds it, pushing the destination to the end.
+    this.layoutChain(destination);
+  }
+
+  /**
+   * The inverse of ensureChainNode: takes `transformId`'s step out of `destination`'s chain and joins its
+   * neighbours back up. Called only once the server has confirmed the step has nothing left to apply (no
+   * transformation rule for this workflow, no enabled rule in its de-identification policy) — the step was put
+   * on the canvas automatically for those rules, so it goes the same way when they are gone, rather than
+   * lingering as an empty node. A lookup that fails removes nothing.
+   */
+  private removeChainStep(destination: CanvasNode, transformId: string): void {
+    const step = this.chainStepsBefore(destination).find(n => (n as TransformNode).transformId === transformId);
+    // Only a step the builder added itself (ensureChainNode marks it) is ever taken away — never one the user
+    // placed, which stays until the user deletes it.
+    if (!step || step.fields?.[AUTO_ADDED_FIELD] !== 'true') return;
+
+    // Every link through the step is kept, not just the first: each predecessor is joined to each successor.
+    const froms = this.store.inboundEdges(step.id).map(edge => edge.from);
+    const tos = this.store.outboundEdges(step.id).map(edge => edge.to);
+    this.store.removeNode(step.id);   // also drops its edges
+    for (const from of froms) {
+      for (const to of tos) {
+        if (!this.store.outboundEdges(from).some(edge => edge.to === to)) {
+          this.store.addEdge({ id: this.store.nextEdgeId(), from, to });
+        }
+      }
+    }
+
+    this.layoutChain(destination);
+  }
+
+  /** Marks an automatically added chain step as the user's (removes __autoAdded), so it is never auto-removed. */
+  private claimChainStep(nodeId: string): void {
+    const node = this.store.byId(nodeId);
+    if (node?.fields?.[AUTO_ADDED_FIELD] !== 'true') return;
+    const fields = { ...node.fields };
+    delete fields[AUTO_ADDED_FIELD];
+    this.store.updateNode(nodeId, { fields });
+  }
+
+  /** Starts a new chain sync for `destination` and returns a check that stays true only while it is the latest. */
+  private beginChainSync(destinationId: string): () => boolean {
+    const generation = (this.chainSyncGeneration.get(destinationId) ?? 0) + 1;
+    this.chainSyncGeneration.set(destinationId, generation);
+    return () => this.chainSyncGeneration.get(destinationId) === generation;
+  }
+
+  /** Whether `destination`'s De-identification step redacts with policy `profileId` — the step's own profileId,
+   *  else the policy picked on the destination, which is what the step is stamped with at save time. */
+  private deIdentificationStepUsesPolicy(destination: CanvasNode, profileId: string): boolean {
+    const step = this.chainStepsBefore(destination).find(n => (n as TransformNode).transformId === 'deidentification');
+    const policy = step?.fields?.['profileId'] || destination.fields?.['deIdentificationProfileId'];
+    return policy === profileId;
+  }
+
+  /** Lays `destination`'s chain out left-to-right from whatever feeds it, pushing the destination to the end. */
+  private layoutChain(destination: CanvasNode): void {
+    const ordered = this.chainStepsBefore(destination);
+    const head = this.store.inboundEdges(ordered.length ? ordered[0].id : destination.id)[0];
+    const upstream = head ? this.store.byId(head.from) : undefined;
+
     const baseX = upstream ? upstream.x : destination.x - 300 * (ordered.length + 1);
     const baseY = upstream ? upstream.y : destination.y;
     ordered.forEach((n, i) => this.store.moveNode(n.id, baseX + 300 * (i + 1), baseY));

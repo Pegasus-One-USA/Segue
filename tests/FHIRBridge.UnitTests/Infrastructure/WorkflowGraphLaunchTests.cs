@@ -264,6 +264,8 @@ public sealed class WorkflowGraphLaunchTests
             LastProfileId = request.ProfileId;
             return Task.FromResult(new DeIdentificationResult("SCRUBBED", []));
         }
+
+        public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop) => value;
     }
 
     private sealed class FakeConfigurationRepository : IConfigurationRepository
