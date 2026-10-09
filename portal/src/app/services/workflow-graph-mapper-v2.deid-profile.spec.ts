@@ -32,8 +32,10 @@ describe('WorkflowGraphMapperServiceV2 — de-identification policy stamping', (
   const destination = (profileId?: string): CanvasNode =>
     ({
       id: 'dest',
-      kind: 'destination',
-      transformId: 'sql-server',
+      // A destination on the canvas is a transform node whose transformId starts with 'dest-' (see
+      // isDestination) — there is no 'destination' kind, and a non-'dest-' id is never walked back from.
+      kind: 'transform',
+      transformId: 'dest-sqlserver',
       fields: {
         __name: 'SQL Server',
         destinationId: DESTINATION_ID,

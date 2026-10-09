@@ -49,7 +49,8 @@ describe('buildIntegrationDetails', () => {
     it('warns that there is no app-to-app credential, so a partner plans for it up front', () => {
       const details = buildIntegrationDetails(row(), ORIGIN, 'Backend Service');
 
-      const signIn = details.checks.find(check => check.label === 'Sign-in required');
+      // Renamed from 'Sign-in required' in 13091302, when launch audiences got their own 'No Segue sign-in needed'.
+      const signIn = details.checks.find(check => check.label === 'Sign-in required to run');
       expect(signIn?.state).toBe('note');
       expect(signIn?.detail).toContain('no app-to-app');
     });
@@ -65,14 +66,18 @@ describe('buildIntegrationDetails', () => {
   describe('Interactive audiences', () => {
     // Matches the run endpoint specifically rather than the bare substring '/run': every interactive audience
     // legitimately cites /workflows/runs/{id}/launch-result to read what a completed launch retrieved.
-    it('never offers the run endpoint — these cannot be started from a server', () => {
-      for (const applicationType of ['Standalone', 'Patient', 'EhrLaunch']) {
-        const details = buildIntegrationDetails(
-          row({ action: 'Launch', applicationType }), ORIGIN, applicationType);
+    // Only EHR Launch: since 13091302 the standalone audiences DO call /run after the one-time sign-in (see
+    // 'documents the standalone run-after-sign-in cycle' below). On EHR Launch the launch itself starts the run,
+    // and the one POST it documents is the server-side validate-run before the mint (added in 7feed0b6).
+    it('never offers the run endpoint on EHR Launch — the launch itself starts the run', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EhrLaunch');
+      const postLines = valuesOf(details).split('\n').filter(line => line.includes('POST'));
 
-        expect(valuesOf(details)).not.toMatch(/\/workflows\/[^/\s]+\/run\b/);
-        expect(valuesOf(details)).not.toContain('POST');
-      }
+      expect(valuesOf(details)).not.toMatch(/\/workflows\/[^/\s]+\/run\b/);
+      expect(postLines).toEqual([
+        `POST ${ORIGIN}/api/v1/workflows/11111111-2222-3333-4444-555555555555/validate-run`,
+      ]);
     });
 
     it('sends Provider Standalone to the Epic directory and its own mint endpoint', () => {
@@ -369,7 +374,10 @@ ${v.hint ?? ''}`).join('\n');
         const details = buildIntegrationDetails(row(overrides), ORIGIN, label);
 
         expect(valuesOf(details)).toContain('X-Correlation-Id');
-        expect(valuesOf(details).toLowerCase() + hintsOf(details).toLowerCase()).toContain('cookies');
+        // Every audience gets an entry that says what to do about cookies. On the launch audiences that entry is
+        // 'Cookies — send them only if…', whose value/hint speak of "withCredentials" and "a … cookie", so the
+        // word only appears in its label.
+        expect(details.values.some(value => value.label.toLowerCase().includes('cookies'))).toBeTrue();
       }
     });
 

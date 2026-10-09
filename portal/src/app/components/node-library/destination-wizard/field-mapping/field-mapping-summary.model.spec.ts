@@ -26,7 +26,9 @@ describe('buildMappingSummaryDocument', () => {
       sourceConnectionId: 'conn-123', destinationId: 'dest-456',
     });
     expect(doc.source).toBe('EPIC');
-    expect(doc.destination).toBe('SQL');
+    // The envelope carries the destination's own label (destLabel), not a sql/csv code: since destType grew
+    // to five kinds (7de2874c) a 'SQL'/'CSV' ternary would have called a MongoDB destination 'CSV'.
+    expect(doc.destination).toBe('SQL Server');
     expect(doc.sourceConnectionId).toBe('conn-123');
     expect(doc.destinationId).toBe('dest-456');
     expect(doc.mappings.length).toBe(1);

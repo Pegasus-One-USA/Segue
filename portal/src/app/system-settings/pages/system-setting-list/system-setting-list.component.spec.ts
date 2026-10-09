@@ -1,8 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { NEVER, of, throwError } from 'rxjs';
 import { SystemSettingListComponent } from './system-setting-list.component';
 import { ISystemSettingsService } from '../../services/i-system-settings.service';
+import { HapiTerminologyConfigurationService } from '../../services/hapi-terminology-configuration.service';
+import { TerminologyStatusHubService } from '../../services/terminology-status-hub.service';
 import { AuthStore } from '../../../auth/store/auth.store';
 import { IRoleService } from '../../../user-management/services/i-role.service';
 import { Role, User } from '../../../auth/models/user.model';
@@ -43,6 +45,19 @@ describe('SystemSettingListComponent', () => {
       { key: 'Caching:TerminologyTtlMinutes', value: '60', description: 'TTL.' } as never,
     ]));
 
+    // An elevated caller (SuperAdmin / Full Access) also gets the Terminology Servers table
+    // (HapiTerminologyTableComponent), which loads over HTTP and opens a SignalR hub from its own
+    // ngOnInit. Neither is what this spec covers, so both are stubbed: no rows, and no live connection.
+    const hapiTerminologyService = jasmine.createSpyObj<HapiTerminologyConfigurationService>(
+      'HapiTerminologyConfigurationService', ['getAll', 'scan'],
+    );
+    hapiTerminologyService.getAll.and.returnValue(of([]));
+    const terminologyHub = {
+      ensureConnected: jasmine.createSpy('ensureConnected'),
+      statusChanged$: NEVER,
+      reconnected$: NEVER,
+    };
+
     TestBed.configureTestingModule({
       imports: [SystemSettingListComponent],
       providers: [
@@ -50,6 +65,8 @@ describe('SystemSettingListComponent', () => {
         provideRouter([]),
         { provide: IRoleService, useValue: roleService },
         { provide: ISystemSettingsService, useValue: settingsService },
+        { provide: HapiTerminologyConfigurationService, useValue: hapiTerminologyService },
+        { provide: TerminologyStatusHubService, useValue: terminologyHub },
       ],
     });
 

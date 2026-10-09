@@ -49,8 +49,12 @@ const SETTINGS_TABS: SettingsTab[] = [
     // Terminology's codes only count toward this tab's visibility while the feature is enabled —
     // see data/terminology-feature.config.ts; otherwise a terminology-only role would see this tab
     // but find nothing reachable inside it.
+    // ehrendpoints.view is in this OR for the same reason it is on settings.routes.ts's 'system-settings'
+    // route and its landing candidate: EHR Endpoints is a row on this tab now, so a role holding only
+    // that permission must still see the tab that leads to it.
     permissions: [
       'configuration.view', 'configuration.write',
+      'ehrendpoints.view',
       ...(TERMINOLOGY_FEATURE_ENABLED ? TERMINOLOGY_PERMISSION_CODES : []),
     ],
   },
