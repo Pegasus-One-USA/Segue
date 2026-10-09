@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -201,8 +201,9 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         }
 
         public Task<IReadOnlyList<TransformationRule>> GetWorkflowScopedAsync(
-            Guid resourcePipelineRouteId, string resourceType, string destinationField, string? sourceSystem,
-            string? sourceField, CancellationToken cancellationToken) => throw new NotSupportedException();
+            Guid resourcePipelineRouteId, Guid? destinationConfigurationId, string resourceType,
+            string destinationField, string? sourceSystem, string? sourceField,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<TransformationRule>> GetFieldScopedAsync(
             string resourceType, string destinationField, string? sourceSystem, string? sourceField,
@@ -229,12 +230,21 @@ public sealed class WorkflowConfigurationCleanupServiceTests
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowRulesAsync(
-            IReadOnlyCollection<DestinationType> destinationTypes, CancellationToken cancellationToken) =>
+            IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<int> DeleteWorkflowRulesForDestinationAsync(
+            Guid resourcePipelineRouteId, Guid destinationConfigurationId, DestinationType destinationType,
+            bool includeUnattributed, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<int> DeletePendingWorkflowRulesAsync(
+            IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<TransformationRule>> GetPendingWorkflowScopedAsync(
             DestinationType destinationType, string resourceType, string destinationField, string? sourceSystem,
-            string? sourceField, CancellationToken cancellationToken) =>
+            string? sourceField, string? owner, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>

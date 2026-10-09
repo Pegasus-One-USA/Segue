@@ -12,6 +12,7 @@ using FHIRBridge.Runtime.Infrastructure.Licensing;
 using FHIRBridge.Runtime.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 
 namespace FHIRBridge.Runtime.Infrastructure;
@@ -56,15 +57,17 @@ public static class DependencyInjection
         services.AddHttpClient<HealowAuthorizationCodeTokenProvider>().AddMutualTls();
         services.AddHttpClient<EpicInteractiveTokenProvider>().AddMutualTls();
         services.AddHttpClient<MeditechGreenfieldTokenProvider>().AddMutualTls();
-        services.AddHttpClient<EpicFhirSourceClient>().AddMutualTls();
+        // The vendor clients also carry EHR write-back's creates (FhirSourceConnectorBase.Write), so each gets a
+        // resilience handler that never retries an unsafe method: see AddWriteSafeResilience.
+        services.AddHttpClient<EpicFhirSourceClient>().AddMutualTls().AddWriteSafeResilience();
         // Shares Epic's EpicFhirClientOptions and every base behaviour — it differs only in naming itself "FHIR"
         // rather than "Epic FHIR" in logs and errors (see GenericFhirSourceClient).
-        services.AddHttpClient<GenericFhirSourceClient>().AddMutualTls();
+        services.AddHttpClient<GenericFhirSourceClient>().AddMutualTls().AddWriteSafeResilience();
         // Shares Epic's EpicFhirClientOptions (retry/timeout/throttle knobs) — no athenahealth-specific values are
         // called out in the integration spec, so the same IOptions<EpicFhirClientOptions> singleton applies here too.
-        services.AddHttpClient<AthenahealthFhirSourceClient>().AddMutualTls();
+        services.AddHttpClient<AthenahealthFhirSourceClient>().AddMutualTls().AddWriteSafeResilience();
         // Same rationale as athenahealth above — no eCW-specific retry/timeout values are confirmed yet.
-        services.AddHttpClient<EClinicalWorksFhirSourceClient>().AddMutualTls();
+        services.AddHttpClient<EClinicalWorksFhirSourceClient>().AddMutualTls().AddWriteSafeResilience();
 
         // Application-type axis: each ApplicationType maps to a strategy that owns its grant/launch flow, validation
         // and descriptor. Resolved from the registry (never a switch — enforced by ApplicationTypeDispatchTests).
@@ -140,6 +143,30 @@ public static class DependencyInjection
         services.AddScoped<IPipelineRunLicenseGuard, LicenseQuotaGuardAdapter>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Replaces the host's default resilience handler (FHIRBridge.Infrastructure's ConfigureHttpClientDefaults, which
+    /// retries every method on 5xx, 408, 429, timeouts and dropped connections) with the same handler minus retries
+    /// for unsafe methods. Without this a create the connector sends ONCE could reach the EHR up to four times from
+    /// underneath it, and the EHR files every copy. GETs keep their retries; <c>Patient/$match</c> is a POST, so the
+    /// connector retries it itself. Timeouts and the circuit breaker match the host defaults.
+    /// </summary>
+    private static IHttpClientBuilder AddWriteSafeResilience(this IHttpClientBuilder builder)
+    {
+        // EXTEXP0001: evaluation-only API in Microsoft.Extensions.Http.Resilience 10.x. It is the documented way to
+        // replace a handler added by ConfigureHttpClientDefaults, and nothing else in the package does that.
+#pragma warning disable EXTEXP0001
+        builder.RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+        builder.AddStandardResilienceHandler(options =>
+        {
+            options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(100);
+            options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(200);
+            options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(300);
+            options.Retry.DisableForUnsafeHttpMethods();
+        });
+        return builder;
     }
 
     // Configures an HttpClient's primary handler to present the mTLS client certificate when enabled. Callers may opt

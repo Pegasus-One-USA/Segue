@@ -637,6 +637,12 @@ public sealed class RankedWorkflowOrchestratorTests
             CapturedContexts.Add(context);
             return Task.FromResult<string?>("ERR-TEST-000002");
         }
+
+        // Workflow trace lines (WorkflowDebug) are not part of what these tests record.
+        public Task<string?> CaptureTraceAsync(
+            string severity, string entryType, string message, ExceptionContext context,
+            DateTime? occurredUtc = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>(null);
     }
 
     private sealed class PayloadExecutor : IWorkflowNodeExecutor

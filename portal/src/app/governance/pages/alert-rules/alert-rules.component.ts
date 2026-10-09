@@ -37,7 +37,7 @@ export class AlertRulesComponent implements OnInit, HasUnsavedChanges {
   private readonly toast = inject(ToastService);
 
   constructor() {
-    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges() || this.isSaveInProgress());
+    this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges(), undefined, () => this.isSaveInProgress());
   }
 
   readonly loading = signal(false);

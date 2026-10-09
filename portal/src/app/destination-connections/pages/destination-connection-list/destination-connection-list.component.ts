@@ -240,7 +240,8 @@ export class DestinationConnectionListComponent implements OnInit {
     }
     forkJoin(
       items.map(item =>
-        this.svc.hasExecutionHistory(item.id).pipe(
+        // Silent: a background flag for rows already on screen — see hasExecutionHistory.
+        this.svc.hasExecutionHistory(item.id, true).pipe(
           map(res => [item.id, res.hasExecutionHistory] as const),
           catchError(() => of([item.id, false] as const)),
         ),

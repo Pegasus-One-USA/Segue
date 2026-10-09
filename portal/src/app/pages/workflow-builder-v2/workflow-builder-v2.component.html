@@ -102,6 +102,7 @@
 <div class="builder-canvas-area">
   <app-canvas
     [workflowSaved]="!!currentWorkflowId()"
+    [workflowId]="currentWorkflowId()"
     [readOnly]="!canMutate()"
     (openWizard)="onOpenWizard($event)"
     (openTransformPicker)="onOpenTransformPicker($event)"

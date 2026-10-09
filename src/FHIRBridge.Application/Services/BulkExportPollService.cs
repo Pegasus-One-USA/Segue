@@ -20,6 +20,8 @@ public sealed class BulkExportPollService : IBulkExportPollService
     private readonly IRankedWorkflowOrchestrator _workflowOrchestrator;
     private readonly IGlobalExceptionManager? _exceptionManager;
     private readonly IAmbientActorContext? _ambientActorContext;
+    private readonly FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowRunStore? _runStore;
+    private readonly FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore? _definitionStore;
     private readonly ILogger<BulkExportPollService> _logger;
 
     public BulkExportPollService(
@@ -29,7 +31,9 @@ public sealed class BulkExportPollService : IBulkExportPollService
         IRankedWorkflowOrchestrator workflowOrchestrator,
         ILogger<BulkExportPollService> logger,
         IGlobalExceptionManager? exceptionManager = null,
-        IAmbientActorContext? ambientActorContext = null)
+        IAmbientActorContext? ambientActorContext = null,
+        FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowRunStore? runStore = null,
+        FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore? definitionStore = null)
     {
         _jobRepository = jobRepository;
         _bulkExportClient = bulkExportClient;
@@ -38,6 +42,8 @@ public sealed class BulkExportPollService : IBulkExportPollService
         _logger = logger;
         _exceptionManager = exceptionManager;
         _ambientActorContext = ambientActorContext;
+        _runStore = runStore;
+        _definitionStore = definitionStore;
     }
 
     public async Task PollDueJobsAsync(
@@ -118,7 +124,13 @@ public sealed class BulkExportPollService : IBulkExportPollService
                 // Binary/Medication/Media/Specimen (referenced by the requested types) even though `_type` asked
                 // only for the selected set. Drop those manifest files up front so unrequested types are never
                 // downloaded (avoids, e.g., a long slow Binary-attachment tail) or written.
-                var outputFiles = FilterFilesToRequestedResourceTypes(result.Files ?? [], job.RequestedResourceTypesJson);
+                //
+                // One exception: Binary, when this run writes notes back into an EHR. A note's text sits in the
+                // Binary its DocumentReference links to, and a bulk-only app's token is refused on a plain
+                // Binary/{id} read (eCW "Backend - Bulk API": "No valid token found"), so the export's own Binary
+                // file is the only place the write-back can get the text from.
+                var alsoKeep = await NeedsNoteContentAsync(job, cancellationToken) ? NoteContentResourceTypes : null;
+                var outputFiles = FilterFilesToRequestedResourceTypes(result.Files ?? [], job.RequestedResourceTypesJson, alsoKeep);
                 var resources = await _bulkExportClient.DownloadResultsAsync(outputFiles, source, cancellationToken);
 
                 // Partial success per the FHIR Bulk Data spec: the job as a whole completed (200), but the
@@ -192,13 +204,51 @@ public sealed class BulkExportPollService : IBulkExportPollService
     // turn a real export into an empty one: with no requested-type list, or when NOTHING matches (e.g. a server that
     // labels every output file generically), the full file set is returned unchanged and the record/destination-side
     // filters still apply downstream.
+    private static readonly IReadOnlyCollection<string> NoteContentResourceTypes = ["Binary"];
+
+    /// <summary>
+    /// True when the paused run's workflow writes back into an EHR and asked for notes (DocumentReference), so the
+    /// export's Binary file carries note text the write-back needs. False whenever that cannot be established: the
+    /// default is the strict filter, which never downloads more than was asked for.
+    /// </summary>
+    private async Task<bool> NeedsNoteContentAsync(BulkExportJob job, CancellationToken cancellationToken)
+    {
+        if (_runStore is null
+            || _definitionStore is null
+            || job.SourcePath != BulkExportJobSourcePath.WorkflowNode
+            || job.WorkflowRunId is not { } runId
+            || ParseRequestedResourceTypeSet(job.RequestedResourceTypesJson) is not { } requested
+            || !requested.Contains("DocumentReference"))
+        {
+            return false;
+        }
+
+        try
+        {
+            var run = await _runStore.GetAsync(runId, cancellationToken);
+            var workflow = run is null ? null : await _definitionStore.GetAsync(run.WorkflowDefinitionId, cancellationToken);
+            return workflow is not null
+                && FHIRBridge.Runtime.Application.Workflows.Catalog.WorkflowNodeTypes.HasEhrWriteBack(workflow);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception, "Could not tell whether bulk export job {JobId} feeds an EHR write-back; Binary files are skipped.", job.Id);
+            return false;
+        }
+    }
+
     private IReadOnlyList<BulkExportFile> FilterFilesToRequestedResourceTypes(
-        IReadOnlyList<BulkExportFile> files, string? requestedResourceTypesJson)
+        IReadOnlyList<BulkExportFile> files, string? requestedResourceTypesJson, IReadOnlyCollection<string>? alsoKeep = null)
     {
         var requested = ParseRequestedResourceTypeSet(requestedResourceTypesJson);
         if (requested is null || files.Count == 0)
         {
             return files;
+        }
+
+        if (alsoKeep is { Count: > 0 })
+        {
+            requested = new HashSet<string>(requested.Concat(alsoKeep), requested.Comparer);
         }
 
         var kept = files.Where(file => requested.Contains(file.ResourceType)).ToList();

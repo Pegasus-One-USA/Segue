@@ -18,7 +18,8 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
         SourceAuthenticationConfiguration authentication,
         ApplicationType? applicationType = null,
         SourceInteractiveConfiguration? interactive = null,
-        SourceRetrievalConfiguration? retrieval = null)
+        SourceRetrievalConfiguration? retrieval = null,
+        SourceConnectionAccess access = SourceConnectionAccess.Read)
     {
         Id = Guid.NewGuid();
         Name = name;
@@ -28,6 +29,7 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
         ApplicationType = applicationType;
         Interactive = interactive;
         Retrieval = retrieval;
+        Access = access;
         IsEnabled = true;
     }
 
@@ -52,6 +54,14 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
 
     public bool IsEnabled { get; private set; }
 
+    /// <summary>
+    /// Whether this connection is read from, written to by an EHR Write-Back destination, or both. Deliberately not a
+    /// parameter of <see cref="Update"/>: several callers rebuild a connection positionally, and a defaulted
+    /// parameter there would silently downgrade a write connection to Read. Change it only through
+    /// <see cref="SetAccess"/>.
+    /// </summary>
+    public SourceConnectionAccess Access { get; private set; } = SourceConnectionAccess.Read;
+
     public void Update(
         string name,
         SourceSystemType sourceSystemType,
@@ -73,6 +83,16 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
     public void SetEnabled(bool isEnabled)
     {
         IsEnabled = isEnabled;
+    }
+
+    public void SetAccess(SourceConnectionAccess access)
+    {
+        if (!Enum.IsDefined(access))
+        {
+            throw new InvalidOperationException($"Source connection access '{(int)access}' is not a defined value.");
+        }
+
+        Access = access;
     }
 
     /// <summary>Advances the incremental-sync cursor for the given resource types after a workflow run completes

@@ -16,6 +16,8 @@ import { buildNodeDeletePlanV2, NodeDeletePlan } from '../../services/node-delet
 import { sourceFormKeyForNode } from '../node-library-v2/source-node-vendor.util';
 import { SOURCES } from '../../data/sources-v2.data';
 import { TRANSFORMS } from '../../data/transforms-v2.data';
+import { TransformationRulesService } from '../node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
+import { DestinationType } from '../../destination-connections/models/destination-configuration.model';
 
 @Component({
   selector: 'app-canvas',
@@ -36,6 +38,7 @@ export class CanvasComponent {
   protected readonly toast       = inject(ToastService);
   protected readonly appSvc      = inject(ApplicabilityServiceV2);
   private readonly permissions   = inject(PermissionService);
+  private readonly transformationRules = inject(TransformationRulesService);
 
   // ── events upward ─────────────────────────────────────────────────────────
   readonly openWizard          = output<string>();
@@ -46,6 +49,10 @@ export class CanvasComponent {
 
   /** True once the workflow has a saved id — a checkpoint URL can only be generated against a persisted node. */
   readonly workflowSaved = input<boolean>(false);
+  /** The workflow being edited, when it has been saved at least once. Needed to clean up the rules a
+   *  deleted destination owned — those are attached to the workflow, not to the canvas, so nothing else
+   *  here can identify them. Null on a workflow that has never been saved, which has no attached rules. */
+  readonly workflowId = input<string | null>(null);
 
   /** True when the current role lacks the permission to mutate THIS workflow (workflow.create for a
    *  brand-new one, workflow.edit for an existing one — see WorkflowBuilderComponent.canMutate). Hides
@@ -236,6 +243,11 @@ export class CanvasComponent {
       this.store.updateNode(clear.nodeId, { fields });
     }
 
+    // Computed BEFORE the removals: it has to resolve the destination type of nodes that are about to go,
+    // and once removeNode has run they are no longer in the store to look up.
+    const removedDestinations = this.destinationsBeingRemoved(plan);
+    const orphanedDestinationTypes = this.destinationTypesLosingTheirLastNode(plan);
+
     for (const removal of plan.removals) this.store.removeNode(removal.id);
 
     // Reconnect what the removal sat between (source → destination after a Mapping delete, predecessor
@@ -247,6 +259,44 @@ export class CanvasComponent {
       this.store.addEdge({ id: this.store.nextEdgeId(), from: edge.from, to: edge.to });
     }
 
+    // Discard the drafts the removed destinations owned. A transformation rule is written to the server the
+    // moment it is configured, but stays PENDING (no workflow) until a save attaches it — and nothing deleted
+    // it when its node went, so it outlived the node. Because the pending tier matches on destination type +
+    // resource type + destination field alone, re-creating the same column on a NEW node of the same type
+    // re-applied that rule with nothing selected.
+    //
+    // Only for a destination type that has just lost its LAST node: pending rules are keyed by field, not by
+    // node, so while another node of the same type is still on the canvas those rules may well belong to it.
+    // Fire-and-forget on purpose — this is cleanup of drafts, and failing it must not block a canvas edit the
+    // user already confirmed (the next attempt cleans up, and an unattached rule cannot run meanwhile).
+    if (orphanedDestinationTypes.length > 0) {
+      this.transformationRules.deletePending(orphanedDestinationTypes).subscribe({
+        next: () => { /* silent: the user deleted the node, not the rules */ },
+        error: () => { /* see above — drafts, not data */ },
+      });
+    }
+
+    // Rules the removed destinations owned. Deleting a destination always looked like it took its
+    // transformations with it; it did not, and the save-time retirement pass could not see a like-for-like
+    // replacement at all (it drops a type from its "removed" set as soon as any surviving destination
+    // shares it), so a new PostgreSQL destination arrived with the previous one's rules already applied.
+    const workflowId = this.workflowId();
+    if (workflowId) {
+      for (const removed of removedDestinations) {
+        this.transformationRules.deleteForDestination({
+          workflowId,
+          destinationConfigurationId: removed.destinationId,
+          destinationType: removed.destinationType,
+          // A rule that records no destination id could belong to a surviving destination of the same
+          // type, so it is only claimed for this one when none is left.
+          otherDestinationsOfThisTypeRemain: !orphanedDestinationTypes.includes(removed.destinationType),
+        }).subscribe({
+          next: () => { /* silent: the user deleted the destination, the rules went with it */ },
+          error: () => { /* the next delete or the next workflow save retries the cleanup */ },
+        });
+      }
+    }
+
     const count = plan.removals.length;
     this.toast.show(
       count === 1 ? 'Module removed' : `${count} modules removed`,
@@ -255,6 +305,41 @@ export class CanvasComponent {
         : `${plan.removals.map(removal => removal.label).join(', ')} deleted.`,
     );
     this.pendingDelete.set(null);
+  }
+
+  /** The destinations this delete removes, as (configuration id, type) pairs — the identity their rules
+   *  are recorded against. A node with no destinationId was never provisioned, so it owns no rules. */
+  private destinationsBeingRemoved(plan: NodeDeletePlan): { destinationId: string; destinationType: DestinationType }[] {
+    return plan.removals.flatMap(removal => {
+      const node = this.store.byId(removal.id);
+      if (!node || node.kind !== 'transform') return [];
+      const destinationType = TRANSFORMS.find(t => t.id === (node as TransformNode).transformId)?.destinationType as
+        DestinationType | undefined;
+      const destinationId = (node.fields ?? {})['destinationId'];
+      return destinationType && destinationId ? [{ destinationId, destinationType }] : [];
+    });
+  }
+
+  /** The destination types whose LAST node this delete removes — the only ones whose pending rules are
+   *  certainly orphaned. A type with another node still on the canvas is excluded, because pending rules
+   *  carry no node id and those rows may belong to the survivor. */
+  private destinationTypesLosingTheirLastNode(plan: NodeDeletePlan): DestinationType[] {
+    const typeOf = (nodeId: string): DestinationType | undefined => {
+      const node = this.store.byId(nodeId);
+      if (!node || node.kind !== 'transform') return undefined;
+      return TRANSFORMS.find(t => t.id === (node as TransformNode).transformId)?.destinationType as
+        DestinationType | undefined;
+    };
+
+    const removedNodeIds = new Set(plan.removals.map(removal => removal.id));
+    const surviving = new Set(this.store.nodes()
+      .filter(node => !removedNodeIds.has(node.id))
+      .map(node => typeOf(node.id))
+      .filter((t): t is DestinationType => !!t));
+    const removed = new Set([...removedNodeIds].map(typeOf)
+      .filter((t): t is DestinationType => !!t));
+
+    return [...removed].filter(destinationType => !surviving.has(destinationType));
   }
 
   cancelDelete(): void {

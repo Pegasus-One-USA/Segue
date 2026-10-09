@@ -1,0 +1,137 @@
+.tab-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.tab-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tab-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.tab-req {
+  color: var(--color-error);
+}
+
+.tab-input {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13.5px;
+  background: var(--color-surface);
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tab-narrow {
+  max-width: 140px;
+}
+
+.tab-mono {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.tab-inline {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-radios,
+.tab-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+
+.tab-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.tab-warn {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-warning-strong);
+}
+
+.tab-error-msg {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-error);
+}
+
+.tab-field--error .tab-input {
+  border-color: var(--color-error);
+}
+
+.tab-error-banner {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--color-error-soft);
+  color: var(--color-error-strong);
+  font-size: 13px;
+}
+
+.tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tab-btn {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.tab-btn--ghost {
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+}
+
+.tab-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.tab-resource pre {
+  margin: 6px 0 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--color-surface-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

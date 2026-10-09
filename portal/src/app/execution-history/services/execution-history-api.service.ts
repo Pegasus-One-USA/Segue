@@ -52,9 +52,11 @@ export class ExecutionHistoryApiService {
 
   /** Requests a graceful stop of a still-running run — the currently in-flight node finishes normally, no
    *  further nodes start, and the run settles into a terminal Cancelled state. 409 (surfaced to the caller as
-   *  an HttpErrorResponse) means the run already finished or was never started as a cancellable async run. */
-  cancel(id: string): Observable<void> {
-    return this.http.post<void>(WORKFLOW_ENDPOINTS.cancelRun(id), {});
+   *  an HttpErrorResponse) means the run already finished or was never started as a cancellable async run.
+   *  A run still shown as Running that is no longer executing (its API restarted) is closed at once: the
+   *  response status is then 'Cancelled' rather than 'CancellationRequested'. */
+  cancel(id: string): Observable<{ status?: string } | null> {
+    return this.http.post<{ status?: string } | null>(WORKFLOW_ENDPOINTS.cancelRun(id), {});
   }
 
   byId(id: string): Observable<RouteExecution> {

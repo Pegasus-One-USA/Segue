@@ -20,6 +20,37 @@
   }
 }
 
+// Same look as the page's own search box (_list-page.scss .search-wrap), scoped here: pulling that whole partial
+// in would also restyle this card's .filter-card.
+.search-wrap {
+  flex: 0 1 280px;
+  min-width: 200px;
+  position: relative;
+
+  .search-ico {
+    position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); color: var(--color-muted); pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%; height: 40px; padding: 0 14px 0 38px;
+    border: 1px solid var(--color-border); border-radius: var(--radius-base);
+    background: var(--color-bg); font-size: 14px; color: var(--color-ink);
+    outline: none; transition: border-color var(--transition-base), box-shadow var(--transition-base);
+    box-sizing: border-box;
+
+    &::placeholder { color: var(--color-muted); }
+    &:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
+  }
+}
+
+.no-match-row td {
+  padding: 16px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
 .filter-header-text {
   h3 {
     margin: 0 0 4px;

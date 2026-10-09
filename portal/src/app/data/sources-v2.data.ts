@@ -15,4 +15,6 @@ export const SOURCES: Source[] = [
   { id: 'generic-fhir', abbr: 'R4',  color: '#5b6573', context: 'Backend system',        name: 'Generic FHIR R4',         sub: 'Any conformant FHIR R4 server.',          permissionPrefix: 'genericfhir' },
   { id: 'hl7v2',        abbr: 'HL7', color: '#b45309', context: 'Backend system',        name: 'HL7 v2 / MLLP',           sub: 'HL7 v2 over MLLP (ingest + map).' },
   { id: 'sample',       abbr: 'SMP', color: '#8b8f98', context: 'Backend system',        name: 'Sample (sandbox)',        sub: 'Synthetic sample data for testing.',      permissionPrefix: 'sample' },
+  // No source connection: rows from an uploaded CSV or a SQL query become FHIR through templates (TabularSourceNode).
+  { id: 'tabular',      abbr: 'CSV', color: '#0f766e', context: 'Tabular data',          name: 'CSV / SQL Table',         sub: 'Rows from a CSV file or a SQL query, as FHIR.', permissionPrefix: 'tabularsources' },
 ];

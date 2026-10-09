@@ -14,8 +14,10 @@
 .fm-createtable-dialog {
   width: 520px;
   max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 64px);
-  overflow-y: auto;
+  // Of the backdrop, not the window: the backdrop only covers the canvas area, which is shorter than the
+  // window, so a window-based limit let the dialog grow past it and cut off its title and buttons.
+  max-height: calc(100% - 32px);
+  overflow: hidden;
   background: var(--color-surface);
   border-radius: var(--radius-modal, 14px);
   box-shadow: var(--shadow-xl);
@@ -26,6 +28,7 @@
 }
 
 .fm-createtable-title {
+  flex-shrink: 0;
   margin: 0;
   font-size: 17px;
   font-weight: 700;
@@ -247,17 +250,38 @@
   &:disabled { color: var(--color-muted-2); cursor: not-allowed; }
 }
 
+// The scrolling middle of the dialog. The small padding, cancelled by the margin, keeps the inputs' 3px
+// focus ring from being clipped by the scroll edge.
+.fm-createtable-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 3px;
+  margin: -3px;
+
+  // Keep each section at its natural height so the body scrolls. Otherwise, when space is short, flex shrinks
+  // them — and the Columns list, a scroll container itself, collapsed to 0px and hid the columns just added.
+  > * { flex-shrink: 0; }
+}
+
 .fm-createtable-columns {
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-height: 220px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .fm-createtable-col-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 28px;
+  // minmax(0, …) so a long name shrinks (and truncates) instead of widening the row, and auto for the
+  // PK / FK badge, which is wider than the 28px this used to allow — that 1px overflow alone put a
+  // horizontal scrollbar under even a single Id row.
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
 }
@@ -266,8 +290,12 @@
   .fm-createtable-col-name,
   .fm-createtable-col-type {
     height: 38px;
-    display: flex;
-    align-items: center;
+    // Block, not flex: text-overflow only truncates text in a block container.
+    display: block;
+    line-height: 35px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     padding: 0 12px;
     font-size: 14px;
     color: var(--color-muted);
@@ -299,6 +327,8 @@
 
 .fm-createtable-col-input,
 .fm-createtable-col-select {
+  width: 100%;
+  min-width: 0;
   height: 38px;
   padding: 0 10px;
   font-size: 13.5px;
@@ -341,6 +371,7 @@
 }
 
 .fm-createtable-actions {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   gap: 10px;

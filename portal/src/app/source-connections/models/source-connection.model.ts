@@ -89,6 +89,8 @@ export interface SourceConnectionModel {
   createdBy?: string | null;
   modifiedOnUtc?: string | null;
   modifiedBy?: string | null;
+  /** What the connection may be used for (SourceConnectionAccess). Older API builds omit it: treat as Read. */
+  access?: SourceConnectionAccessModel | null;
 }
 
 /** Matches CreateSourceConnectionRequest's expected body shape for both create (POST) and update (PUT). */
@@ -100,7 +102,12 @@ export interface SourceConnectionRequest {
   applicationType?: string | null;
   interactive?: SourceInteractiveConfigurationModel | null;
   retrieval?: SourceRetrievalConfigurationModel | null;
+  /** Null keeps the saved value on update and means Read on create (see CreateSourceConnectionRequest.Access). */
+  access?: SourceConnectionAccessModel | null;
 }
+
+/** Matches the backend's SourceConnectionAccess enum (serialized as a string). */
+export type SourceConnectionAccessModel = 'Read' | 'Write' | 'ReadWrite';
 
 /** Matches the API's GeneratedSigningKeyDto shape exactly (see GeneratedSigningKeyDto.cs). The private key itself
  *  is never returned — only what's needed to wire it into SourceAuthenticationModel on save. */

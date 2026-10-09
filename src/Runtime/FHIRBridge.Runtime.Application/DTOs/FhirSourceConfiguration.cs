@@ -92,4 +92,12 @@ public sealed record FhirSourceConfiguration(
     // carried in SearchParameters), so the Patient fetch must use them as given and must not ALSO be pinned to the
     // launched patient's _id: servers such as eClinicalWorks reject name=...&_id=... outright. The same rule already
     // holds for PatientSearchCriteria, the other channel a caller can use to say "search for these patients".
-    bool RunSearchCriteriaActive = false);
+    bool RunSearchCriteriaActive = false,
+    // Send no 'scope' on the token request at all, rather than the resolved scopes or the vendor wildcard. Set only
+    // by the EHR write-back channel, for vendors that ignore the requested scope and grant whatever APIs the client
+    // id is registered for (Epic, verified live). The granted scope is then read back from the token response. False
+    // leaves every other caller's scope handling unchanged.
+    bool OmitScopeParameter = false,
+    // False when the connection's Access is Write only: it exists for EHR write-back and must not be read from as a
+    // workflow source. Filled from the connection by the runtime resolver; true for every other caller.
+    bool AllowsRead = true);

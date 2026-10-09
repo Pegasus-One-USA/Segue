@@ -8,8 +8,8 @@ namespace FHIRBridge.Api.IntegrationTests.Tests;
 /// Verifies the resource-based permission check on ConfigurationsController.AddSourceConnection /
 /// UpdateSourceConnection: the required permission group is resolved from the request's
 /// SourceSystemType at runtime (via SourceSystemPermissionGroups), not from a static
-/// [StandardPermission] attribute — a user holding only "epic.edit" can manage an Epic source
-/// connection but not a Cerner one, and vice versa.
+/// [StandardPermission] attribute — a user holding only "epic.create" can create an Epic source
+/// connection but not a Cerner one, and vice versa (creating needs Create; Edit is for updating one).
 /// </summary>
 [Collection("ApiTests")]
 public sealed class SourceConnectionPermissionTests(ApiFixture f)
@@ -50,9 +50,9 @@ public sealed class SourceConnectionPermissionTests(ApiFixture f)
     }
 
     [Fact]
-    public async Task User_with_epic_edit__can_create_an_Epic_source_connection()
+    public async Task User_with_epic_create__can_create_an_Epic_source_connection()
     {
-        var jwt = await CreateUserWithOnlyPermissionAndLoginAsync("epic.edit");
+        var jwt = await CreateUserWithOnlyPermissionAndLoginAsync("epic.create");
         using var client = f.CreateAuthenticatedClient(jwt);
 
         var resp = await client.PostAsJsonAsync(
@@ -63,9 +63,9 @@ public sealed class SourceConnectionPermissionTests(ApiFixture f)
     }
 
     [Fact]
-    public async Task User_with_epic_edit__cannot_create_a_Cerner_source_connection()
+    public async Task User_with_epic_create__cannot_create_a_Cerner_source_connection()
     {
-        var jwt = await CreateUserWithOnlyPermissionAndLoginAsync("epic.edit");
+        var jwt = await CreateUserWithOnlyPermissionAndLoginAsync("epic.create");
         using var client = f.CreateAuthenticatedClient(jwt);
 
         var resp = await client.PostAsJsonAsync(
@@ -76,9 +76,9 @@ public sealed class SourceConnectionPermissionTests(ApiFixture f)
     }
 
     [Fact]
-    public async Task User_with_cerner_edit__can_create_a_Cerner_source_connection_but_not_Epic()
+    public async Task User_with_cerner_create__can_create_a_Cerner_source_connection_but_not_Epic()
     {
-        var jwt = await CreateUserWithOnlyPermissionAndLoginAsync("cerner.edit");
+        var jwt = await CreateUserWithOnlyPermissionAndLoginAsync("cerner.create");
         using var client = f.CreateAuthenticatedClient(jwt);
 
         var cernerResp = await client.PostAsJsonAsync(
@@ -122,9 +122,9 @@ public sealed class SourceConnectionPermissionTests(ApiFixture f)
     // "allscripts.edit" weren't auto-discovered, this permission simply wouldn't exist to grant.
 
     [Fact]
-    public async Task User_with_allscripts_edit__can_create_an_Allscripts_source_connection_but_not_Epic()
+    public async Task User_with_allscripts_create__can_create_an_Allscripts_source_connection_but_not_Epic()
     {
-        var jwt = await CreateUserWithOnlyPermissionAndLoginAsync("allscripts.edit");
+        var jwt = await CreateUserWithOnlyPermissionAndLoginAsync("allscripts.create");
         using var client = f.CreateAuthenticatedClient(jwt);
 
         var allscriptsResp = await client.PostAsJsonAsync(

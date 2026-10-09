@@ -1,4 +1,5 @@
 ﻿using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Application.Services;
 using FHIRBridge.Application.Services.Transforms;
 using Microsoft.Extensions.Configuration;
 
@@ -169,6 +170,7 @@ public sealed class SystemSettingsSeeder : ISystemSettingsSeeder
             ("Workflow:GraphExecution:Enabled", Bool("Workflow:GraphExecution:Enabled", false), "Master switch for running the persisted workflow graph instead of the flat route path."),
             (TransformationRulesFeatureFlag.SettingKey, Bool(TransformationRulesFeatureFlag.SettingKey, TransformationRulesFeatureFlag.DefaultHidden), "When true, hides the destination wizard's Rules button and the Settings > Transformation Rules screen. Does NOT stop already-configured rules from running during workflow execution. Ships hidden by default; set to false to reveal it."),
             ("Compliance:RequireTde", Bool("Compliance:RequireTde", false), "When true, the TDE health check reports Unhealthy (not just Degraded) if the database is unencrypted."),
+            (EhrWriteBackSettings.CloneModeEnabledKey, Bool(EhrWriteBackSettings.CloneModeEnabledKey, EhrWriteBackSettings.CloneModeEnabledDefault), "QA ONLY. When true, EHR Write-Back destinations may run in clone mode: they create a new test patient from a source patient's data with an altered name, birth date and identifiers, and write that patient's records against the clone. Never enable in production."),
 
             (
                 "OAuth:PublicBaseUrl",

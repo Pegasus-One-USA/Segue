@@ -115,6 +115,7 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
   'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
   'dest-azurefhir':   { abbr: 'AZF', color: '#0078D4' },
+  'dest-ehr-writeback': { abbr: 'EWB', color: '#00A89D' },
   'dest-csv':         { abbr: 'CSV', color: '#374151' },
   'dest-xlsx':        { abbr: 'XLS', color: '#217346' },
   'dest-ndjson':      { abbr: 'NDJ', color: '#475569' },
@@ -281,7 +282,7 @@ export class NodeLibraryDialogComponent {
 
   // ── destination wizard state ──────────────────────────────────────────────
   readonly showDestWizard   = signal(false);
-  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | null>(null);
+  readonly destWizardType   = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' | null>(null);
 
   /** Landing mode to pin when the picked row is a Fabric SURFACE rather than its own destination type — today
    *  only Lakehouse Delta (see Transform.fabricMode for why it is a mode and Warehouse is a type). Null for
@@ -419,7 +420,7 @@ export class NodeLibraryDialogComponent {
   readonly destMappingTypeLabel = computed(() => this.destTypeLabel(this.destWizardType()));
   readonly destMappingCount = signal(0);
 
-  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | null>(null);
+  readonly pendingDestSwitch      = signal<'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' | null>(null);
 
   /** The Fabric landing mode awaiting the same confirmation as pendingDestSwitch. Held separately because a
    *  switch between two rows of one type (OneLake Files → Lakehouse Delta) differs only by mode, so the type
@@ -462,7 +463,7 @@ export class NodeLibraryDialogComponent {
             if (!untracked(() => this.showDestWizard())) { untracked(() => this._close()); }
             return;
           }
-          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir' || tId === 'dest-blob' || tId === 'dest-medplum' || tId === 'dest-azurefhir' || tId === 'dest-datalake-webhook' || tId === 'dest-fabric' || tId === 'dest-fabric-warehouse' || tId === 'dest-fabric-cosmos' || tId === 'dest-apiendpoint') {
+          if (tId === 'dest-sqlserver' || tId === 'dest-csv' || tId === 'dest-mysql' || tId === 'dest-mongo' || tId === 'dest-postgres' || tId === 'dest-fhir' || tId === 'dest-blob' || tId === 'dest-medplum' || tId === 'dest-azurefhir' || tId === 'dest-datalake-webhook' || tId === 'dest-fabric' || tId === 'dest-fabric-warehouse' || tId === 'dest-fabric-cosmos' || tId === 'dest-apiendpoint' || tId === 'dest-ehr-writeback') {
             untracked(() => this._openDestWizardEdit(node));
             // _openDestWizardEdit's own canOpenDestWizard() check already showed a toast and returned
             // without setting showDestWizard() true if the permission check failed — stopping there would
@@ -581,7 +582,7 @@ export class NodeLibraryDialogComponent {
 
         // Lock the other destination type while mid-way through configuring one —
         // switching would silently discard the in-progress form.
-        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-fhir' || t.id === 'dest-blob' || t.id === 'dest-medplum' || t.id === 'dest-azurefhir' || t.id === 'dest-datalake-webhook' || t.id === 'dest-fabric' || t.id === 'dest-fabric-warehouse' || t.id === 'dest-fabric-cosmos' || t.id === 'dest-apiendpoint') && this.destTypeLocked()) {
+        if ((t.id === 'dest-sqlserver' || t.id === 'dest-csv' || t.id === 'dest-mysql' || t.id === 'dest-mongo' || t.id === 'dest-postgres' || t.id === 'dest-fhir' || t.id === 'dest-blob' || t.id === 'dest-medplum' || t.id === 'dest-azurefhir' || t.id === 'dest-datalake-webhook' || t.id === 'dest-fabric' || t.id === 'dest-fabric-warehouse' || t.id === 'dest-fabric-cosmos' || t.id === 'dest-apiendpoint' || t.id === 'dest-ehr-writeback') && this.destTypeLocked()) {
           status = 'disabled';
           reason = 'Finish or go back to Configure before switching destination type.';
         }
@@ -738,9 +739,9 @@ export class NodeLibraryDialogComponent {
       return;
     }
 
-    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-fhir' || item.id === 'dest-blob' || item.id === 'dest-medplum' || item.id === 'dest-azurefhir' || item.id === 'dest-datalake-webhook' || item.id === 'dest-fabric' || item.id === 'dest-fabric-lakehouse-table' || item.id === 'dest-fabric-warehouse' || item.id === 'dest-fabric-cosmos' || item.id === 'dest-apiendpoint') {
-      const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' =
-        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : item.id === 'dest-fhir' ? 'fhir' : item.id === 'dest-blob' ? 'blob' : item.id === 'dest-azurefhir' ? 'azurefhir' : item.id === 'dest-datalake-webhook' ? 'datalake' : item.id === 'dest-fabric-warehouse' ? 'fabricwarehouse' : item.id === 'dest-fabric-cosmos' ? 'cosmosfabric' : (item.id === 'dest-fabric' || item.id === 'dest-fabric-lakehouse-table') ? 'fabric' : item.id === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
+    if (item.id === 'dest-sqlserver' || item.id === 'dest-csv' || item.id === 'dest-mysql' || item.id === 'dest-mongo' || item.id === 'dest-postgres' || item.id === 'dest-fhir' || item.id === 'dest-blob' || item.id === 'dest-medplum' || item.id === 'dest-azurefhir' || item.id === 'dest-datalake-webhook' || item.id === 'dest-fabric' || item.id === 'dest-fabric-lakehouse-table' || item.id === 'dest-fabric-warehouse' || item.id === 'dest-fabric-cosmos' || item.id === 'dest-apiendpoint' || item.id === 'dest-ehr-writeback') {
+      const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' =
+        item.id === 'dest-sqlserver' ? 'sql' : item.id === 'dest-mysql' ? 'mysql' : item.id === 'dest-postgres' ? 'postgres' : item.id === 'dest-mongo' ? 'mongo' : item.id === 'dest-medplum' ? 'medplum' : item.id === 'dest-fhir' ? 'fhir' : item.id === 'dest-blob' ? 'blob' : item.id === 'dest-azurefhir' ? 'azurefhir' : item.id === 'dest-datalake-webhook' ? 'datalake' : item.id === 'dest-fabric-warehouse' ? 'fabricwarehouse' : item.id === 'dest-fabric-cosmos' ? 'cosmosfabric' : (item.id === 'dest-fabric' || item.id === 'dest-fabric-lakehouse-table') ? 'fabric' : item.id === 'dest-apiendpoint' ? 'apiendpoint' : item.id === 'dest-ehr-writeback' ? 'ehrwriteback' : 'csv';
       // Both Fabric FILE-surface rows (OneLake Files and Lakehouse Delta) open the same wizard TYPE, so the
       // landing mode is what distinguishes them and has to travel alongside the type everywhere below —
       // including through the switch-confirm detour, which resumes with whatever was pending.
@@ -768,10 +769,10 @@ export class NodeLibraryDialogComponent {
     this.selectedId.set(item.id);
   }
 
-  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | null): string {
+  destTypeLabel(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' | null): string {
     // 'datalake'/'fabric' previously fell through to 'CSV' here — the same class of gap this method's own
     // doc comment above describes for MySQL/PostgreSQL. Named explicitly now, alongside the new Warehouse type.
-    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : type === 'fhir' ? 'FHIR Repository (Aidbox)' : type === 'azurefhir' ? 'Azure FHIR Service' : type === 'blob' ? 'Azure Blob Storage' : type === 'datalake' ? 'Data Lake Webhook' : type === 'fabricwarehouse' ? 'Microsoft Fabric (Warehouse)' : type === 'cosmosfabric' ? 'Cosmos DB in Fabric' : type === 'fabric' ? 'Microsoft Fabric' : type === 'apiendpoint' ? 'API Endpoint' : 'CSV';
+    return type === 'sql' ? 'SQL Server' : type === 'mysql' ? 'MySQL' : type === 'postgres' ? 'PostgreSQL' : type === 'mongo' ? 'MongoDB' : type === 'medplum' ? 'Medplum' : type === 'fhir' ? 'FHIR Repository (Aidbox)' : type === 'azurefhir' ? 'Azure FHIR Service' : type === 'blob' ? 'Azure Blob Storage' : type === 'datalake' ? 'Data Lake Webhook' : type === 'fabricwarehouse' ? 'Microsoft Fabric (Warehouse)' : type === 'cosmosfabric' ? 'Cosmos DB in Fabric' : type === 'fabric' ? 'Microsoft Fabric' : type === 'apiendpoint' ? 'API Endpoint' : type === 'ehrwriteback' ? 'EHR Write-Back' : 'CSV';
   }
 
   confirmDestSwitch(): void {
@@ -890,7 +891,7 @@ export class NodeLibraryDialogComponent {
   // create/edit/delete request for either of these DestinationType values comes in. So the backend already
   // requires sourceconnections.create/.edit/.delete for these two — checking it here (instead of an empty
   // prefix list) is closing a UI/backend mismatch, not inventing a new code.
-  private destWizardPermissionPrefixes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint'): string[] {
+  private destWizardPermissionPrefixes(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback'): string[] {
     switch (type) {
       case 'sql':      return ['sqlserver', 'azuresql'];
       case 'csv':      return ['csv'];
@@ -903,6 +904,8 @@ export class NodeLibraryDialogComponent {
       // Azure FHIR Service likewise has no dedicated PermissionGroupCode member — same fallback-to-
       // SourceConnections resolution as 'medplum'/'fhir' above (see this method's doc comment).
       case 'azurefhir': return ['sourceconnections'];
+      // Its own permission group (PermissionGroupCode.EhrWriteBack): writing into a chart is a separate grant.
+      case 'ehrwriteback': return ['ehrwriteback'];
       // Neither lake destination has a dedicated PermissionGroupCode either, so both resolve through
       // the same generic SourceConnections fallback SourceSystemPermissionGroups.GroupFor already
       // applies to them server-side — the real code the backend checks, not a placeholder.
@@ -915,7 +918,7 @@ export class NodeLibraryDialogComponent {
     }
   }
 
-  private canOpenDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint', action: 'create' | 'edit'): boolean {
+  private canOpenDestWizard(type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback', action: 'create' | 'edit'): boolean {
     const prefixes = this.destWizardPermissionPrefixes(type);
     if (!prefixes.length) return true;
     if (prefixes.some(prefix => this.permissions.hasPermission(`${prefix}.${action}`))) return true;
@@ -924,7 +927,7 @@ export class NodeLibraryDialogComponent {
   }
 
   private _openDestWizard(
-    type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint',
+    type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback',
     fabricMode: string | null = null,
   ): void {
     if (!this.canOpenDestWizard(type, 'create')) return;
@@ -954,8 +957,8 @@ export class NodeLibraryDialogComponent {
 
   private _openDestWizardEdit(node: CanvasNode): void {
     const tId = (node as TransformNode).transformId;
-    const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' =
-      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : tId === 'dest-blob' ? 'blob' : tId === 'dest-azurefhir' ? 'azurefhir' : tId === 'dest-datalake-webhook' ? 'datalake' : tId === 'dest-fabric-warehouse' ? 'fabricwarehouse' : tId === 'dest-fabric-cosmos' ? 'cosmosfabric' : (tId === 'dest-fabric' || tId === 'dest-fabric-lakehouse-table') ? 'fabric' : tId === 'dest-apiendpoint' ? 'apiendpoint' : 'csv';
+    const type: 'sql' | 'csv' | 'mysql' | 'mongo' | 'postgres' | 'medplum' | 'fhir' | 'blob' | 'azurefhir' | 'datalake' | 'fabric' | 'fabricwarehouse' | 'cosmosfabric' | 'apiendpoint' | 'ehrwriteback' =
+      tId === 'dest-sqlserver' ? 'sql' : tId === 'dest-mysql' ? 'mysql' : tId === 'dest-postgres' ? 'postgres' : tId === 'dest-mongo' ? 'mongo' : tId === 'dest-medplum' ? 'medplum' : tId === 'dest-fhir' ? 'fhir' : tId === 'dest-blob' ? 'blob' : tId === 'dest-azurefhir' ? 'azurefhir' : tId === 'dest-datalake-webhook' ? 'datalake' : tId === 'dest-fabric-warehouse' ? 'fabricwarehouse' : tId === 'dest-fabric-cosmos' ? 'cosmosfabric' : (tId === 'dest-fabric' || tId === 'dest-fabric-lakehouse-table') ? 'fabric' : tId === 'dest-apiendpoint' ? 'apiendpoint' : tId === 'dest-ehr-writeback' ? 'ehrwriteback' : 'csv';
     if (!this.canOpenDestWizard(type, 'edit')) return;
     // Re-opening a saved node: the mode comes from the catalog row the node was created from, so a Delta
     // destination re-opens on Delta rather than falling back to the form's OneLake Files default. The form

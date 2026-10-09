@@ -6,10 +6,11 @@ using Xunit;
 namespace FHIRBridge.Api.IntegrationTests.Tests;
 
 /// <summary>
-/// End-to-end verification of the permission pipeline: login issues a JWT carrying exactly the
-/// user's effective (role ∪ direct-override) permissions, every request re-checks those claims via
-/// <see cref="FHIRBridge.Api.Security.PermissionAuthorizationHandler"/>, and a missing permission is
-/// rejected with a proper HTTP status rather than silently allowed or a raw 500.
+/// End-to-end verification of the permission pipeline: the access token carries no permission codes (they are
+/// resolved per request by IUserPermissionsProvider, from role ∪ direct overrides), every request is checked by
+/// <see cref="FHIRBridge.Api.Security.PermissionAuthorizationHandler"/>, a change to a user's permissions applies to
+/// the session they already have, and a missing permission is rejected with a proper HTTP status rather than
+/// silently allowed or a raw 500.
 /// </summary>
 [Collection("ApiTests")]
 public sealed class PermissionEnforcementTests(ApiFixture f)
@@ -23,16 +24,18 @@ public sealed class PermissionEnforcementTests(ApiFixture f)
             .ToArray();
     }
 
-    // ── Login token carries the right permissions ──────────────────────────────
+    // ── The token is an identity, not a permission list ──────────────────────────────
 
     [Fact]
-    public async Task Login_token_carries_exactly_the_roles_granted_permissions()
+    public async Task Access_token_carries_no_permission_codes()
     {
-        var (_, _, jwt) = await f.CreateUserWithPermissionsAndLoginAsync("user.view");
-        var claims = DecodePermissionClaims(jwt);
+        // Permission codes used to be one claim each, which overflowed the 4 KB access-token cookie for a
+        // SuperAdmin; they are now looked up per request from the token's "uid".
+        var (userId, _, jwt) = await f.CreateUserWithPermissionsAndLoginAsync("user.view");
+        var token = new JwtSecurityToken(jwt);
 
-        Assert.Contains("user.view", claims, StringComparer.OrdinalIgnoreCase);
-        Assert.DoesNotContain("role.delete", claims, StringComparer.OrdinalIgnoreCase);
+        Assert.Empty(DecodePermissionClaims(jwt));
+        Assert.Equal(userId.ToString(), token.Claims.Single(c => c.Type == "uid").Value);
     }
 
     // ── Endpoint access follows the token's permissions ─────────────────────────
@@ -66,12 +69,16 @@ public sealed class PermissionEnforcementTests(ApiFixture f)
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
-    // ── Direct user-level overrides change the next login's token ──────────────
+    // ── Direct user-level overrides apply to the session the user already has ──
 
     [Fact]
-    public async Task Granting_a_direct_override__adds_the_permission_on_next_login_only()
+    public async Task Granting_a_direct_override__applies_to_the_existing_session()
     {
-        var (userId, email, staleJwt) = await f.CreateUserWithPermissionsAndLoginAsync("user.view");
+        // The token is issued BEFORE the change and never re-issued. No request is made with it first: the
+        // provider caches a user's permissions for up to 60 seconds (CachedUserPermissionsProvider), and a
+        // cached set would hide the change until it expires.
+        var (userId, _, jwt) = await f.CreateUserWithPermissionsAndLoginAsync("user.view");
+        using var client = f.CreateAuthenticatedClient(jwt);
         var roleDeleteId = await f.GetPermissionIdByNameAsync("role.delete");
 
         var allocResp = await f.AdminClient.PutAsJsonAsync(
@@ -79,26 +86,18 @@ public sealed class PermissionEnforcementTests(ApiFixture f)
             new { IsEnabled = true });
         allocResp.EnsureSuccessStatusCode();
 
-        // The access token already issued is unaffected — an accepted JWT tradeoff (the override
-        // takes effect once the user's refresh token is invalidated and they log in again).
-        Assert.DoesNotContain("role.delete", DecodePermissionClaims(staleJwt), StringComparer.OrdinalIgnoreCase);
-        using var staleClient = f.CreateAuthenticatedClient(staleJwt);
-        var staleResp = await staleClient.DeleteAsync($"/api/v1/roles/{Guid.NewGuid()}");
-        Assert.Equal(HttpStatusCode.Forbidden, staleResp.StatusCode);
-
-        // A fresh login picks up the override — same nonexistent-role probe now clears
-        // authorization and reaches the "not found" business logic instead.
-        var freshJwt = await f.LoginAsync(email);
-        Assert.Contains("role.delete", DecodePermissionClaims(freshJwt), StringComparer.OrdinalIgnoreCase);
-        using var freshClient = f.CreateAuthenticatedClient(freshJwt);
-        var freshResp = await freshClient.DeleteAsync($"/api/v1/roles/{Guid.NewGuid()}");
-        Assert.Equal(HttpStatusCode.NotFound, freshResp.StatusCode);
+        // Permissions are resolved per request, so the same token now clears authorization: the
+        // nonexistent-role probe reaches "not found".
+        var resp = await client.DeleteAsync($"/api/v1/roles/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
     }
 
     [Fact]
-    public async Task Denying_a_role_granted_permission__removes_it_on_next_login_only()
+    public async Task Denying_a_role_granted_permission__removes_it_from_the_existing_session()
     {
-        var (userId, email, _) = await f.CreateUserWithPermissionsAndLoginAsync("user.view");
+        // As above: the token predates the change, and nothing caches its permissions before the change.
+        var (userId, _, jwt) = await f.CreateUserWithPermissionsAndLoginAsync("user.view");
+        using var client = f.CreateAuthenticatedClient(jwt);
         var userViewId = await f.GetPermissionIdByNameAsync("user.view");
 
         var allocResp = await f.AdminClient.PutAsJsonAsync(
@@ -106,10 +105,6 @@ public sealed class PermissionEnforcementTests(ApiFixture f)
             new { IsEnabled = false });
         allocResp.EnsureSuccessStatusCode();
 
-        var freshJwt = await f.LoginAsync(email);
-        Assert.DoesNotContain("user.view", DecodePermissionClaims(freshJwt), StringComparer.OrdinalIgnoreCase);
-
-        using var client = f.CreateAuthenticatedClient(freshJwt);
         var resp = await client.GetAsync($"/api/v1/users/{userId}");
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
     }

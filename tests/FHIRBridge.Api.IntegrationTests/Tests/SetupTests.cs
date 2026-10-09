@@ -26,7 +26,14 @@ public sealed class SetupTests(ApiFixture f)
         {
             Email = "another-admin@testhospital.test",
             DisplayName = "Another Admin",
-            Password = "AnotherAdmin@Test123!"
+            Password = "AnotherAdmin@Test123!",
+            // A complete first-run request, so the refusal is the "already set up" 409, not request validation.
+            AcceptTerms = true,
+            EmailSettings = new
+            {
+                Host = "localhost", Port = 25, EnableSsl = false, Username = "smtp-test", Password = "smtp-test",
+                FromAddress = "noreply@testhospital.test", FromName = "FHIRBridge Integration Tests",
+            },
         });
         Assert.Equal(HttpStatusCode.Conflict, resp.StatusCode);
     }

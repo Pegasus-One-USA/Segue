@@ -59,8 +59,10 @@ public static class TransformNodeConfigSchemas
     // with a bespoke system URI) reveals a free-text box instead of forcing the value back to a preset.
     // Use this instead of Select whenever "not in the list" is a legitimate answer, not just an oversight —
     // e.g. a rule author's own local/custom code system URI, which a closed dropdown would wrongly block.
-    private static TransformConfigFieldSchema Combo(string key, string label, string[] options, string? defaultValue = null, string? placeholder = null, bool advanced = false) =>
-        new(key, label, "combo", options, defaultValue, placeholder, advanced);
+    private static TransformConfigFieldSchema Combo(
+        string key, string label, string[] options, string? defaultValue = null, string? placeholder = null,
+        bool advanced = false, TransformConfigFieldVisibility? visibleWhen = null) =>
+        new(key, label, "combo", options, defaultValue, placeholder, advanced, visibleWhen);
 
     private static TransformConfigFieldSchema Checkbox(
         string key, string label, bool defaultValue, bool advanced = false,
@@ -238,10 +240,24 @@ public static class TransformNodeConfigSchemas
             ]),
             [TransformNodeType.ReferenceConstruction] = new(TransformNodeType.ReferenceConstruction, "Reference Construction",
             [
+                // DELIBERATELY NOT scoped to relative/absolute, though only those two styles put it in the
+                // output. allowedTargetTypes is checked against it on EVERY style, before the style switch —
+                // so hiding it under urn/logical would have the config form prune the saved key (see
+                // rule-config-form's isConfigFieldVisible pruning), the node would fall back to its "Patient"
+                // default, and a urn rule whose allowed list is "Practitioner" would start failing a check it
+                // has always passed. A field is only safe to scope when its key is read nowhere outside the
+                // styles it is visible for, which is true of baseUrl and identifierSystem below and of
+                // nothing else here.
                 Combo("resourceType", "Target resource type", CommonFhirResourceTypes, defaultValue: "Patient"),
                 Select("style", "Reference style", ["relative", "absolute", "urn", "logical"], "relative"),
-                Text("baseUrl", "Base URL (only for absolute style)", placeholder: "e.g. https://fhir.example.com/r4", advanced: true),
-                Combo("identifierSystem", "Identifier system URI (only for logical style)", CommonSystemUris, placeholder: "e.g. http://hl7.org/fhir/sid/us-npi", advanced: true),
+                // Not advanced: each is REQUIRED by the one style that shows it, and burying a required field
+                // behind a collapsed panel is how a blank Base URL ends up writing "/Patient/123". The style
+                // qualifiers come off the labels — visibleWhen says it now, and a label that has to explain
+                // its own visibility is a sign the scoping was missing.
+                Text("baseUrl", "Base URL", placeholder: "e.g. https://fhir.example.com/r4",
+                    visibleWhen: OnlyWhen("style", "absolute")),
+                Combo("identifierSystem", "Identifier system URI", CommonSystemUris, placeholder: "e.g. http://hl7.org/fhir/sid/us-npi",
+                    visibleWhen: OnlyWhen("style", "logical")),
                 Text("display", "Display text (optional)", placeholder: "e.g. Jane Roe", advanced: true),
                 Text("allowedTargetTypes", "Allowed target resource types (comma-separated, optional)", placeholder: "e.g. Patient,RelatedPerson", advanced: true),
             ]),

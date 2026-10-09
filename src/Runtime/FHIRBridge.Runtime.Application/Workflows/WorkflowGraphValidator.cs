@@ -105,6 +105,34 @@ public sealed class WorkflowGraphValidator : IWorkflowGraphValidator
             }
         }
 
+        foreach (var writeBack in enabledNodes.Values.Where(node =>
+            string.Equals(node.NodeType, WorkflowNodeTypes.EhrWriteBackDestination, StringComparison.OrdinalIgnoreCase)))
+        {
+            // Structure only: whether the connection exists, accepts writes and has Write access needs the
+            // configuration store, so the executor and the destination save path check that.
+            if (!Guid.TryParse(ReadSetting(writeBack, "dest_sourceConnectionId"), out var targetId) || targetId == Guid.Empty)
+            {
+                errors.Add($"Destination node '{writeBack.NodeType}' must name the EHR connection to write to.");
+            }
+
+            // The writer keys every record on the server it came from, so it must be able to name exactly one.
+            var upstreamSources = enabledNodes.Values.Count(candidate =>
+                candidate.Category == WorkflowNodeCategory.Source
+                && HasDownstreamPath(enabledNodes, enabledEdges, candidate.Id, node => node.Id == writeBack.Id));
+            if (upstreamSources != 1)
+            {
+                errors.Add($"Destination node '{writeBack.NodeType}' must be fed by exactly one source node (found {upstreamSources}).");
+            }
+
+            // The contract check already refuses a De-identification node directly upstream; this also catches
+            // one further up, behind a transformation node that passes the redacted resources on.
+            if (HasUpstreamPath(enabledNodes, enabledEdges, writeBack.Id, node =>
+                string.Equals(node.NodeType, WorkflowNodeTypes.DeIdentification, StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add($"Destination node '{writeBack.NodeType}' cannot write de-identified data into an EHR.");
+            }
+        }
+
         foreach (var deIdentificationNode in enabledNodes.Values.Where(node =>
             string.Equals(node.NodeType, WorkflowNodeTypes.DeIdentification, StringComparison.OrdinalIgnoreCase)))
         {
@@ -153,6 +181,24 @@ public sealed class WorkflowGraphValidator : IWorkflowGraphValidator
         return catalogItem.RequiredConfigurationFields
             .Where(field => !keys.Contains(field))
             .ToArray();
+    }
+
+    private static string? ReadSetting(WorkflowNode node, string key)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(node.ConfigurationJson);
+            var settings = WorkflowNodeConfigurationEnvelope.ResolveSettings(document.RootElement);
+            return settings.ValueKind == JsonValueKind.Object
+                && settings.TryGetProperty(key, out var value)
+                && value.ValueKind == JsonValueKind.String
+                    ? value.GetString()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static bool DestinationRequiresMappedRecords(WorkflowNode destination)

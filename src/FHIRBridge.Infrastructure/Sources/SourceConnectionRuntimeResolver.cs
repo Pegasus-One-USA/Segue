@@ -282,7 +282,8 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             PatientSearchCriteria: patientSearchCriteria,
             CallerId: callerId,
             PracticeId: sourceConnection.Authentication.PracticeId,
-            AuthPlacement: sourceConnection.Authentication.AuthPlacement);
+            AuthPlacement: sourceConnection.Authentication.AuthPlacement,
+            AllowsRead: sourceConnection.Access.AllowsRead());
 
         if (runOverrides is not null)
         {

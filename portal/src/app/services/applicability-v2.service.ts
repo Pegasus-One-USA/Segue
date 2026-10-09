@@ -52,6 +52,12 @@ export class ApplicabilityServiceV2 {
     return !!destType && SQL_FAMILY_DESTINATION_TYPES.has(destType);
   }
 
+  /** True for an EHR Write-Back destination node, which takes whole FHIR resources and refuses de-identified ones. */
+  isEhrWriteBackDestination(node: CanvasNode): boolean {
+    if (!isTransformNode(node)) return false;
+    return TRANSFORMS.find(t => t.id === node.transformId)?.destinationType === 'EhrWriteBack';
+  }
+
   private transformItem(id: string): PickerItem | null {
     const t = TRANSFORMS.find(x => x.id === id);
     if (!t) return null;
@@ -145,6 +151,8 @@ export class ApplicabilityServiceV2 {
     return ApplicabilityServiceV2.CHAIN_STEP_IDS.filter(id => {
       if (present.has(id)) return false;
       if (id === 'field-mapping') return this.isSqlFamilyDestination(destination);
+      // Redacted data must never be written into a patient's chart; the backend refuses the graph too.
+      if (id === 'deidentification') return !this.isEhrWriteBackDestination(destination);
       return true;
     });
   }

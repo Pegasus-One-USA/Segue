@@ -8,6 +8,7 @@ import { MeditechSourceFormComponent } from './meditech-source-form/meditech-sou
 import { GenericFhirSourceFormComponent } from './generic-fhir-source-form/generic-fhir-source-form.component';
 import { Hl7v2SourceFormComponent } from './hl7v2-source-form/hl7v2-source-form.component';
 import { SampleSourceFormComponent } from './sample-source-form/sample-source-form.component';
+import { TabularSourceFormComponent } from './tabular-source-form/tabular-source-form.component';
 
 /**
  * Dispatches a SOURCES catalog `id` (see ../../data/sources-v2.data.ts) to the standalone component that configures
@@ -25,6 +26,7 @@ export const SOURCE_FORM_REGISTRY: SourceFormRegistry = {
   'generic-fhir': GenericFhirSourceFormComponent,
   hl7v2: Hl7v2SourceFormComponent,
   sample: SampleSourceFormComponent,
+  tabular: TabularSourceFormComponent,
 };
 
 /** Maps the backend's EhrVendor (SourceSystemType) enum member names back to the SOURCE_FORM_REGISTRY keys above —

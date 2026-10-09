@@ -16,4 +16,5 @@ public sealed record SourceConnectionDto(
     DateTime? CreatedOnUtc = null,
     string? CreatedBy = null,
     DateTime? ModifiedOnUtc = null,
-    string? ModifiedBy = null);
+    string? ModifiedBy = null,
+    SourceConnectionAccess Access = SourceConnectionAccess.Read);

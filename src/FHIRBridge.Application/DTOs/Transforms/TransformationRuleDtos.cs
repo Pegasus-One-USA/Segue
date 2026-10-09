@@ -1,4 +1,4 @@
-using FHIRBridge.Domain.Enums;
+﻿using FHIRBridge.Domain.Enums;
 
 namespace FHIRBridge.Application.DTOs.Transforms;
 
@@ -50,7 +50,11 @@ public sealed record SaveTransformationRuleRequest(
     // The data type this rule's output is expected to be — validated against the destination column's type
     // at mapping-profile save time (see CreateMappingProfileRequestValidator). Null means "not declared,"
     // which is silently excluded from that check rather than treated as a conflict.
-    MappingValueType? ExpectedValueType = null);
+    MappingValueType? ExpectedValueType = null,
+    // Which DestinationConfiguration this rule is authored against. DestinationType cannot answer that:
+    // replace a PostgreSQL destination with another PostgreSQL destination and the new one inherited the
+    // old one's rules, because nothing recorded WHICH destination they belonged to.
+    Guid? DestinationConfigurationId = null);
 
 /// <summary>Resolve-and-apply a sample value through whatever rule chain is currently in effect for one field —
 /// backs both the wizard's "auto-applied on add" behavior and the Rules modal's live preview.

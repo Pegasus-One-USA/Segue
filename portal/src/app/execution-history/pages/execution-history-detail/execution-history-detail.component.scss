@@ -291,6 +291,20 @@
   &--cancelled { border-left-color: var(--color-muted); }
 }
 
+/* The row toggle plus, for EHR write-back nodes, the report link beside it (a sibling, never a child). */
+.resource-summary-bar {
+  display: flex;
+  align-items: center;
+
+  > .resource-summary { flex: 1 1 auto; min-width: 0; }
+}
+
+@media (max-width: 600px) {
+  .resource-summary-bar { flex-wrap: wrap; }
+  .resource-summary { flex-wrap: wrap; }
+  .node-summary-meta { white-space: normal; padding-left: 0; }
+}
+
 .resource-summary {
   display: flex;
   align-items: center;
@@ -497,6 +511,44 @@
   ::ng-deep {
     .mat-mdc-paginator-container { padding: 8px 16px; }
     .mat-mdc-paginator-range-label { color: var(--color-muted); font-size: 13px; }
+  }
+}
+
+/* EHR write-back report link: on the node header (opens without expanding) and under the write result. */
+.ehr-report-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  mat-icon { font-size: 17px; width: 17px; height: 17px; }
+
+  &:hover:not(.is-loading) { background: var(--color-primary-soft); text-decoration: underline; }
+  &:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  &.is-loading { color: var(--color-muted); cursor: progress; }
+
+  &--header {
+    flex-shrink: 0;
+    margin-right: 16px;
+
+    @media (max-width: 600px) { margin: 0 0 10px 70px; }
+  }
+
+  &--inline {
+    margin-top: 10px;
+    padding-left: 0;
+    flex-wrap: wrap;
+    white-space: normal;
+
+    .cell-muted { font-weight: 400; margin-left: 4px; }
   }
 }
 

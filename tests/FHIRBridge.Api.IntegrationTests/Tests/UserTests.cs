@@ -63,7 +63,8 @@ public sealed class UserTests(ApiFixture f)
             DisplayName           = "New User",
             Password              = "NewUser@Test123!",
             RoleNames             = new[] { "Operations" },
-            RequirePasswordChange = false
+            RequirePasswordChange = false,
+            RequireMfa            = false
         });
         Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
         var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
@@ -78,7 +79,8 @@ public sealed class UserTests(ApiFixture f)
             Email    = "anon@test.local",
             Password = "Test@123456!",
             RoleNames = new[] { "Operations" },
-            RequirePasswordChange = false
+            RequirePasswordChange = false,
+            RequireMfa            = false
         });
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
@@ -95,7 +97,8 @@ public sealed class UserTests(ApiFixture f)
             IsEnabled             = true,
             RoleNames             = new[] { "Operations" },
             NewPassword           = (string?)null,
-            RequirePasswordChange = false
+            RequirePasswordChange = false,
+            RequireMfa            = false
         });
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }

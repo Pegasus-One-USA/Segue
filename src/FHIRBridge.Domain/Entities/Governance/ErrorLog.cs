@@ -32,7 +32,13 @@ public sealed class ErrorLog : Entity<Guid>, IAppendOnlyEntity
         string? traceId = null,
         string? spanId = null,
         string? diagnosisAction = null,
-        string? diagnosisCause = null)
+        string? diagnosisCause = null,
+        string? workflowName = null,
+        string? nodeName = null,
+        string? nodeType = null,
+        string? sourceName = null,
+        string? destinationName = null,
+        string? resourceType = null)
     {
         Id = id;
         OccurredOnUtc = occurredOnUtc;
@@ -53,6 +59,12 @@ public sealed class ErrorLog : Entity<Guid>, IAppendOnlyEntity
         SpanId = spanId;
         DiagnosisAction = diagnosisAction;
         DiagnosisCause = diagnosisCause;
+        WorkflowName = workflowName;
+        NodeName = nodeName;
+        NodeType = nodeType;
+        SourceName = sourceName;
+        DestinationName = destinationName;
+        ResourceType = resourceType;
     }
 
     public DateTime OccurredOnUtc { get; private set; }
@@ -90,4 +102,12 @@ public sealed class ErrorLog : Entity<Guid>, IAppendOnlyEntity
     /// <summary>Plain-language cause paired with <see cref="DiagnosisAction"/> — sourced from the same computation
     /// as <see cref="UserFriendlyMessage"/>, so message text and any UI badge can't disagree.</summary>
     public string? DiagnosisCause { get; private set; }
+
+    // Human-readable "where did it fail" names. Admin-defined labels and FHIR type names only - never patient data.
+    public string? WorkflowName { get; private set; }
+    public string? NodeName { get; private set; }
+    public string? NodeType { get; private set; }
+    public string? SourceName { get; private set; }
+    public string? DestinationName { get; private set; }
+    public string? ResourceType { get; private set; }
 }

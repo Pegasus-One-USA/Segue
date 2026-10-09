@@ -70,7 +70,7 @@
   // inset for free from .shell-content > * (styles.scss's --page-gutter-x/y rule), which never fires
   // in here since this isn't .shell-content. Without this the page rendered edge-to-edge against the
   // dialog panel itself, title and toolbar touching the chrome row/corners with no margin at all.
-  //
+
   // A deliberately bigger inset than --page-gutter-x/y (8px): that token suits a routed page sitting
   // directly in the browser viewport, but the same 8px read as cramped once there's a visible dialog
   // panel edge (border-radius, shadow) framing it too — a box-within-a-box wants more breathing room

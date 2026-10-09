@@ -11,6 +11,9 @@ public static class WorkflowNodeTypes
     public const string GenericFhirSource = "GenericFhirSourceNode";
     public const string Hl7v2MllpSource = "Hl7v2MllpSourceNode";
     public const string SampleSource = "SampleSourceNode";
+    /// <summary>Rows from an uploaded CSV or a SQL query, turned into FHIR resources by templates. Has no source
+    /// connection.</summary>
+    public const string TabularSource = "TabularSourceNode";
     public const string Normalization = "NormalizationNode";
     public const string DataQualityScoring = "DataQualityScoringNode";
     public const string FlattenExtensions = "FlattenExtensionsNode";
@@ -84,6 +87,11 @@ public static class WorkflowNodeTypes
     /// <see cref="RestApiDestination"/> it supports batching, retry and every auth mode a real integration needs.</summary>
     public const string ApiEndpointDestination = "ApiEndpointDestinationNode";
 
+    /// <summary>FHIR R4 write-back INTO an EHR (Epic first) over the source connection named by
+    /// <c>dest_sourceConnectionId</c>. Takes whole FHIR resources straight from a source or transformation node, never
+    /// mapped records and never de-identified ones: see DestinationType.EhrWriteBack.</summary>
+    public const string EhrWriteBackDestination = "EhrWriteBackDestinationNode";
+
     /// <summary>Phase 2 example: a Destination-category node whose input is a previous destination's write result,
     /// not fresh mapped records — demonstrates chaining a destination into another node via a bespoke catalog rank
     /// tier (71, above Destination's 70) rather than relaxing the graph validator. See
@@ -92,4 +100,16 @@ public static class WorkflowNodeTypes
     public const string HedisMeasureReport = "HedisMeasureReportNode";
     public const string AnomalyDetection = "AnomalyDetectionNode";
     public const string PatientAggregation = "PatientAggregationNode";
+
+    /// <summary>True for an EHR Write-Back destination node, the only node that writes into an EHR.</summary>
+    public static bool IsEhrWriteBack(string? nodeType) =>
+        string.Equals(nodeType, EhrWriteBackDestination, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when the workflow writes into an EHR. Such a workflow only ever runs for a signed-in caller holding
+    /// ehrwriteback.execute (or on a schedule armed by one): it is never publicly launchable, never run from an EHR
+    /// launch callback, and never reachable through a checkpoint URL, because none of those has a user to check.
+    /// </summary>
+    public static bool HasEhrWriteBack(FHIRBridge.Runtime.Domain.Workflows.WorkflowDefinition workflow) =>
+        workflow.Nodes.Any(node => IsEhrWriteBack(node.NodeType));
 }

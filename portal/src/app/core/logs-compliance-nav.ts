@@ -23,5 +23,8 @@ export const LOGS_COMPLIANCE_TABS: LogsComplianceTab[] = [
   { label: 'Authentication Logs', route: '/governance/authentication-logs', icon: 'verified_user', permissions: ['governance.read'] },
   { label: 'Correlation Search', route: '/governance/correlation-search', icon: 'search', permissions: ['governance.read'] },
   { label: 'Errors', route: '/operations/errors', icon: 'error_outline', permissions: ['governance.read'] },
+  // EHR write-back writes awaiting a person (unknown outcome, refused, abandoned). Not in Correlation Search: the
+  // ledger is the only place an unknown write is recorded, and it must be worked down, not looked up.
+  { label: 'EHR Write-Back Review', route: '/operations/ehr-write-review', icon: 'fact_check', permissions: ['ehrwriteback.view'] },
   { label: 'Compliance Reports', route: '/governance/compliance-reports', icon: 'description', permissions: ['governance.read'] },
 ];

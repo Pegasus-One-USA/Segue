@@ -41,6 +41,14 @@ public sealed class SourceConnectionConfiguration : IEntityTypeConfiguration<Sou
             .HasConversion<string>()
             .HasMaxLength(50);
 
+        // Read = 0 is both the CLR default and the column default, so EF never has to choose between them and every
+        // row that predates the column reads as Read.
+        builder.Property(x => x.Access)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired()
+            .HasDefaultValue(FHIRBridge.Domain.Enums.SourceConnectionAccess.Read);
+
         builder.OwnsOne(x => x.Interactive, interactive =>
         {
             var redirectUris = interactive.Property(x => x.RedirectUris)

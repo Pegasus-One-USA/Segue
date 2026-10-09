@@ -43,6 +43,11 @@ export enum PermissionGroup {
   RxNorm = 'rxnorm',
   Icd10 = 'icd10',
   BlobStorage = 'blobstorage',
+  FhirRepository = 'fhirrepository',
+  Medplum = 'medplum',
+  AzureFhirService = 'azurefhirservice',
+  EhrWriteBack = 'ehrwriteback',
+  TabularSources = 'tabularsources',
 }
 
 export enum PermissionAction {
@@ -58,6 +63,7 @@ export enum PermissionAction {
   Write = 'write',
   Read = 'read',
   Test = 'test',
+  Export = 'export',
 }
 
 /** Joins a group and action into the backend's wire-format permission code, e.g.

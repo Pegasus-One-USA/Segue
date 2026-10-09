@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Enums;
 using FluentValidation;
@@ -32,6 +33,13 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.KeyVaultName).NotEmpty();
         RuleFor(x => x.SecretName).NotEmpty();
+
+        // De-identified data written into a patient's chart is corrupted chart data, and it can no longer be matched
+        // to the EHR's own patient. Applies on every save, including one that leaves the metadata untouched.
+        RuleFor(x => x.DeIdentificationProfileId)
+            .Null()
+            .When(x => x.DestinationType == DestinationType.EhrWriteBack)
+            .WithMessage("An EHR Write-Back destination cannot have a de-identification profile.");
 
         RuleFor(x => x).Custom(ValidateConnectionMetadata);
     }
@@ -91,6 +99,45 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
             // validation rather than reusing ValidateDataFabricMetadata.
             ValidateCosmosDbFabricMetadata(context, metadata);
         }
+        else if (request.DestinationType == DestinationType.EhrWriteBack)
+        {
+            ValidateEhrWriteBackMetadata(context, metadata);
+        }
+    }
+
+    private static readonly string[] BooleanFlagValues = ["true", "false"];
+
+    private static readonly string[] NoteDocStatusValues = ["preliminary", "final"];
+
+    /// <summary>
+    /// EHR Write-Back: the shape of its settings only. Whether the named connection exists, has Write access and
+    /// belongs to a vendor that accepts writes needs the repository, so <c>ConfigurationService</c> checks that.
+    /// </summary>
+    private static void ValidateEhrWriteBackMetadata(
+        ValidationContext<CreateDestinationConfigurationRequest> context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        var sourceConnectionId = metadata.GetValueOrDefault("dest_sourceConnectionId");
+        if (string.IsNullOrWhiteSpace(sourceConnectionId))
+        {
+            context.AddFailure("dest_sourceConnectionId", "Choose the EHR connection to write to.");
+        }
+        else if (!Guid.TryParse(sourceConnectionId, out var parsed) || parsed == Guid.Empty)
+        {
+            context.AddFailure("dest_sourceConnectionId", "The EHR connection id is not a valid id.");
+        }
+
+        RequireOneOf(context, metadata, "dest_dryRun", BooleanFlagValues, "dry-run flag");
+        RequireOneOf(context, metadata, "dest_createPatientIfMissing", BooleanFlagValues, "create-patient flag");
+        RequireOneOf(context, metadata, "dest_cloneMode", BooleanFlagValues, "clone-mode flag");
+        RequireOneOf(context, metadata, "dest_noteDocStatus", NoteDocStatusValues, "note status");
+        RequireOptionalIntInRange(
+            context,
+            metadata,
+            "dest_maxWritesPerRun",
+            1,
+            EhrWriteBackRunOptions.MaxAllowedWritesPerRun,
+            $"Max writes per run must be a whole number from 1 to {EhrWriteBackRunOptions.MaxAllowedWritesPerRun}.");
     }
 
     /// <summary>

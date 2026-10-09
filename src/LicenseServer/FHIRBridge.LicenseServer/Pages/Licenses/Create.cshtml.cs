@@ -57,6 +57,7 @@ public sealed class CreateModel : PageModel
     {
         "SqlServer", "PostgreSql", "MySql", "Mongo", "BlobStorage", "Csv", "FhirRepository", "Medplum",
         "AzureFhirService", "DataLakeWebhook", "DataFabricAzure", "DataFabricWarehouse", "ApiEndpoint",
+        "EhrWriteBack",
     };
 
     private readonly LicenseServerDbContext _db;

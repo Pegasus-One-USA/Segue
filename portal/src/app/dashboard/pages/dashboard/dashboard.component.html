@@ -10,7 +10,9 @@
       <span class="refresh-hint">Last updated {{ lastRefreshed() | date:'h:mm a' }}</span>
       <button class="refresh-btn" type="button" (click)="refresh()">&#8635; Refresh</button>
       @if (canCreateWorkflow()) {
-        <a class="new-pipeline-btn" routerLink="/workflow-builder">New</a>
+        <!-- Same "New workflow" dialog as the Workflows list: name it first, then the builder opens on the
+             created workflow. This used to link straight to an empty, unsaved builder. -->
+        <button class="new-pipeline-btn" type="button" (click)="showNewWorkflow.set(true)">New</button>
       }
     </div>
   </div>
@@ -81,3 +83,7 @@
   />
 
 </div>
+
+@if (showNewWorkflow()) {
+  <app-new-workflow-dialog (closed)="showNewWorkflow.set(false)" />
+}

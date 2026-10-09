@@ -24,13 +24,16 @@ namespace FHIRBridge.Application.Abstractions.Destinations;
 /// delivery attempted — populated whether it actually sent, was skipped (Notification Settings disabled), or
 /// failed, so the destination node's execution-history entry can show exactly what happened instead of just a
 /// pass/fail.</param>
+/// <param name="EhrWrite">Per-resource-type counts from an EHR write-back destination, including what a dry run
+/// would have written. Null for every other destination type.</param>
 public sealed record DestinationWriteResult(
     int Count,
     GeneratedFile? InlineDownload = null,
     string? DownloadUrl = null,
     IReadOnlyList<string>? RecordErrors = null,
     IReadOnlyList<string?>? WrittenResourceIds = null,
-    EmailDeliveryDetail? EmailDelivery = null);
+    EmailDeliveryDetail? EmailDelivery = null,
+    EhrWriteReport? EhrWrite = null);
 
 /// <summary>See <see cref="DestinationWriteResult.EmailDelivery"/>.</summary>
 public sealed record EmailDeliveryDetail(

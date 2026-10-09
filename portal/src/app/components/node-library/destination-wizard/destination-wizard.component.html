@@ -755,6 +755,7 @@
           [allResources]="selectedResources()"
           [destType]="nonFhirDestType()"
           [rulesDestinationType]="resolveDestinationTypeForRules()"
+          [rulesDestinationConfigurationId]="selectedExistingId() ?? resolvedDestinationId()"
           [deIdentificationProfiles]="deIdentificationProfiles()"
           [selectedDeIdentificationProfileId]="selectedDeIdentificationProfileId()"
           [newProfileName]="newProfileName()"

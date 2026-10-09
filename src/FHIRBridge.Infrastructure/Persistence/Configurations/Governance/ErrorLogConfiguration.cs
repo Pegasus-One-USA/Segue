@@ -18,6 +18,12 @@ public sealed class ErrorLogConfiguration : IEntityTypeConfiguration<ErrorLog>
         builder.Property(x => x.Message).IsRequired();
         builder.Property(x => x.StackTrace);
         builder.Property(x => x.Module).HasMaxLength(100);
+        builder.Property(x => x.WorkflowName).HasMaxLength(200);
+        builder.Property(x => x.NodeName).HasMaxLength(200);
+        builder.Property(x => x.NodeType).HasMaxLength(200);
+        builder.Property(x => x.SourceName).HasMaxLength(200);
+        builder.Property(x => x.DestinationName).HasMaxLength(200);
+        builder.Property(x => x.ResourceType).HasMaxLength(200);
         builder.Property(x => x.CorrelationId).HasMaxLength(100);
 
         // ── Phase 6A – Enterprise Global Exception Management ────────────────────

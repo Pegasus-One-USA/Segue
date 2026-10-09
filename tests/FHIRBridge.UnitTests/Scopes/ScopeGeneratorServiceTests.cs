@@ -49,6 +49,32 @@ public sealed class ScopeGeneratorServiceTests
     }
 
     [Fact]
+    public void Ecw_document_reference_brings_the_binary_read_scope_its_note_text_needs()
+    {
+        // eCW notes link to their text in a Binary; without system/Binary.r the write-back's read of it got 401.
+        var result = _sut.Generate(
+            ApplicationType.Backend, ["Patient", "DocumentReference"], "v1", false, null, vendor: SourceSystemType.Healow);
+
+        result.Scopes.Should().Contain("system/DocumentReference.read").And.Contain("system/Binary.r");
+    }
+
+    [Fact]
+    public void Binary_is_added_only_where_the_server_is_known_to_publish_it()
+    {
+        // No profile and no discovery: a guessed scope could fail the whole token request, so none is added.
+        _sut.Generate(ApplicationType.Backend, ["DocumentReference"], "v2", false, null)
+            .Scopes.Should().Equal("system/DocumentReference.rs");
+
+        // Discovery that advertises Binary is followed.
+        _sut.Generate(ApplicationType.Backend, ["DocumentReference"], "v2", true, ["system/DocumentReference.rs", "system/Binary.r"])
+            .Scopes.Should().Equal("system/DocumentReference.rs", "system/Binary.r");
+
+        // Without DocumentReference there is nothing to read a Binary for.
+        _sut.Generate(ApplicationType.Backend, ["Patient"], "v1", false, null, vendor: SourceSystemType.Healow)
+            .Scopes.Should().NotContain(s => s.StartsWith("system/Binary"));
+    }
+
+    [Fact]
     public void Backend_group_export_adds_group_read_scope_ecw_v1()
     {
         // eCW bulk (Group/{id}/$export) needs system/Group.read on top of the per-resource scopes. Regression guard:

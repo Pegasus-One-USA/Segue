@@ -45,8 +45,9 @@ export class SsoConfigurationsComponent implements OnInit, HasUnsavedChanges {
 
   constructor() {
     this.unsavedChangesRegistry.register(
-      () => this.hasUnsavedChanges() || this.isSaveInProgress(),
+      () => this.hasUnsavedChanges(),
       this.destroyRef,
+      () => this.isSaveInProgress(),
     );
   }
 

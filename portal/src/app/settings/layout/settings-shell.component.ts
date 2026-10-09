@@ -50,7 +50,7 @@ const SETTINGS_TABS: SettingsTab[] = [
     // see data/terminology-feature.config.ts; otherwise a terminology-only role would see this tab
     // but find nothing reachable inside it.
     permissions: [
-      'configuration.view', 'configuration.write',
+      'configuration.view', 'configuration.write', 'governance.read',
       ...(TERMINOLOGY_FEATURE_ENABLED ? TERMINOLOGY_PERMISSION_CODES : []),
     ],
   },

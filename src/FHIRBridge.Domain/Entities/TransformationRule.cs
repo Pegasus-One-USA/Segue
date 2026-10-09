@@ -1,4 +1,4 @@
-using FHIRBridge.Domain.Enums;
+﻿using FHIRBridge.Domain.Enums;
 using FHIRBridge.SharedKernel.Abstractions;
 
 namespace FHIRBridge.Domain.Entities;
@@ -33,7 +33,8 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         string? fhirWriteBackJsonPath = null,
         TransformExecutionPhase executionPhase = TransformExecutionPhase.PostMapping,
         Guid? deIdentificationProfileId = null,
-        MappingValueType? expectedValueType = null)
+        MappingValueType? expectedValueType = null,
+        Guid? destinationConfigurationId = null)
     {
         if (executionPhase == TransformExecutionPhase.PreMapping)
         {
@@ -68,6 +69,7 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
         NodeType = nodeType;
         ConfigJson = configJson;
         DestinationType = destinationType;
+        DestinationConfigurationId = destinationConfigurationId;
         ResourceType = resourceType;
         DestinationField = destinationField;
         ResourcePipelineRouteId = resourcePipelineRouteId;
@@ -87,6 +89,25 @@ public sealed class TransformationRule : AuditableEntity<Guid>, IHasAuditDisplay
 
     public TransformScope Scope { get; private set; }
     public DestinationType? DestinationType { get; private set; }
+
+    /// <summary>Which DestinationConfiguration this rule was authored against, when one is known.</summary>
+    /// <remarks>
+    /// DestinationType alone cannot answer "is this rule mine?" — replace a PostgreSQL destination with
+    /// another PostgreSQL destination and every type-based check still matches, so the new one inherits the
+    /// old one's rules and the save-time retirement pass finds nothing to retire (it removes a type from its
+    /// "removed" set the moment any surviving destination shares it). The configuration id is the only thing
+    /// that distinguishes two destinations of the same kind.
+    ///
+    /// Nullable because every rule written before this column existed has none, and those must keep applying
+    /// rather than silently stopping — so a null means "not recorded", matched permissively, not "no
+    /// destination".
+    /// </remarks>
+    public Guid? DestinationConfigurationId { get; private set; }
+
+    /// <summary>Records the destination a rule was authored against when it was saved without one — used
+    /// when an existing rule is re-saved from a destination that now knows its own configuration id.</summary>
+    public void SetDestinationConfiguration(Guid? destinationConfigurationId) =>
+        DestinationConfigurationId = destinationConfigurationId;
     public string? ResourceType { get; private set; }
 
     /// <summary>What this rule writes into, once the source value has been transformed — a storage-side

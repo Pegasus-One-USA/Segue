@@ -145,6 +145,22 @@
           </div>
           <p class="eaf-hint">Decides which Client ID set applies. {{ displayVendor() }} issues separate IDs per environment.</p>
         </div>
+
+        <div class="eaf-field">
+          <label class="eaf-label" for="eaf-access">Access <span class="eaf-req">*</span></label>
+          <div class="eaf-select-wrap">
+            <select id="eaf-access" class="eaf-select" formControlName="access">
+              <option value="Read">Read</option>
+              <option value="Write" [disabled]="!canChooseWriteAccess()">Write (EHR write-back only)</option>
+              <option value="ReadWrite" [disabled]="!canChooseWriteAccess()">Read &amp; Write</option>
+            </select>
+          </div>
+          @if (canChooseWriteAccess()) {
+            <p class="eaf-hint">Write lets an EHR Write-Back destination create records over this connection. Use a client ID registered for write-back only.</p>
+          } @else {
+            <p class="eaf-hint">Write access needs a vendor that accepts EHR write-back and the Backend System audience.</p>
+          }
+        </div>
       </div>
     </div>
 

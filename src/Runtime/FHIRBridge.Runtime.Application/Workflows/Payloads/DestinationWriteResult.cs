@@ -6,12 +6,36 @@ namespace FHIRBridge.Runtime.Application.Workflows.Payloads;
 /// <param name="EmailDelivery">Populated only for a CSV destination using Email delivery — the full send detail
 /// (recipients, subject, body, attachment names, and outcome) so Execution History can show exactly what was
 /// emailed, instead of just a record count.</param>
+/// <param name="EhrWrite">Populated only for an EHR write-back destination: per-resource-type counts and reason
+/// codes, including what a dry run would have written. PHI-free by construction.</param>
 public sealed record DestinationWriteResult(
     string DestinationId,
     int RecordsWritten,
     DateTimeOffset WrittenAt,
     string? DownloadUrl = null,
-    EmailDeliveryDetail? EmailDelivery = null);
+    EmailDeliveryDetail? EmailDelivery = null,
+    EhrWriteSummary? EhrWrite = null);
+
+/// <summary>Runtime-plane mirror of <c>FHIRBridge.Application.Abstractions.Destinations.EhrWriteReport</c>, duplicated
+/// for the same layering reason as <see cref="EmailDeliveryDetail"/>.</summary>
+public sealed record EhrWriteSummary(
+    bool DryRun,
+    string TargetVendor,
+    int RecordsReceived,
+    string ScopeStatus,
+    IReadOnlyList<EhrWriteResourceCounts> Resources,
+    bool CloneMode = false);
+
+public sealed record EhrWriteResourceCounts(
+    string ResourceType,
+    int Received,
+    int WouldWrite,
+    int Written,
+    int AlreadyWritten,
+    int Skipped,
+    int Rejected,
+    int Unknown,
+    IReadOnlyDictionary<string, int> Reasons);
 
 /// <summary>Runtime-plane mirror of <c>FHIRBridge.Application.Abstractions.Destinations.EmailDeliveryDetail</c> —
 /// duplicated rather than referenced because Runtime.Application deliberately never depends on the Configured

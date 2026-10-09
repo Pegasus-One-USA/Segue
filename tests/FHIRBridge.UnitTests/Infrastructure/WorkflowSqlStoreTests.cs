@@ -492,7 +492,7 @@ public sealed class WorkflowSqlStoreTests
     }
 
     [Fact]
-    public async Task Run_store_status_counts_reflect_every_run_and_zero_fill_unrepresented_statuses()
+    public async Task Run_store_status_counts_reflect_runs_of_existing_workflows_and_zero_fill_unrepresented_statuses()
     {
         var definitionId = Guid.NewGuid();
 
@@ -503,14 +503,20 @@ public sealed class WorkflowSqlStoreTests
         var failed = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
         failed.Fail("boom", DateTimeOffset.UtcNow);
         var running = new WorkflowRun(Guid.NewGuid(), definitionId, DateTimeOffset.UtcNow);
+        // A run of a workflow that has since been deleted — /workflow-runs can't list it, so the tiles mustn't count it.
+        var orphaned = new WorkflowRun(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow);
+        orphaned.Fail("boom", DateTimeOffset.UtcNow);
 
         await using (var context = CreateContext())
         {
+            await CreateDefinitionStore(context).SaveAsync(
+                new WorkflowDefinition(definitionId, "Counted workflow", 1), CancellationToken.None);
             var store = new SqlWorkflowRunStore(context);
             await store.SaveAsync(succeeded1, CancellationToken.None);
             await store.SaveAsync(succeeded2, CancellationToken.None);
             await store.SaveAsync(failed, CancellationToken.None);
             await store.SaveAsync(running, CancellationToken.None);
+            await store.SaveAsync(orphaned, CancellationToken.None);
         }
 
         await using (var assertContext = CreateContext())

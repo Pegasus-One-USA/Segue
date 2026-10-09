@@ -155,8 +155,9 @@ public sealed class LicenseService : ILicenseService, IDisposable
                 await _redis.GetSubscriber().SubscribeAsync(InvalidationChannel, (_, _) => _ = ReloadFromInvalidationAsync());
                 _subscribedToInvalidation = true;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                FHIRBridge.Governance.SwallowedError.Report(exception, "License.Redis subscribe");
                 // Still down/hung — ConnectionRestored will call this again; the reload timer bounds
                 // staleness meanwhile.
             }

@@ -34,6 +34,9 @@ public sealed class EmptyGovernanceQueryService : IGovernanceQueryService
     public Task<PagedResult<ErrorLogDto>> GetErrorLogsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
         => Task.FromResult(new PagedResult<ErrorLogDto>([], 0, 1, take));
 
+    public Task<ErrorDashboardDto> GetErrorDashboardAsync(DateTime fromUtc, DateTime toUtc, string? severity, string? category, CancellationToken cancellationToken)
+        => Task.FromResult(new ErrorDashboardDto(fromUtc, toUtc, 0, 0, 0, 0, 0, 0, 0, [], [], [], [], []));
+
     public Task<PagedResult<ErrorLogDto>> SearchErrorLogsAsync(ErrorLogSearch search, CancellationToken cancellationToken)
         => Task.FromResult(new PagedResult<ErrorLogDto>([], 0, 1, search.Take));
 
@@ -57,6 +60,10 @@ public sealed class EmptyGovernanceQueryService : IGovernanceQueryService
 
     public Task<CorrelationSearchResultDto> GetCorrelationSearchResultAsync(string correlationId, CancellationToken cancellationToken)
         => Task.FromResult(new CorrelationSearchResultDto(correlationId, null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], []));
+
+    public Task<IReadOnlyDictionary<string, CorrelationSearchResultDto>> GetCorrelationRunSummariesAsync(
+        IReadOnlyCollection<string> correlationIds, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyDictionary<string, CorrelationSearchResultDto>>(new Dictionary<string, CorrelationSearchResultDto>());
 
     public Task<IReadOnlyList<RetentionPolicyDto>> GetRetentionPoliciesAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<RetentionPolicyDto>>([]);

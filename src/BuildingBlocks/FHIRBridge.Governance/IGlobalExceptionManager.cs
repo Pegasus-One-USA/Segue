@@ -19,6 +19,13 @@ public interface IGlobalExceptionManager
     /// actually be persisted (see remarks on <see cref="ErrorReport.ErrorReferenceId"/> — a caller must never
     /// surface a reference id that has no matching ErrorLogs row behind it).</summary>
     Task<string?> CaptureExpectedAsync(ExpectedFailure failure, ExceptionContext context, CancellationToken cancellationToken = default);
+
+    /// <summary>Writes a plain trace entry (no exception): used for the step-by-step <c>WorkflowDebug</c> lines.
+    /// Honours the error-log settings (the <paramref name="severity"/> must be enabled). Returns the entry's reference
+    /// id, or null if it was not recorded.</summary>
+    Task<string?> CaptureTraceAsync(
+        string severity, string entryType, string message, ExceptionContext context,
+        DateTime? occurredUtc = null, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A routine, expected domain outcome (e.g. a validation rejection, wrong password) that the caller
@@ -38,11 +45,19 @@ public sealed record ExceptionContext(
     string? RequestId = null,
     string? TraceId = null,
     string? SpanId = null,
-    string? UserFriendlyMessageOverride = null);
+    string? UserFriendlyMessageOverride = null,
+    string? WorkflowName = null,
+    string? NodeName = null,
+    string? NodeType = null,
+    string? SourceName = null,
+    string? DestinationName = null,
+    string? ResourceType = null);
 
 /// <summary>The safe, user-facing result of capturing an exception. Contains no stack trace, technical
 /// message, or PHI/PII — only the reference id, category, a friendly message, and who should act on it.</summary>
-/// <param name="ErrorReferenceId">Null if every persistence attempt failed (e.g. the database was unreachable)
+/// <param name="ErrorReferenceId">When <c>ErrorCapture:Sinks</c> is <c>ApplicationInsights</c> only, the id exists in Application
+/// Insights (as <c>customDimensions.ErrorReferenceId</c>) but there is no ErrorLogs row, so the Errors screens cannot find it.
+/// Null if every persistence attempt failed (e.g. the database was unreachable)
 /// — a caller MUST treat a null id as "no reference id to offer", never fall back to a placeholder, since
 /// nothing was actually written to ErrorLogs for the caller to quote or for Operations → Errors to find.</param>
 public sealed record ErrorReport(

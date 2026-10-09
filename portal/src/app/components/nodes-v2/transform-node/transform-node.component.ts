@@ -29,6 +29,7 @@ const TRANSFORM_META: Record<string, { abbr: string; color: string }> = {
   'dest-fhir':        { abbr: 'AB',  color: '#00A89D' },
   'dest-medplum':     { abbr: 'MP',  color: '#00A89D' },
   'dest-azurefhir':   { abbr: 'AZF', color: '#0078D4' },
+  'dest-ehr-writeback': { abbr: 'EWB', color: '#00A89D' },
   // Microsoft Fabric surfaces. Spelled out here rather than left to a fallback: this map has none, so a
   // missing entry renders the node with no badge at all.
   'dest-fabric':      { abbr: 'OLF', color: '#117865' },

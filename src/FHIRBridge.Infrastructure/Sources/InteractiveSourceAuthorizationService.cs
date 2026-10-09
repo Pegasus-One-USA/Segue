@@ -14,6 +14,7 @@ using FHIRBridge.Runtime.Application.Abstractions.Applications;
 using FHIRBridge.Runtime.Application.Abstractions.Auth;
 using FHIRBridge.Runtime.Application.DTOs;
 using FHIRBridge.Runtime.Application.Workflows;
+using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Enums;
 using FHIRBridge.SharedKernel.Enums;
@@ -945,6 +946,16 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
             return false;
         }
 
+        // An EHR launch has no user whose ehrwriteback.execute could be checked, so it never runs a graph that writes
+        // into an EHR. Handled (true), so the route fallback does not run in its place.
+        if (WorkflowNodeTypes.HasEhrWriteBack(workflow))
+        {
+            _logger.LogWarning(
+                "Launch graph for source connection {SourceConnectionId} writes into an EHR; an EHR launch does not run it.",
+                sourceConnectionId);
+            return true;
+        }
+
         var context = new WorkflowExecutionContext(
             Guid.NewGuid(),
             $"ehr-launch:{sourceConnectionId:N}",
@@ -977,6 +988,13 @@ public sealed class InteractiveSourceAuthorizationService : IInteractiveSourceAu
 
             var workflow = await _workflowDefinitionStore.GetAsync(workflowId, cancellationToken)
                 ?? throw new NotFoundException("WorkflowDefinition", workflowId);
+
+            // Same rule as the anonymous /run: the launch callback has no user to hold ehrwriteback.execute.
+            if (WorkflowNodeTypes.HasEhrWriteBack(workflow))
+            {
+                throw new InvalidOperationException(
+                    "A workflow that writes into an EHR cannot be run from an EHR launch; run it from the portal.");
+            }
 
             // The ambient correlation id — which CompleteAsync has already re-stamped from this launch's decrypted
             // workflow + session — rather than the per-workflow constant this used to build. That constant was the

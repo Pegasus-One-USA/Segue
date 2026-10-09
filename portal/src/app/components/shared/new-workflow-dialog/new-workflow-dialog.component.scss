@@ -1,0 +1,104 @@
+// Copied unchanged from workflow-list.component.scss (which keeps its own copies for its other modals), so
+// the dialog looks the same wherever it is opened. position: absolute on the overlay resolves against the
+// shell's content area, as it did when this markup lived in the Workflows list.
+
+.cell-muted   { font-size: 13px; color: var(--color-muted); }
+
+.btn-danger {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 40px; padding: 0 18px;
+  border: 1.5px solid var(--color-error); border-radius: var(--radius-base);
+  background: var(--color-error-soft); color: var(--color-error);
+  font-size: 13.5px; font-weight: 600; cursor: pointer;
+  transition: filter var(--transition-base);
+
+  &:hover:not(:disabled) { filter: brightness(0.97); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.btn-cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 40px; padding: 0 18px;
+  border: none; border-radius: var(--radius-base);
+  background: var(--color-primary); color: var(--color-on-primary);
+  font-size: 13.5px; font-weight: 700; cursor: pointer; text-decoration: none;
+  transition: background var(--transition-base), transform var(--transition-fast);
+
+  &:hover:not(:disabled) { background: var(--color-primary-dark); transform: translateY(-1px); }
+  &:active:not(:disabled) { transform: translateY(0); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 40px; padding: 0 16px;
+  border: 1.5px solid var(--color-border); border-radius: var(--radius-base);
+  background: transparent; color: var(--color-ink-2);
+  font-size: 13.5px; font-weight: 500; cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base);
+
+  &:hover:not(:disabled) { border-color: var(--color-muted); background: var(--color-side); color: var(--color-ink); }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.modal-overlay {
+  position: absolute; inset: 0; z-index: var(--z-modal, 200);
+  background: rgba(15, 23, 42, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+
+  /* A second overlay layered over an already-open modal (the New-workflow discard confirm). Sits one
+     level above it, with a lighter scrim so the form underneath stays readable — the user is being
+     asked about that form, so hiding it behind a second full-strength backdrop would be backwards. */
+  &.modal-overlay--stacked {
+    z-index: calc(var(--z-modal, 200) + 1);
+    background: rgba(15, 23, 42, 0.32);
+  }
+}
+
+.modal {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  width: 100%; max-width: 560px;
+  max-height: 85vh; display: flex; flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+
+  &.modal-wide { max-width: 920px; }
+
+  /* Confirmations — narrower than the forms they sit over, so the modal beneath stays visible at the
+     edges and the stack reads as one thing layered on another rather than a page swap. */
+  &.modal--sm { max-width: 420px; }
+}
+
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px; border-bottom: 1px solid var(--color-border);
+
+  h2 { font-size: 16px; font-weight: 700; color: var(--color-ink); margin: 0; }
+}
+
+.modal-close {
+  border: none; background: transparent; cursor: pointer;
+  font-size: 24px; line-height: 1; color: var(--color-muted);
+  &:hover { color: var(--color-ink); }
+}
+
+.modal-body { padding: 22px; overflow: auto; }
+
+.modal-sub  { font-size: 14px; color: var(--color-ink-2); margin: 0 0 14px; }
+
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+.text-input {
+  width: 100%; box-sizing: border-box;
+  padding: 9px 12px; font-size: 14px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-base);
+  background: var(--color-bg); color: var(--color-ink);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+}

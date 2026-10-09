@@ -108,8 +108,18 @@ export class FieldMappingListComponent {
   /** All tables (primary + extras) a resource currently targets — populates the draft's table picker. */
   readonly tablesForResource = input.required<(resource: string) => string[]>();
   readonly columnsFor = input.required<(resource: string, tableName: string) => string[]>();
+  /** What the empty list says while there is no destination table yet, worded by the canvas after the add-table
+   *  control it actually shows above (see FieldMappingCanvasComponent.noTableHint). */
+  readonly noTableHint = input<string>('No table yet — add one above, then you can add mappings here.');
+  /** Whether any resource has a destination table to map onto. Without one, "+ Add mapping" opened a form whose
+   *  table list was empty, so it could never be submitted — the button stays hidden until a table is added. */
+  readonly hasTargetTable = computed(() => this.resources().some(r => this.tablesForResource()(r).length > 0));
   readonly targetByResource = input.required<Record<string, string>>();
   readonly isApproximated = input.required<(row: MappingRow) => boolean>();
+  /** Rows the host always keeps mapped (the Settings mapping-profile screen's id/upsert-key row) — they show
+   *  a lock in place of Remove, which would only be undone straight away. Off by default: the workflow
+   *  builder has no such row. */
+  readonly isRowLocked = input<(row: MappingRow) => boolean>(() => false);
 
   readonly addRow = output<MappingRow>();
   readonly removeRow = output<{ resource: string; tableName: string; targetName: string }>();
@@ -118,6 +128,9 @@ export class FieldMappingListComponent {
    *  FieldMappingCanvasComponent's own doc comment. Null hides the "Transformations" tab entirely (nothing
    *  to look rules up against). */
   readonly rulesDestinationType = input<DestinationType | null>(null);
+  /** Must match what the join popover sends, for the same reason the other lookup fields do: this tab
+   *  and that popover answer the same question about the same field. */
+  readonly rulesDestinationConfigurationId = input<string | null>(null);
   /** Bumped by FieldMappingCanvasComponent every time the join popover closes — see its own doc comment.
    *  Not read directly, just a dependency the ruleByRowKey effect below needs to re-run on, since a
    *  transformation rule can change without any MappingRow (this component's real state) changing at all. */
@@ -178,6 +191,10 @@ export class FieldMappingListComponent {
   readonly ruleByRowKey = signal<Map<string, TransformationRule | null>>(new Map());
 
   constructor() {
+    // Removing the last table leaves an open "+ Add mapping" form pointing at a table that no longer exists.
+    effect(() => {
+      if (!this.hasTargetTable()) untracked(() => this.draft.set(null));
+    });
 
     // Bring the rule editor into view when "+ Add rule" or "Edit…" opens it. The form renders below the
     // rules table, so on a policy with more than a couple of rules it opened off-screen and the click
@@ -220,6 +237,7 @@ export class FieldMappingListComponent {
             resourcePipelineRouteId: this.workflowId() ?? undefined,
             workflowScopedOnly: true,
             includePending: true,
+            destinationConfigurationId: this.rulesDestinationConfigurationId(),
           })
           .subscribe({
             next: rules => this.ruleByRowKey.update(m => new Map(m).set(key, rules[0] ?? null)),
@@ -704,6 +722,7 @@ export class FieldMappingListComponent {
   }
 
   onRemove(row: MappingRow): void {
+    if (this.isRowLocked()(row)) return;
     this.removeRow.emit({ resource: row.resource, tableName: row.tableName, targetName: row.targetName });
   }
 

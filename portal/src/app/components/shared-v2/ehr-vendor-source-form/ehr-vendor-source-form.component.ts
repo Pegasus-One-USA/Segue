@@ -11,7 +11,8 @@ import {
   ElementRef,
   ViewChild,
 } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { EhrWriteCapabilitiesService } from '../../../services/ehr-write-capabilities.service';
 import { Observable, catchError, map, of, switchMap } from 'rxjs';
 import { take } from 'rxjs/operators';
 import {
@@ -936,6 +937,15 @@ export class EhrVendorSourceFormComponent
   private readonly sourceConnectionSvc = inject(ISourceConnectionService);
   private readonly unsavedChangesPrompt = inject(UnsavedChangesPromptService);
   private readonly catalogSvc = inject(MappingCatalogService);
+  private readonly ehrWriteCapabilitiesSvc = inject(EhrWriteCapabilitiesService);
+  /** Whether this vendor accepts EHR write-back at all (EhrWriteCapabilities, deny-by-default). */
+  protected readonly vendorAcceptsWrites = toSignal(
+    toObservable(this.vendor).pipe(
+      switchMap((vendor) => this.ehrWriteCapabilitiesSvc.writableResourceTypes(vendor)),
+      map((types) => types.length > 0),
+    ),
+    { initialValue: false },
+  );
 
   /** True only when opened in read-only View mode from the Source Connections page — disables every control and
    *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
@@ -1063,6 +1073,9 @@ export class EhrVendorSourceFormComponent
   protected readonly form = this.fb.nonNullable.group({
     audience: ['provider-ehr-launch' as EpicAudience, Validators.required],
     environment: ['sandbox', Validators.required],
+    // Read / Write / Read & Write (SourceConnectionAccess). Write is offered only for a vendor that accepts EHR
+    // write-back over a Backend System connection — see canChooseWriteAccess.
+    access: ['Read' as 'Read' | 'Write' | 'ReadWrite', Validators.required],
     epicBaseUrl: [
       'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4',
       [Validators.required, urlValidator],
@@ -1290,6 +1303,21 @@ export class EhrVendorSourceFormComponent
     this.form.controls.singlePatientResourceType.valueChanges,
     { initialValue: this.form.controls.singlePatientResourceType.value },
   );
+
+  /** Write access needs a vendor that accepts writes AND a Backend System connection (EhrWriteCapabilities lists
+   *  Backend as the only application type in Phase 1). */
+  protected readonly canChooseWriteAccess = computed(
+    () => this.vendorAcceptsWrites() && this.audience() === 'backend-system',
+  );
+
+  /** Write access exists only for Backend System: moving the audience away drops it back to Read rather than leaving
+   *  a disabled option selected (which the server would refuse on save). Keyed on the audience alone, so restoring a
+   *  saved Write connection is never undone while its vendor's capabilities are still loading. */
+  private readonly accessFollowsAudience = effect(() => {
+    if (this.audience() !== 'backend-system' && this.form.controls.access.value !== 'Read') {
+      this.form.controls.access.setValue('Read');
+    }
+  });
 
   protected readonly audience = computed(
     () => this.audienceValue() as EpicAudience,
@@ -2228,6 +2256,8 @@ export class EhrVendorSourceFormComponent
       }
     };
 
+    // Restored before any early return below: a connection created in Settings has no retrieval method.
+    setIfPresent('access', 'Access');
     setIfPresent('launchDisplayMode', 'Launch display mode');
     setIfPresent('jwksUrl', 'JWKS URL');
     setIfPresent('jwtKid', 'JWT kid');
@@ -2380,6 +2410,7 @@ export class EhrVendorSourceFormComponent
     // saved Source Connection in entity mode (Settings › Source Connections) reverted placement to the 'post'
     // default on reopen/re-save, the same data-loss bug as canvas mode.
     if (auth?.authPlacement) fields['Auth placement'] = auth.authPlacement;
+    if (dto.access) fields['Access'] = dto.access;
     if (dto.interactive?.launchDisplayMode)
       fields['Launch display mode'] = dto.interactive.launchDisplayMode;
 
@@ -3162,6 +3193,7 @@ export class EhrVendorSourceFormComponent
     this.form.patchValue({
       audience,
       environment: 'sandbox',
+      access: dto.access ?? 'Read',
       appName: dto.name,
       epicBaseUrl: dto.baseUrl,
       tokenEndpoint: dto.authentication?.tokenEndpoint ?? '',
@@ -3326,6 +3358,8 @@ export class EhrVendorSourceFormComponent
     'appName',
     'audience',
     'environment',
+    // Changing Access on a reused connection forks a new one rather than silently widening a shared connection.
+    'access',
     'epicBaseUrl',
     'tokenEndpoint',
     'authzEndpoint',
@@ -3711,6 +3745,7 @@ export class EhrVendorSourceFormComponent
       // actually assembled Epic connections; wiring non-Epic vendors all the way through canvas → workflow-build
       // is tracked as follow-up work, not part of this UI-layer split).
       Connector: this.vendor(),
+      Access: v.access ?? 'Read',
       'Client ID': v.clientId ?? '',
       // Only meaningful when the audience is on Client Secret auth (showSecret()) — WizardServiceV2.save() treats
       // a blank value here as "leave whatever secret is already stored untouched" (existingClientSecretRef),

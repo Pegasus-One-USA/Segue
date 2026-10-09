@@ -35,7 +35,9 @@ export type DestinationType =
    *  the other Fabric destinations in the picker, but sharing nothing technical with them, and deliberately NOT
    *  reachable through 'Mongo': Fabric's Cosmos DB is the NoSQL API and speaks no MongoDB wire protocol. */
   | 'CosmosDbFabric'
-  | 'ApiEndpoint';
+  | 'ApiEndpoint'
+  /** FHIR write-back into an EHR — see DestinationTypeV2 for why it is its own type. */
+  | 'EhrWriteBack';
 
 /** Must match the backend's ArtifactDeliveryMode enum member names. Stored as `dest_deliveryMode` in
  *  ConnectionMetadataJson for Csv destinations — replaces the old `dest_storageType` field. */

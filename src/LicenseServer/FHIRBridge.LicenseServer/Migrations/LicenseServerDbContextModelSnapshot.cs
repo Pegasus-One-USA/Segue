@@ -73,6 +73,212 @@ namespace FHIRBridge.LicenseServer.Migrations
                     b.ToTable("CheckIns");
                 });
 
+            modelBuilder.Entity("FHIRBridge.LicenseServer.Domain.ErrorReportCorrelation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("EventsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ExtractedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ImportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("MappedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RunCompletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RunStartedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RunStatus")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<bool>("Truncated")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("WrittenCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImportId", "CorrelationId");
+
+                    b.ToTable("ErrorReportCorrelations");
+                });
+
+            modelBuilder.Entity("FHIRBridge.LicenseServer.Domain.ErrorReportEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Category")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Cause")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("CorrelationId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DestinationName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EndpointId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ErrorReferenceId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExceptionType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExecutionId")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ImportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Module")
+                        .HasColumnType("text");
+
+                    b.Property<string>("NodeName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("NodeType")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("OccurredOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SourceName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("StackTrace")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TraceId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("WhatToDo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("WorkflowId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("WorkflowName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImportId", "OccurredOnUtc");
+
+                    b.ToTable("ErrorReportEntries");
+                });
+
+            modelBuilder.Entity("FHIRBridge.LicenseServer.Domain.ErrorReportImport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApplicationVersion")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<string>("ClientName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("ErrorCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime>("ImportedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImportedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("ReportFromUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ReportGeneratedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ReportToUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("ReportTruncated")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SourceFileName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientName");
+
+                    b.HasIndex("ImportedAtUtc");
+
+                    b.ToTable("ErrorReportImports");
+                });
+
             modelBuilder.Entity("FHIRBridge.LicenseServer.Domain.Installation", b =>
                 {
                     b.Property<string>("InstallationId")
@@ -273,6 +479,28 @@ namespace FHIRBridge.LicenseServer.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("FHIRBridge.LicenseServer.Domain.ErrorReportCorrelation", b =>
+                {
+                    b.HasOne("FHIRBridge.LicenseServer.Domain.ErrorReportImport", "Import")
+                        .WithMany("Correlations")
+                        .HasForeignKey("ImportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Import");
+                });
+
+            modelBuilder.Entity("FHIRBridge.LicenseServer.Domain.ErrorReportEntry", b =>
+                {
+                    b.HasOne("FHIRBridge.LicenseServer.Domain.ErrorReportImport", "Import")
+                        .WithMany("Entries")
+                        .HasForeignKey("ImportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Import");
+                });
+
             modelBuilder.Entity("FHIRBridge.LicenseServer.Domain.Installation", b =>
                 {
                     b.HasOne("FHIRBridge.LicenseServer.Domain.IssuedLicense", "CurrentIssuedLicense")
@@ -291,6 +519,13 @@ namespace FHIRBridge.LicenseServer.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("FulfilledIssuedLicense");
+                });
+
+            modelBuilder.Entity("FHIRBridge.LicenseServer.Domain.ErrorReportImport", b =>
+                {
+                    b.Navigation("Correlations");
+
+                    b.Navigation("Entries");
                 });
 #pragma warning restore 612, 618
         }

@@ -32,6 +32,10 @@ export interface TransformationRule {
   id: string;
   scope: TransformScope;
   destinationType?: DestinationType | null;
+  /** Which DestinationConfiguration the rule is authored against. destinationType cannot answer that:
+   *  replace a PostgreSQL destination with another PostgreSQL destination and the new one inherits the
+   *  old one's rules, because nothing recorded WHICH destination they belonged to. */
+  destinationConfigurationId?: string | null;
   resourceType?: string | null;
   destinationField?: string | null;
   resourcePipelineRouteId?: string | null;
@@ -75,6 +79,10 @@ export interface SaveTransformationRuleRequest {
   nodeType: TransformNodeType;
   config: Record<string, string>;
   destinationType?: DestinationType | null;
+  /** Which DestinationConfiguration this rule is authored against. Without it the rule is stored
+   *  with a null destination, which matches ANY destination of the same type — so a replacement
+   *  destination inherits it and delete-by-destination cannot identify it. */
+  destinationConfigurationId?: string | null;
   resourceType?: string | null;
   destinationField?: string | null;
   resourcePipelineRouteId?: string | null;
@@ -230,6 +238,9 @@ export class TransformationRulesService {
     destinationType: DestinationType; resourceType: string; destinationField: string;
     resourcePipelineRouteId?: string; sourceSystem?: string | null; sourceField?: string | null;
     workflowScopedOnly?: boolean; includePending?: boolean;
+    /** Narrows to one destination — see SaveTransformationRuleRequest.destinationConfigurationId.
+     *  Omitted means "any", which is how this behaved before the field existed. */
+    destinationConfigurationId?: string | null;
   }): Observable<TransformationRule[]> {
     const params = new URLSearchParams();
     Object.entries(filter).forEach(([key, value]) => {
@@ -254,6 +265,34 @@ export class TransformationRulesService {
     const qs = params.toString();
     const url = TRANSFORMATION_RULES_ENDPOINTS.attachPending(workflowId);
     return this.http.post<number>(qs ? `${url}?${qs}` : url, {});
+  }
+
+  /** Discards this user's own pending (unattached) rules for the given destination types — called when the
+   *  destination node they were drafted against leaves the canvas and no other node of that type remains.
+   *  Without it the drafts outlive the node, and because the pending tier matches on destination type +
+   *  resource type + destination field alone, re-creating the same column on a NEW node silently re-applies a
+   *  transformation nobody selected. Never touches an attached rule, nor another author's drafts. */
+  deletePending(destinationTypes: DestinationType[]): Observable<number> {
+    const params = new URLSearchParams();
+    for (const destinationType of destinationTypes) params.append('destinationTypes', destinationType);
+    const qs = params.toString();
+    const url = TRANSFORMATION_RULES_ENDPOINTS.deletePending;
+    return this.http.delete<number>(qs ? `${url}?${qs}` : url);
+  }
+
+  /** Removes the rules a destination owned, when that destination node is deleted from the canvas —
+   *  "delete the destination and its transformations go with it", which is what deleting one always
+   *  looked like it did. Rules that record no destination id are only taken when no other destination of
+   *  the same type survives; that is what clears rules authored before destination ids were recorded. */
+  deleteForDestination(args: {
+    workflowId: string;
+    destinationConfigurationId: string;
+    destinationType: DestinationType;
+    otherDestinationsOfThisTypeRemain: boolean;
+  }): Observable<number> {
+    const params = new URLSearchParams();
+    Object.entries(args).forEach(([key, value]) => params.set(key, String(value)));
+    return this.http.delete<number>(`${TRANSFORMATION_RULES_ENDPOINTS.deleteForDestination}?${params}`);
   }
 
   delete(ruleId: string): Observable<void> {

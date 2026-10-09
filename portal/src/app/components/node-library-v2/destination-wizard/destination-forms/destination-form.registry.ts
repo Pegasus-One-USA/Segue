@@ -28,6 +28,7 @@ import { DataLakeWebhookDestinationFormComponent } from './data-lake-webhook-des
 import { DataFabricDestinationFormComponent } from './data-fabric-destination-form.component';
 import { ApiEndpointDestinationFormComponent } from './api-endpoint-destination-form.component';
 import { CosmosDbFabricDestinationFormComponent } from './cosmos-db-fabric-destination-form.component';
+import { EhrWriteBackDestinationFormComponent } from './ehr-write-back-destination-form.component';
 
 /**
  * Single source of truth mapping every DestinationType to the standalone component that configures it —
@@ -70,4 +71,5 @@ export const DESTINATION_FORM_REGISTRY: DestinationFormRegistry<DestinationType>
   // NOT the Fabric form: this shares the vendor and the Entra auth shape, but nothing else — it addresses a
   // Cosmos endpoint and database rather than a workspace and item, so it has its own form.
   CosmosDbFabric: CosmosDbFabricDestinationFormComponent,
+  EhrWriteBack: EhrWriteBackDestinationFormComponent,
 };

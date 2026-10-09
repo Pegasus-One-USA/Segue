@@ -68,8 +68,11 @@ export class ApiSourceConnectionService extends ISourceConnectionService {
     );
   }
 
+  /** Always silent (SKIP_LOADER): a background check that only pre-disables Edit/Delete on in-use rows. With the
+   *  app-wide loader it made the page inert after every search keystroke, which took focus out of the box. */
   getUsedIds(): Observable<string[]> {
-    return this.http.get<string[]>(SOURCE_CONNECTIONS_ENDPOINTS.usage).pipe(
+    const context = new HttpContext().set(SKIP_LOADER, true);
+    return this.http.get<string[]>(SOURCE_CONNECTIONS_ENDPOINTS.usage, { context }).pipe(
       catchError(err => throwError(() => err))
     );
   }

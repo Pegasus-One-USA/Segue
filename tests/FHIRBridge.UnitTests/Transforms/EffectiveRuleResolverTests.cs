@@ -1,4 +1,4 @@
-using FHIRBridge.Application.Abstractions.Persistence;
+﻿using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
@@ -19,7 +19,7 @@ public sealed class EffectiveRuleResolverTests
     {
         var repository = new Mock<ITransformationRuleRepository>();
         repository
-            .Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         repository
             .Setup(x => x.GetFieldScopedAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
@@ -34,7 +34,7 @@ public sealed class EffectiveRuleResolverTests
             .Setup(x => x.GetGlobalScopedAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         repository
-            .Setup(x => x.GetPendingWorkflowScopedAsync(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetPendingWorkflowScopedAsync(It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[]);
         return repository;
     }
@@ -54,7 +54,7 @@ public sealed class EffectiveRuleResolverTests
         repository
             .Setup(x => x.GetPendingWorkflowScopedAsync(
                 DestinationType.SqlServer, ResourceType, DestinationField, It.IsAny<string?>(), It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[rule]);
         return repository;
     }
@@ -66,13 +66,13 @@ public sealed class EffectiveRuleResolverTests
 
         var resolver = new EffectiveRuleResolver(repository.Object);
         var result = await resolver.ResolveAsync(
-            DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, CancellationToken.None);
+            DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, null, CancellationToken.None);
 
         result.Should().BeEmpty();
         repository.Verify(
             x => x.GetPendingWorkflowScopedAsync(
                 It.IsAny<DestinationType>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+                It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -83,7 +83,7 @@ public sealed class EffectiveRuleResolverTests
 
         var resolver = new EffectiveRuleResolver(repository.Object);
         var result = await resolver.ResolveAsync(
-            DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, CancellationToken.None,
+            DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, null, CancellationToken.None,
             workflowScopedOnly: true, includePendingWorkflowRules: true);
 
         result.Should().ContainSingle().Which.Should().Be(pendingRule);
@@ -98,13 +98,13 @@ public sealed class EffectiveRuleResolverTests
             destinationField: DestinationField, resourcePipelineRouteId: WorkflowId);
         repository
             .Setup(x => x.GetWorkflowScopedAsync(
-                WorkflowId, ResourceType, DestinationField, It.IsAny<string?>(), It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
+                WorkflowId, It.IsAny<Guid?>(), ResourceType, DestinationField, It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[attachedRule]);
 
         var resolver = new EffectiveRuleResolver(repository.Object);
         var result = await resolver.ResolveAsync(
-            DestinationType.SqlServer, ResourceType, DestinationField, WorkflowId, null, null, CancellationToken.None,
+            DestinationType.SqlServer, ResourceType, DestinationField, WorkflowId, null, null, null, CancellationToken.None,
             workflowScopedOnly: true, includePendingWorkflowRules: true);
 
         result.Should().ContainSingle().Which.Should().Be(attachedRule);
@@ -120,7 +120,7 @@ public sealed class EffectiveRuleResolverTests
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[globalRule]);
 
         var resolver = new EffectiveRuleResolver(repository.Object);
-        var result = await resolver.ResolveAsync(DestinationType.FhirRepository, ResourceType, DestinationField, null, null, null, CancellationToken.None);
+        var result = await resolver.ResolveAsync(DestinationType.FhirRepository, ResourceType, DestinationField, null, null, null, null, CancellationToken.None);
 
         result.Should().ContainSingle().Which.Should().Be(globalRule);
     }
@@ -136,7 +136,7 @@ public sealed class EffectiveRuleResolverTests
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[resourceTypeRule]);
 
         var resolver = new EffectiveRuleResolver(repository.Object);
-        var result = await resolver.ResolveAsync(DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, CancellationToken.None);
+        var result = await resolver.ResolveAsync(DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, null, CancellationToken.None);
 
         result.Should().ContainSingle().Which.Should().Be(resourceTypeRule);
         repository.Verify(x => x.GetDestinationTypeScopedAsync(It.IsAny<DestinationType>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -157,7 +157,7 @@ public sealed class EffectiveRuleResolverTests
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[fieldRule]);
 
         var resolver = new EffectiveRuleResolver(repository.Object);
-        var result = await resolver.ResolveAsync(DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, CancellationToken.None);
+        var result = await resolver.ResolveAsync(DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, null, CancellationToken.None);
 
         result.Should().ContainSingle().Which.Should().Be(fieldRule);
     }
@@ -174,11 +174,11 @@ public sealed class EffectiveRuleResolverTests
             TransformScope.Workflow, TransformNodeType.DefaultNullHandling, "{}",
             resourceType: ResourceType, destinationField: DestinationField, resourcePipelineRouteId: WorkflowId);
         repository
-            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, ResourceType, DestinationField, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.GetWorkflowScopedAsync(WorkflowId, It.IsAny<Guid?>(), ResourceType, DestinationField, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[workflowRule]);
 
         var resolver = new EffectiveRuleResolver(repository.Object);
-        var result = await resolver.ResolveAsync(DestinationType.SqlServer, ResourceType, DestinationField, WorkflowId, null, null, CancellationToken.None);
+        var result = await resolver.ResolveAsync(DestinationType.SqlServer, ResourceType, DestinationField, WorkflowId, null, null, null, CancellationToken.None);
 
         result.Should().ContainSingle().Which.Should().Be(workflowRule);
     }
@@ -194,7 +194,7 @@ public sealed class EffectiveRuleResolverTests
             .ReturnsAsync((IReadOnlyList<TransformationRule>)[blanket, fieldSpecific]);
 
         var resolver = new EffectiveRuleResolver(repository.Object);
-        var result = await resolver.ResolveAsync(DestinationType.FhirRepository, ResourceType, DestinationField, null, null, null, CancellationToken.None);
+        var result = await resolver.ResolveAsync(DestinationType.FhirRepository, ResourceType, DestinationField, null, null, null, null, CancellationToken.None);
 
         result.Should().ContainSingle().Which.Should().Be(fieldSpecific);
     }
@@ -205,7 +205,7 @@ public sealed class EffectiveRuleResolverTests
         var repository = CreateRepositoryMock();
         var resolver = new EffectiveRuleResolver(repository.Object);
 
-        var result = await resolver.ResolveAsync(DestinationType.FhirRepository, ResourceType, DestinationField, null, null, null, CancellationToken.None);
+        var result = await resolver.ResolveAsync(DestinationType.FhirRepository, ResourceType, DestinationField, null, null, null, null, CancellationToken.None);
 
         result.Should().BeEmpty();
     }
@@ -225,7 +225,7 @@ public sealed class EffectiveRuleResolverTests
 
         var resolver = new EffectiveRuleResolver(repository.Object);
         var result = await resolver.ResolveAsync(
-            DestinationType.SqlServer, ResourceType, DestinationField, null, "Epic", null, CancellationToken.None);
+            DestinationType.SqlServer, ResourceType, DestinationField, null, null, "Epic", null, CancellationToken.None);
 
         result.Should().ContainSingle().Which.Should().Be(epicOnly);
     }
@@ -242,7 +242,7 @@ public sealed class EffectiveRuleResolverTests
 
         var resolver = new EffectiveRuleResolver(repository.Object);
         var result = await resolver.ResolveAsync(
-            DestinationType.SqlServer, ResourceType, DestinationField, null, "Healow", null, CancellationToken.None);
+            DestinationType.SqlServer, ResourceType, DestinationField, null, null, "Healow", null, CancellationToken.None);
 
         result.Should().ContainSingle().Which.Should().Be(anySource);
     }
@@ -262,7 +262,7 @@ public sealed class EffectiveRuleResolverTests
 
         var resolver = new EffectiveRuleResolver(repository.Object);
         var result = await resolver.ResolveAsync(
-            DestinationType.SqlServer, ResourceType, DestinationField, null, null, "identifier.value", CancellationToken.None);
+            DestinationType.SqlServer, ResourceType, DestinationField, null, null, null, "identifier.value", CancellationToken.None);
 
         result.Should().ContainSingle().Which.Should().Be(identifierValueOnly);
     }

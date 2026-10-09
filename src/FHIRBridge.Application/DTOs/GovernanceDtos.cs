@@ -97,7 +97,13 @@ public sealed record ErrorLogDto(
     string? ResolvedBy = null,
     DateTime? ResolvedOnUtc = null,
     string? DiagnosisAction = null,
-    string? DiagnosisCause = null);
+    string? DiagnosisCause = null,
+    string? WorkflowName = null,
+    string? NodeName = null,
+    string? NodeType = null,
+    string? SourceName = null,
+    string? DestinationName = null,
+    string? ResourceType = null);
 
 /// <summary>Search filter for the Monitoring → Errors screen (Phase 6A). All criteria optional and AND-combined.</summary>
 public sealed record ErrorLogSearch(
@@ -113,6 +119,41 @@ public sealed record ErrorLogSearch(
     DateTime? ToUtc = null,
     int Skip = 0,
     int Take = 200);
+
+public sealed record ErrorCountDto(string Key, int Count);
+
+public sealed record ErrorDayCountDto(DateTime DayUtc, int Count);
+
+/// <summary>A recurring error, grouped by exception type + module + message prefix.</summary>
+public sealed record ErrorSignatureDto(
+    string ExceptionType,
+    string? Module,
+    string? Category,
+    string SampleMessage,
+    int Count,
+    int OpenCount,
+    DateTime FirstSeenUtc,
+    DateTime LastSeenUtc,
+    string? SampleErrorReferenceId);
+
+/// <summary>Aggregated view behind the Error Dashboard. Contains counts and already-scrubbed message samples only.</summary>
+public sealed record ErrorDashboardDto(
+    DateTime FromUtc,
+    DateTime ToUtc,
+    int Total,
+    int Open,
+    int Resolved,
+    int Critical,
+    int Last24Hours,
+    int SelfFixCount,
+    int ContactSupportCount,
+    IReadOnlyList<ErrorCountDto> BySeverity,
+    IReadOnlyList<ErrorCountDto> ByCategory,
+    IReadOnlyList<ErrorCountDto> ByModule,
+    IReadOnlyList<ErrorDayCountDto> ByDay,
+    IReadOnlyList<ErrorSignatureDto> TopSignatures,
+    DateTime? ClearedAtUtc = null,
+    bool Truncated = false);
 
 public sealed record ApiRequestLogDto(
     Guid Id,

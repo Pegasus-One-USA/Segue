@@ -112,6 +112,9 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  Optional (not every host of this canvas — e.g. the Mapping Profiles dialog — has a resolved
    *  destination type on hand); the popover simply hides its transformation-rule section when absent. */
   readonly rulesDestinationType = input<DestinationType | null>(null);
+  /** The DestinationConfiguration these columns belong to, passed straight through to the rule popover
+   *  and the mapping list — see the popover for why the destination TYPE cannot identify a destination. */
+  readonly rulesDestinationConfigurationId = input<string | null>(null);
   // ── pass-through to the "De-identification" tab (field-mapping-list) — same shared state
   // DestinationWizardComponent's Step 1 picker owns; this canvas has no logic of its own here. ──────────
   readonly deIdentificationProfiles = input<DeIdentificationProfileDto[]>([]);
@@ -179,6 +182,8 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
    *  SQL table, so nothing offers an action that would silently no-op against a null connectionInfo.
    *  Defaults true so the Destination Wizard (which always has real connectionInfo) is unaffected. */
   readonly schemaAuthoringEnabled = input(true);
+  /** Passed straight to the mapping list — see FieldMappingListComponent.isRowLocked. */
+  readonly isRowLocked = input<(row: MappingRow) => boolean>(() => false);
   /** Outcome of the host's live schema read (see SchemaLoadState). Defaults to 'idle' so a host that never
    *  reads a schema at all is unaffected — only 'loading'/'failed'/'unavailable' surface the notice below. */
   readonly schemaLoadState = input<SchemaLoadState>('idle');
@@ -939,6 +944,37 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     const state = this.schemaLoadState();
     return state === 'loading' || state === 'failed' || state === 'unavailable';
   }
+
+  /** The mapping list's empty message while no table has been added yet — names whichever add-table control
+   *  the slot above actually shows (same branches as the template's .fm-add-table-slot), so it never points
+   *  at a button that isn't there. */
+  /** A host's own wording for that message, when its way to add a table isn't one of this canvas's controls
+   *  (the Settings mapping-profile screen's Table / File name box). Null uses the wording below. */
+  readonly noTableHintOverride = input<string | null>(null);
+
+  readonly noTableHint = computed(() => {
+    const override = this.noTableHintOverride();
+    if (override) return override;
+    const then = ' Then you can add mappings here.';
+    if (this.destType() === 'mongo') {
+      return 'No collection yet — use "+ Add a collection…" above to select an existing collection or create a new one.' + then;
+    }
+    if (this.destType() !== 'csv' && this.showAddTablePicker()) {
+      return this.schemaAuthoringEnabled()
+        ? 'No table yet — use "+ Add a table from your database…" above to select an existing table or create a new one.' + then
+        : 'No table yet — use "+ Add a table from your database…" above to select an existing table.' + then;
+    }
+    if (this.destType() !== 'csv' && this.showSchemaLoadNotice()) {
+      return this.schemaLoadState() === 'loading'
+        ? "No table yet — once your database's tables have loaded, add one from the panel above." + then
+        : "No table yet — your database's tables couldn't be loaded. Use Retry above"
+          + (this.schemaAuthoringEnabled() ? ', or "+ Create a new table…".' : '.') + then;
+    }
+    if (this.destType() !== 'csv' && this.schemaAuthoringEnabled()) {
+      return 'No table yet — use "+ Create a new table…" above to create one.' + then;
+    }
+    return 'No table yet — this destination has no table to map to.';
+  });
 
   /** availableTablesToAdd() is a plain function input, not itself a signal, so this can't be a
    *  computed() — it just re-filters on every call, same as tablesForResourceFn/columnsForResourceTableFn
@@ -2181,7 +2217,15 @@ export class FieldMappingCanvasComponent implements OnInit, AfterViewInit, OnDes
     this.closePopover();
   }
 
+  /** Whether the row open in the popover is one the host keeps locked (see isRowLocked). Read from the real
+   *  row, not popoverDisplayRow, which can be narrowed to one source of a join. */
+  readonly popoverRowLocked = computed(() => {
+    const row = this.popoverRow();
+    return !!row && this.isRowLocked()(row);
+  });
+
   onPopoverRemove(): void {
+    if (this.popoverRowLocked()) return;
     const key = this.popoverKey();
     if (key) this.removeRow(key.resource, key.tableName, key.targetName);
     this.closePopover();

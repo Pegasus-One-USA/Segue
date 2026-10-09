@@ -125,3 +125,19 @@ export function isCosmosDbFabricForm(
 ): x is CosmosDbFabricFormApi {
   return !!x && (x as Partial<{ kind: string }>).kind === 'cosmosFabric';
 }
+
+/** Extra members exposed only by EhrWriteBackDestinationFormComponent. The wizard copies the target's vendor and
+ *  writable resource types into its own signals on Step 1's Next, because Step 2's resource picker must be filtered
+ *  by what the TARGET EHR accepts, not by the upstream source. */
+export interface EhrWriteBackFormApi extends WizardDestinationFormApi {
+  readonly kind: 'ehrWriteBack';
+  /** SourceSystemType name of the selected target connection, or null before one is chosen. */
+  readonly targetVendor: Signal<string | null>;
+  /** Resource types the selected target accepts writes for; empty when none (or before a choice). */
+  readonly writableResourceTypes: Signal<string[]>;
+}
+
+/** Keyed on its own `kind` marker, for the same reason as isMongoForm. */
+export function isEhrWriteBackForm(x: WizardDestinationFormApi | null | undefined): x is EhrWriteBackFormApi {
+  return !!x && (x as Partial<{ kind: string }>).kind === 'ehrWriteBack';
+}

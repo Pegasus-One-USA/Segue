@@ -1,0 +1,97 @@
+<div class="ewr" role="dialog" aria-modal="true" aria-labelledby="ewr-title" aria-describedby="ewr-headline">
+  <header class="ewr-head">
+    <div class="ewr-title-row">
+      <mat-icon class="ewr-title-icon" aria-hidden="true">{{ report.DryRun ? 'science' : 'cloud_done' }}</mat-icon>
+      <h3 class="ewr-title" id="ewr-title">{{ title }}</h3>
+      <span class="ewr-mode" [class.ewr-mode--live]="!report.DryRun">{{ report.DryRun ? 'Dry run' : 'Live' }}</span>
+      @if (report.CloneMode) {
+        <span class="ewr-mode ewr-mode--clone" title="Each patient was written as a new synthetic test patient">Clone mode</span>
+      }
+    </div>
+    <p class="ewr-sub">
+      {{ vendor }} · {{ report.RecordsReceived.toLocaleString() }} record{{ report.RecordsReceived === 1 ? '' : 's' }} received
+      @if (writtenAtText(); as at) { · {{ at }} }
+    </p>
+  </header>
+
+  <div class="ewr-body">
+    <div
+      class="ewr-headline"
+      id="ewr-headline"
+      [class.ewr-headline--live]="!report.DryRun && !headlineNeedsAttention()"
+      [class.ewr-headline--attention]="headlineNeedsAttention()"
+    >
+      <mat-icon aria-hidden="true">{{ report.DryRun ? 'info' : headlineNeedsAttention() ? 'error_outline' : 'check_circle' }}</mat-icon>
+      <span>{{ headline() }}</span>
+    </div>
+
+    <div class="ewr-scope" [class.ewr-scope--warn]="!scope.ok">
+      <mat-icon aria-hidden="true">{{ scope.ok ? 'verified_user' : 'gpp_maybe' }}</mat-icon>
+      <span>{{ scope.text }}</span>
+    </div>
+
+    <dl class="ewr-totals">
+      @for (o of outcomes; track o.key) {
+        <div class="ewr-total" [class.ewr-total--zero]="totals()[o.key] === 0" [class]="'ewr-total--' + o.key">
+          <dt>{{ o.label }}</dt>
+          <dd>{{ totals()[o.key].toLocaleString() }}</dd>
+        </div>
+      }
+    </dl>
+
+    @if (report.Resources.length) {
+      <div class="ewr-table-wrap">
+        <table class="ewr-table">
+          <thead>
+            <tr>
+              <th scope="col">Resource type</th>
+              <th scope="col" class="num">Received</th>
+              @for (o of outcomes; track o.key) {
+                <th scope="col" class="num">{{ o.label }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of report.Resources; track r.ResourceType) {
+              <tr class="ewr-row">
+                <th scope="row">{{ r.ResourceType }}</th>
+                <td class="num">{{ r.Received.toLocaleString() }}</td>
+                @for (o of outcomes; track o.key) {
+                  <td class="num" [class.zero]="valueOf(r, o.key) === 0" [class]="'col-' + o.key">{{ valueOf(r, o.key).toLocaleString() }}</td>
+                }
+              </tr>
+              @if (reasonsFor(r); as reasons) {
+                @if (reasons.length) {
+                  <tr class="ewr-reasons-row">
+                    <td [attr.colspan]="outcomes.length + 2">
+                      <ul class="ewr-reasons">
+                        @for (reason of reasons; track reason.code) {
+                          <li>
+                            <span class="ewr-reason-count">{{ reason.count.toLocaleString() }} ×</span>
+                            <span class="ewr-reason-label">{{ reason.label }}</span>
+                            <code class="ewr-reason-code">{{ reason.code }}</code>
+                          </li>
+                        }
+                      </ul>
+                    </td>
+                  </tr>
+                }
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <p class="ewr-empty">No records reached the write-back step in this run.</p>
+    }
+
+    <p class="ewr-note">Counts and reason codes only. No patient details are stored with a run.</p>
+  </div>
+
+  <footer class="ewr-foot">
+    <button mat-stroked-button type="button" class="ewr-btn-secondary" (click)="copy()">
+      <mat-icon>content_copy</mat-icon> Copy report
+    </button>
+    <button mat-flat-button type="button" class="ewr-btn-primary" #closeButton (click)="dialogRef.close()">Close</button>
+  </footer>
+</div>

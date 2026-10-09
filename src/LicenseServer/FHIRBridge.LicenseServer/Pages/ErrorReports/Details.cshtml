@@ -1,0 +1,319 @@
+@page "{id:guid}"
+@model FHIRBridge.LicenseServer.Pages.ErrorReports.DetailsModel
+@using FHIRBridge.LicenseServer.Pages.ErrorReports
+@{
+    ViewData["Title"] = Model.Import.Name;
+}
+
+<div class="page-header">
+    <p class="muted"><a href="/ErrorReports">&larr; All error reports</a></p>
+    <h1>@Model.Import.Name</h1>
+    <form method="post" asp-page-handler="Delete" asp-route-id="@Model.Import.Id"
+          onsubmit="return confirm('Delete this import and all of its errors? This cannot be undone.');" style="margin:0 0 12px;">
+        <button type="submit" class="btn-danger">Delete this import</button>
+    </form>
+    <p class="page-subtitle">
+        Client: <strong>@Model.Import.ClientName</strong>
+        &middot; imported @Model.Import.ImportedAtUtc.ToString("u") by @Model.Import.ImportedBy
+        &middot; file <code>@Model.Import.SourceFileName</code>
+        @if (Model.Import.ReportFromUtc is not null && Model.Import.ReportToUtc is not null)
+        {
+            <text>&middot; period @Model.Import.ReportFromUtc.Value.ToString("yyyy-MM-dd") &rarr; @Model.Import.ReportToUtc.Value.ToString("yyyy-MM-dd")</text>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.Import.ApplicationVersion))
+        {
+            <text>&middot; app version @Model.Import.ApplicationVersion</text>
+        }
+    </p>
+    @if (Model.Import.ReportTruncated)
+    {
+        <p class="error">The client's export hit its row limit, so older errors in this period are not included.</p>
+    }
+</div>
+
+<div class="stat-grid">
+    <div class="stat-chip"><span class="stat-chip-label">Errors</span><span class="stat-chip-value">@Model.Total</span></div>
+    <div class="stat-chip status-over"><span class="stat-chip-label">Critical</span><span class="stat-chip-value">@Model.Critical</span></div>
+    <div class="stat-chip"><span class="stat-chip-label">Client can fix</span><span class="stat-chip-value">@Model.SelfFix</span></div>
+    <div class="stat-chip"><span class="stat-chip-label">Needs support</span><span class="stat-chip-value">@Model.NeedSupport</span></div>
+</div>
+
+@if (Model.Total == 0)
+{
+    <div class="panel empty-state"><p>This report contains no errors.</p></div>
+}
+else
+{
+    <div class="panel">
+        <h2>Errors per day</h2>
+        <div class="er-trend">
+            @foreach (var day in Model.ByDay)
+            {
+                <div class="er-trend-col" title="@day.DayUtc.ToString("yyyy-MM-dd"): @day.Value">
+                    <span class="er-trend-count">@day.Value</span>
+                    <span class="er-trend-bar" style="height:@(Math.Max(2, day.Value * 100 / Model.MaxDay))%"></span>
+                    <span class="er-trend-day">@day.DayUtc.ToString("MMM d")</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="er-grid">
+        @foreach (var (title, list) in new[] { ("By severity", Model.BySeverity), ("By category", Model.ByCategory), ("By area", Model.ByModule) })
+        {
+            <div class="panel">
+                <h2>@title</h2>
+                @foreach (var item in list)
+                {
+                    <div class="er-bar-row">
+                        <span class="er-bar-label" title="@item.Key">@item.Key</span>
+                        <span class="er-bar-track"><span class="er-bar-fill" style="width:@DetailsModel.Percent(item.Value, list)%"></span></span>
+                        <span class="er-bar-count">@item.Value</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="panel">
+        <h2>Most frequent errors</h2>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr><th>Error</th><th>Area</th><th>Count</th><th>Last seen</th><th>Example</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in Model.TopSignatures)
+                    {
+                        <tr class="clickable-row er-row" tabindex="0">
+                            <td><strong>@s.ExceptionType</strong><div class="muted er-break">@s.SampleMessage</div></td>
+                            <td>@(s.Module ?? "—")</td>
+                            <td>@s.Total</td>
+                            <td>@s.LastSeenUtc.ToString("u")</td>
+                            <td>
+                                @if (s.SampleReference is not null)
+                                {
+                                    <code>@s.SampleReference</code>
+                                }
+                            </td>
+                            @if (Model.SignatureEntries.TryGetValue(s.SampleEntryId, out var sample))
+                            {
+                                <partial name="_ErrorData" model="Model.Row(sample)" />
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>All errors</h2>
+        <form method="get" class="er-filters">
+            <input type="text" name="Search" value="@Model.Search" class="er-search" placeholder="Search error message, type, reference / correlation ID, workflow, technical details…" />
+            <label class="er-filter-field">Correlation ID
+                <input type="text" name="CorrelationId" value="@Model.CorrelationId" placeholder="Paste a correlation ID…" />
+            </label>
+            <label class="er-filter-field">From (UTC)
+                <input type="datetime-local" name="FromUtc" value="@(Model.FromUtc?.ToString("yyyy-MM-ddTHH:mm"))" />
+            </label>
+            <label class="er-filter-field">To (UTC)
+                <input type="datetime-local" name="ToUtc" value="@(Model.ToUtc?.ToString("yyyy-MM-ddTHH:mm"))" />
+            </label>
+            <select name="Severity" aria-label="Severity">
+                <option value="">All severities</option>
+                @foreach (var item in Model.BySeverity) { <option value="@item.Key" selected="@(item.Key == Model.Severity)">@item.Key</option> }
+            </select>
+            <select name="Category" aria-label="Category">
+                <option value="">All categories</option>
+                @foreach (var item in Model.ByCategory) { <option value="@item.Key" selected="@(item.Key == Model.Category)">@item.Key</option> }
+            </select>
+            <select name="Module" aria-label="Area">
+                <option value="">All areas</option>
+                @foreach (var item in Model.ByModule) { <option value="@item.Key" selected="@(item.Key == Model.Module)">@item.Key</option> }
+            </select>
+            <button type="submit">Search</button>
+            <a class="button secondary" href="/ErrorReports/Details/@Model.Import.Id">Reset</a>
+        </form>
+
+        <p class="muted">@Model.FilteredCount matching error(s) &middot; click a row to see everything about it</p>
+
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr><th>When (UTC)</th><th>Severity</th><th>Area</th><th>Error</th><th>What to do</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in Model.Entries)
+                    {
+                        <tr class="clickable-row er-row" tabindex="0" data-entry="@e.Id">
+                            <td>@e.OccurredOnUtc.ToString("u")</td>
+                            <td>@e.Severity</td>
+                            <td>@(e.Module ?? "—")</td>
+                            <td>
+                                <strong>@e.ExceptionType</strong>
+                                <div class="er-break er-clip">@e.Message</div>
+                            </td>
+                            <td>@e.WhatToDo</td>
+                            <partial name="_ErrorData" model="Model.Row(e)" />
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (Model.PageCount > 1)
+        {
+            <p class="er-pager">
+                @if (Model.PageNumber > 1) { <a href="@Model.PageUrl(Model.PageNumber - 1)">&larr; Previous</a> }
+                <span class="muted">Page @Model.PageNumber of @Model.PageCount</span>
+                @if (Model.PageNumber < Model.PageCount) { <a href="@Model.PageUrl(Model.PageNumber + 1)">Next &rarr;</a> }
+            </p>
+        }
+    </div>
+}
+
+<div id="er-meta" hidden data-has-correlations="@(Model.ImportHasCorrelations ? "1" : "")"></div>
+
+<dialog id="er-dialog" class="er-dialog" aria-labelledby="er-dialog-title">
+    <div class="er-dialog-head">
+        <h2 id="er-dialog-title">Error details</h2>
+        <button type="button" class="secondary" id="er-dialog-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="er-dialog-body">
+        <dl class="er-dl" id="er-dl"></dl>
+        <h3>Message</h3>
+        <pre class="er-stack" id="er-dialog-msg"></pre>
+        <h3>Technical details</h3>
+        <pre class="er-stack" id="er-dialog-st"></pre>
+        <h3>Correlation details</h3>
+        <div id="er-corr"></div>
+    </div>
+    <div class="er-dialog-foot">
+        <button type="button" class="secondary" id="er-dialog-copy">Copy details</button>
+        <button type="button" id="er-dialog-close2">Close</button>
+    </div>
+</dialog>
+
+<script>
+(function () {
+    var dialog = document.getElementById('er-dialog');
+    var dl = document.getElementById('er-dl');
+    var msg = document.getElementById('er-dialog-msg');
+    var st = document.getElementById('er-dialog-st');
+    var corrBox = document.getElementById('er-corr');
+    var copyText = '';
+    var fields = [
+        ['Reference ID', 'ref'], ['Time (UTC)', 'when'], ['Severity', 'severity'], ['Category', 'category'],
+        ['Area', 'module'], ['What to do', 'whattodo'], ['Likely cause', 'cause'], ['Error type', 'type'],
+        ['Workflow', 'wfname'], ['Node', 'node'], ['Node type', 'nodetype'], ['Source', 'sourcename'],
+        ['Destination', 'destname'], ['Resource type', 'resource'],
+        ['Correlation ID', 'corr'], ['Execution ID', 'exec'], ['Workflow ID', 'workflow'], ['Endpoint', 'endpoint'],
+        ['Trace ID', 'trace']
+    ];
+
+    function renderCorrelation(box, corrId) {
+        corrBox.textContent = '';
+        if (!box) {
+            var none = document.createElement('p');
+            none.className = 'muted';
+            var hasAny = document.getElementById('er-meta').getAttribute('data-has-correlations');
+            none.textContent = !corrId
+                ? 'This error has no correlation ID.'
+                : hasAny
+                    ? 'The client did not export a timeline for this particular run (reports include at most 50 runs).'
+                    : 'This report has no correlation details. Ask the client to export again (JSON) with "Include correlation details" ticked, using an up-to-date version of the product.';
+            corrBox.appendChild(none);
+            return;
+        }
+        var summary = [];
+        if (box.dataset.runstatus) { summary.push('Run status: ' + box.dataset.runstatus); }
+        if (box.dataset.started) { summary.push('Started: ' + box.dataset.started); }
+        if (box.dataset.completed) { summary.push('Completed: ' + box.dataset.completed); }
+        if (box.dataset.extracted) {
+            summary.push('Records: ' + box.dataset.extracted + ' extracted, ' + box.dataset.mapped + ' mapped, ' + box.dataset.written + ' written');
+        }
+        if (summary.length) {
+            var p = document.createElement('p');
+            p.textContent = summary.join('  |  ');
+            corrBox.appendChild(p);
+        }
+        var events = [];
+        try { events = JSON.parse(box.textContent || '[]'); } catch (x) { events = []; }
+        if (!events.length) {
+            var empty = document.createElement('p');
+            empty.className = 'muted';
+            empty.textContent = 'No other activity was recorded for this run.';
+            corrBox.appendChild(empty);
+            return;
+        }
+        var table = document.createElement('table');
+        var head = table.createTHead().insertRow();
+        ['Time (UTC)', 'Source', 'What happened', 'Status'].forEach(function (h) {
+            var th = document.createElement('th'); th.textContent = h; head.appendChild(th);
+        });
+        var body = table.createTBody();
+        events.forEach(function (ev) {
+            var tr = body.insertRow();
+            tr.insertCell().textContent = ev.occurredUtc ? ev.occurredUtc.replace('T', ' ').substring(0, 19) : '';
+            tr.insertCell().textContent = ev.source || '';
+            var what = tr.insertCell();
+            var title = document.createElement('div'); title.textContent = ev.title || '';
+            what.appendChild(title);
+            if (ev.detail) {
+                var detail = document.createElement('div');
+                detail.className = 'muted er-break';
+                detail.textContent = ev.detail;
+                what.appendChild(detail);
+            }
+            tr.insertCell().textContent = ev.status || '';
+        });
+        var wrap = document.createElement('div');
+        wrap.className = 'table-scroll';
+        wrap.appendChild(table);
+        corrBox.appendChild(wrap);
+        if (box.dataset.truncated) {
+            var more = document.createElement('p');
+            more.className = 'muted';
+            more.textContent = 'Only the first events of this run were exported.';
+            corrBox.appendChild(more);
+        }
+    }
+
+    function open(row) {
+        var data = row.querySelector('.er-data');
+        if (!data) { return; }
+        dl.textContent = '';
+        var lines = [];
+        fields.forEach(function (f) {
+            var v = data.getAttribute('data-' + f[1]);
+            if (!v) { return; }
+            var dt = document.createElement('dt'); dt.textContent = f[0];
+            var dd = document.createElement('dd'); dd.textContent = v;
+            dl.appendChild(dt); dl.appendChild(dd);
+            lines.push(f[0] + ': ' + v);
+        });
+        var m = data.querySelector('.er-msg').textContent;
+        var s = data.querySelector('.er-st').textContent;
+        msg.textContent = m;
+        st.textContent = s || '(no technical details were included in this report)';
+        renderCorrelation(data.querySelector('.er-corr'), data.getAttribute('data-corr'));
+        copyText = lines.join('\n') + '\n\nMessage:\n' + m + (s ? '\n\nTechnical details:\n' + s : '');
+        dialog.showModal();
+    }
+
+    document.querySelectorAll('tr.er-row').forEach(function (row) {
+        row.addEventListener('click', function () { open(row); });
+        row.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(row); }
+        });
+    });
+    ['er-dialog-close', 'er-dialog-close2'].forEach(function (id) {
+        document.getElementById(id).addEventListener('click', function () { dialog.close(); });
+    });
+    dialog.addEventListener('click', function (ev) { if (ev.target === dialog) { dialog.close(); } });
+    document.getElementById('er-dialog-copy').addEventListener('click', function () {
+        if (navigator.clipboard) { navigator.clipboard.writeText(copyText); }
+    });
+})();
+</script>

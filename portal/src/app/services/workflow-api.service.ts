@@ -206,6 +206,8 @@ export interface CreateSourceConnectionRequest {
   applicationType?: string | null;           // Backend | EhrLaunch | Standalone | Patient
   interactive?: SourceInteractiveConfigurationRequest | null;
   retrieval?: SourceRetrievalConfigurationRequest | null;
+  /** Read | Write | ReadWrite. Null keeps the saved value (and means Read for a new connection). */
+  access?: 'Read' | 'Write' | 'ReadWrite' | null;
 }
 
 export interface CreateDestinationConfigurationRequest {

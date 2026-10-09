@@ -264,6 +264,67 @@ public sealed class BulkExportPollServiceTests
         downloadedFiles!.Select(f => f.ResourceType).Should().BeEquivalentTo(["Patient", "Condition"]);
     }
 
+    [Theory]
+    // A write-back that asked for notes keeps Binary: it holds the note text, and a bulk-only app's token is
+    // refused on a plain Binary/{id} read.
+    [InlineData(true, "[\"Patient\",\"DocumentReference\"]", true)]
+    // Without an EHR write-back node, or without notes requested, the strict filter holds.
+    [InlineData(false, "[\"Patient\",\"DocumentReference\"]", false)]
+    [InlineData(true, "[\"Patient\",\"Condition\"]", false)]
+    public async Task Completed_result_keeps_binary_only_for_an_ehr_write_back_that_wants_notes(
+        bool hasWriteBack, string requested, bool binaryKept)
+    {
+        var job = CreateJob(Guid.NewGuid(), requestedResourceTypesJson: requested);
+        var repository = new Mock<IBulkExportJobRepository>();
+        var client = new Mock<IFhirBulkExportClient>();
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        var orchestrator = new Mock<IRankedWorkflowOrchestrator>();
+
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "ecw-to-epic", 1);
+        workflow.AddNode(FHIRBridge.Runtime.Application.Workflows.Catalog.WorkflowNodeTypes.EClinicalWorksSource, WorkflowNodeCategory.Source, 0);
+        workflow.AddNode(
+            hasWriteBack
+                ? FHIRBridge.Runtime.Application.Workflows.Catalog.WorkflowNodeTypes.EhrWriteBackDestination
+                : FHIRBridge.Runtime.Application.Workflows.Catalog.WorkflowNodeTypes.FhirRepositoryDestination,
+            WorkflowNodeCategory.Destination, 1);
+        var runStore = new Mock<FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowRunStore>();
+        runStore.Setup(s => s.GetAsync(job.WorkflowRunId!.Value, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WorkflowRun(job.WorkflowRunId!.Value, workflow.Id, DateTimeOffset.UtcNow));
+        var definitionStore = new Mock<FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore>();
+        definitionStore.Setup(s => s.GetAsync(workflow.Id, It.IsAny<CancellationToken>())).ReturnsAsync(workflow);
+
+        var service = new BulkExportPollService(
+            repository.Object, client.Object, resolver.Object, orchestrator.Object, NullLogger<BulkExportPollService>.Instance,
+            runStore: runStore.Object, definitionStore: definitionStore.Object);
+
+        var manifest = new[]
+        {
+            new BulkExportFile("Patient", "https://fhir.example.com/files/patient.ndjson"),
+            new BulkExportFile("DocumentReference", "https://fhir.example.com/files/doc.ndjson"),
+            new BulkExportFile("Condition", "https://fhir.example.com/files/condition.ndjson"),
+            new BulkExportFile("Binary", "https://fhir.example.com/files/binary.ndjson"),
+        };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: manifest));
+        IReadOnlyList<BulkExportFile>? downloadedFiles = null;
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .Callback<IReadOnlyList<BulkExportFile>, FhirSourceConfiguration, CancellationToken>((files, _, _) => downloadedFiles = files)
+            .ReturnsAsync([]);
+        orchestrator.Setup(o => o.ResumeAfterBulkExportAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(),
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WorkflowRunResult(
+                new WorkflowRun(job.WorkflowRunId!.Value, workflow.Id, DateTimeOffset.UtcNow), new Dictionary<Guid, WorkflowNodeOutput>()));
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        downloadedFiles!.Select(f => f.ResourceType).Contains("Binary").Should().Be(binaryKept);
+    }
+
     [Fact]
     public async Task Completed_result_downloads_all_files_when_none_match_the_requested_types()
     {

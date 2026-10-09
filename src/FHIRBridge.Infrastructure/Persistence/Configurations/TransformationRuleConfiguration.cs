@@ -1,4 +1,4 @@
-using FHIRBridge.Domain.Entities;
+﻿using FHIRBridge.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -28,6 +28,9 @@ public sealed class TransformationRuleConfiguration : IEntityTypeConfiguration<T
         builder.Property(x => x.ExecutionPhase).HasConversion<string>().HasMaxLength(20).IsRequired()
             .HasDefaultValue(FHIRBridge.Domain.Enums.TransformExecutionPhase.PostMapping);
         builder.Property(x => x.DeIdentificationProfileId);
+        // Nullable by design — see the entity. Rules written before this column existed carry no id and are
+        // matched permissively, so they keep applying instead of silently stopping.
+        builder.Property(x => x.DestinationConfigurationId);
         builder.Property(x => x.IsEnabled).IsRequired();
         builder.Property(x => x.ExpectedValueType).HasConversion<string>().HasMaxLength(20);
 

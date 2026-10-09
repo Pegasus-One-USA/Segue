@@ -62,7 +62,8 @@ public sealed class MfaLoginTests(ApiFixture f)
             DisplayName = "MFA Integration User",
             Password = password,
             RoleNames = new[] { "Operations" },
-            RequirePasswordChange = false
+            RequirePasswordChange = false,
+            RequireMfa            = false
         });
         userResp.EnsureSuccessStatusCode();
 
@@ -116,10 +117,12 @@ public sealed class MfaLoginTests(ApiFixture f)
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
         var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
         Assert.False(doc.GetProperty("requiresMfa").GetBoolean());
-        Assert.True(doc.TryGetProperty("accessToken", out var accessTokenProp) && accessTokenProp.ValueKind == JsonValueKind.String);
+        // The session tokens are issued as cookies, not in the body.
+        var accessToken = ApiFixture.SessionTokens(resp).Access;
+        Assert.False(string.IsNullOrEmpty(accessToken));
 
         // Authenticate with the freshly issued access token to confirm the session is genuinely usable.
-        using var authed = f.CreateAuthenticatedClient(accessTokenProp.GetString()!);
+        using var authed = f.CreateAuthenticatedClient(accessToken!);
         var meResp = await authed.GetAsync("/api/v1/auth/me");
         Assert.Equal(HttpStatusCode.OK, meResp.StatusCode);
     }

@@ -57,6 +57,12 @@
 /// supply it and every writer that ignores it behaves exactly as before. A writer must never let a failure from
 /// this hook change its own outcome; see <c>DestinationStageReporting.ReportAsync</c>, which swallows for it.</para>
 /// </param>
+/// <param name="EhrWriteChannel">
+/// The EHR an <see cref="FHIRBridge.Domain.Enums.DestinationType.EhrWriteBack"/> destination writes into, built by
+/// the Runtime plane's EHR write-back executor. Null for every other destination type and for every caller that
+/// cannot build one (the configured-pipeline plane), in which case the write-back writer refuses to run rather
+/// than guess a target.
+/// </param>
 public sealed record PipelineWriteContext(
     bool AllowInlineDelivery,
     string RouteName,
@@ -66,7 +72,8 @@ public sealed record PipelineWriteContext(
     string? SourceBaseUrl = null,
     Guid PipelineRunId = default,
     string? UserIdentity = null,
-    Func<DestinationStageReport, CancellationToken, Task>? ReportStageAsync = null);
+    Func<DestinationStageReport, CancellationToken, Task>? ReportStageAsync = null,
+    IEhrWriteChannel? EhrWriteChannel = null);
 
 /// <summary>
 /// One stage a writer reports through <see cref="PipelineWriteContext.ReportStageAsync"/>. Carries only what the
