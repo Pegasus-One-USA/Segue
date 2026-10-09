@@ -154,7 +154,7 @@ describe('a test run on a Generic FHIR server', () => {
 
     expect(report.TestRun).toBeTrue();
     expect(ehrWriteScopeLabel(report.ScopeStatus).ok).toBeTrue();
-    expect(ehrWriteReportToText(report)).toContain('Live run (test run on a Generic FHIR server) to Athenahealth');
+    expect(ehrWriteReportToText(report)).toContain('Test run on a FHIR test server, shaped as Athenahealth');
     expect(ehrWriteReasonLabel('variant-not-enabled')).toContain('has not turned on');
     expect(ehrWriteReasonLabel('target-references-unmappable')).toContain('CSV / SQL Table');
   });

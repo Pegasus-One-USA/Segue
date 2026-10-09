@@ -40,7 +40,8 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
 
     private static (EhrWriteBackDestinationNodeExecutor Executor, List<PipelineWriteContext> Contexts, Mock<IFhirWriteClient> WriteClient) Build(
         SourceConnection? connection,
-        List<MappedDestinationRecord>? writtenRecords = null)
+        List<MappedDestinationRecord>? writtenRecords = null,
+        DestinationWriteResult? writeResult = null)
     {
         var contexts = new List<PipelineWriteContext>();
         var writer = new Mock<IConfiguredDestinationWriter>();
@@ -53,7 +54,7 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
                     contexts.Add(context);
                     writtenRecords?.AddRange(records);
                 })
-            .ReturnsAsync(new DestinationWriteResult(0));
+            .ReturnsAsync(writeResult ?? new DestinationWriteResult(0));
         var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
         writerFactory.Setup(f => f.Create(DestinationType.EhrWriteBack)).Returns(writer.Object);
 
@@ -83,6 +84,20 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
     {
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "write-back", 1);
         return workflow.AddNode(WorkflowNodeTypes.EhrWriteBackDestination, WorkflowNodeCategory.Destination, 70, configurationJson: configurationJson);
+    }
+
+    [Fact]
+    public async Task A_test_run_is_reported_as_one()
+    {
+        // The run report must say a test run went to the FHIR test server, not "Live run to Epic".
+        var report = new EhrWriteReport(false, "Epic", 0, "test-server", [], TestRun: true);
+        var (executor, _, _) = Build(Connection(), writeResult: new DestinationWriteResult(0, EhrWrite: report));
+        var node = Node($$"""{"dest_sourceConnectionId":"{{TargetId}}","destinationId":"{{Guid.NewGuid()}}","dest_resources":"Condition"}""");
+
+        var output = await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        output.Payload.Should().BeOfType<FHIRBridge.Runtime.Application.Workflows.Payloads.DestinationWriteResult>()
+            .Which.EhrWrite!.TestRun.Should().BeTrue();
     }
 
     [Fact]

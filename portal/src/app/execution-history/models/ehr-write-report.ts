@@ -254,11 +254,16 @@ export function ehrWriteReasonLabel(code: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : code;
 }
 
+/** The run mode as the destination's Run mode names it: a test run is never a live run, even though it sends. */
+export function ehrWriteRunMode(report: EhrWriteReport): 'Dry run' | 'Test run' | 'Live run' {
+  return report.DryRun ? 'Dry run' : report.TestRun ? 'Test run' : 'Live run';
+}
+
 /** The report as plain text, for the row's Copy button. */
 export function ehrWriteReportToText(report: EhrWriteReport): string {
   const totals = ehrWriteTotals(report);
   const lines = [
-    `${report.DryRun ? 'Dry run' : 'Live run'}${report.CloneMode ? ' (clone mode)' : ''}${report.TestRun ? ' (test run on a Generic FHIR server)' : ''} to ${report.TargetVendor || 'EHR'}`,
+    `${ehrWriteRunMode(report)}${report.CloneMode ? ' (clone mode)' : ''}${report.TestRun ? ` on a FHIR test server, shaped as ${report.TargetVendor || 'the EHR'}` : ` to ${report.TargetVendor || 'EHR'}`}`,
     `Records received: ${report.RecordsReceived}`,
     ...EHR_WRITE_OUTCOMES.map(o => `${o.label}: ${totals[o.key]}`),
     `Access: ${ehrWriteScopeLabel(report.ScopeStatus).text}`,

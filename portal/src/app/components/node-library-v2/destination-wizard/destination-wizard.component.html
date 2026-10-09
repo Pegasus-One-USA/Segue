@@ -111,7 +111,7 @@
                 [disabled]="existingOptionsLoading()"
                 (change)="selectExisting($any($event.target).value)"
               >
-                <option value="" disabled [selected]="!selectedExistingId()">{{ existingOptionsLoading() ? 'Loading…' : 'Choose a connection…' }}</option>
+                <option value="" disabled [selected]="!selectedExistingId()">{{ existingOptionsLoading() ? 'Loading…' : isEhrWriteBack() ? 'Choose a saved destination to copy…' : 'Choose a connection…' }}</option>
                 @for (o of shownExistingOptions(); track o.id) {
                   <option [value]="o.id" [selected]="o.id === selectedExistingId()">{{ o.name }} ({{ o.destinationType }})</option>
                 }

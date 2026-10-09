@@ -60,7 +60,7 @@ export class EhrWriteReportDialogComponent {
       return `Dry run: nothing was sent to ${this.vendor}. ${plural(totals.WouldWrite, 'record')} would be written by a live run.`;
     }
 
-    const parts = [`Live run: ${plural(totals.Written, 'record')} written to ${this.vendor}.`];
+    const parts = [`${this.report.TestRun ? 'Test run' : 'Live run'}: ${plural(totals.Written, 'record')} written to ${this.vendor}.`];
     if (totals.WouldWrite > 0) {
       // Counted rather than sent: a dry-run-only type, or on runs recorded before the release setting was removed, an
       // unreleased one. The per-type reasons below say which, so the headline stays neutral.
