@@ -4,7 +4,7 @@
     <select id="tab-conn" class="tab-input" [value]="current() ?? ''" (change)="choose($any($event.target).value)">
       <option value="">{{ connections().length ? 'Choose a saved database' : 'No saved databases yet' }}</option>
       @for (c of connections(); track c.id) {
-        <option [value]="c.id">{{ c.name }} ({{ c.engine }})</option>
+        <option [value]="c.id" [selected]="c.id === current()">{{ c.name }} ({{ c.engine }})</option>
       }
     </select>
     <button type="button" class="tab-btn tab-btn--ghost" (click)="runTest()" [disabled]="!current() || testing()">Test</button>

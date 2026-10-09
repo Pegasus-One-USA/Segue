@@ -20,7 +20,7 @@
         <select [id]="'tab-f-' + index()" class="tab-input" [value]="entry().fileId" (change)="set('fileId', $any($event.target).value)">
           <option value="">Choose a file</option>
           @for (f of files(); track f.id) {
-            <option [value]="f.id">{{ f.fileName }}</option>
+            <option [value]="f.id" [selected]="f.id === entry().fileId">{{ f.fileName }}</option>
           }
         </select>
       </div>
@@ -30,7 +30,7 @@
           <select [id]="'tab-fc-' + index()" class="tab-input" [value]="entry().rowFilterColumn" (change)="set('rowFilterColumn', $any($event.target).value)">
             <option value="">All rows</option>
             @for (col of fileColumns(entry().fileId); track col) {
-              <option [value]="col">{{ col }}</option>
+              <option [value]="col" [selected]="col === entry().rowFilterColumn">{{ col }}</option>
             }
           </select>
           @if (entry().rowFilterColumn) {
