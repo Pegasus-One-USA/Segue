@@ -1,0 +1,35 @@
+portal/src/app/destination-connections/components/destination-configuration-kind/destination-configuration-kind.component.ts
+  s_d1b985c75f92bc::t_ebc89431d39cde 25-26,77-78,91-95
+  s_d1b985c75f92bc::t_5f4d9faaccc8f0 96-97
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_d1b985c75f92bc::t_bdb875d378e177 293,976
+portal/src/app/connections/connection-labels.ts
+  s_d1b985c75f92bc::t_ecb78d677d54e2 47-53
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.ehr-writeback.spec.ts
+  s_d1b985c75f92bc::t_fc6802f43a9f6b 122-134,289,291-307
+  s_d1b985c75f92bc::t_521ddb9ae01862 290
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-back.model.ts
+  s_d1b985c75f92bc::t_9589a0e817c342 84-94
+portal/src/app/destination-connections/components/destination-configuration-kind/destination-configuration-kind.component.spec.ts
+  s_d1b985c75f92bc::t_d0f6da19ba8b6f 63-89
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d1b985c75f92bc::t_bdb875d378e177 16,46,49,924-936,2050,2265-2271
+portal/src/app/connections/connection-labels.spec.ts
+  s_d1b985c75f92bc::t_79e1ee7cc76f4e 1,32-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e349c08aeca6e9e6b5106dcec1aa20a8aa10e312",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
