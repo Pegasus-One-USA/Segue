@@ -30,7 +30,22 @@ public sealed record DeIdentificationRequest(
 /// is empty whenever no profile was assigned or no rule matched anything in this resource. Consumed by
 /// <c>DeIdentificationNodeExecutor</c> to thread PreMapping redactions into the same Field Lineage chain the
 /// Mapping node builds for its own PostMapping rules (see <c>MappingNodeExecutor.ApplyTransformRulesAsync</c>).</summary>
-public sealed record DeIdentificationResult(string Json, IReadOnlyList<DeIdentificationFieldHop> Hops);
+public sealed record DeIdentificationResult(
+    string Json,
+    IReadOnlyList<DeIdentificationFieldHop> Hops,
+    // The minimum a Mapping node needs to apply a deferrable rule (Mask/Redact/Remove) AFTER a column's own
+    // Transformations: the redacted resource (<see cref="Json"/>) with ONLY the fields covered solely by such rules
+    // put back to their original values. Fields any other rule touched (Hash, Generalize) stay redacted. Null when
+    // no deferrable rule applied. Never written anywhere — the Runtime keeps it in DeIdentificationSnapshots.
+    string? DeferrableOriginalJson = null)
+{
+    // A record would print DeferrableOriginalJson in its generated ToString: never let it reach a log line.
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        builder.Append("Hops = ").Append(Hops.Count);
+        return true;
+    }
+}
 
 /// <summary>One field-level redaction applied by a PreMapping de-identification rule — the PreMapping
 /// counterpart to <c>LineageHopEntryDto</c> (which only ever covers PostMapping rule chains).</summary>

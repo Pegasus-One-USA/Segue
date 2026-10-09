@@ -22,8 +22,10 @@ namespace FHIRBridge.Runtime.UnitTests.Workflows;
 /// de-identification step). Expected values are computed by the real nodes from the rule's own config rather than
 /// hardcoded, so they follow whatever the configured masking rule does.
 ///
-/// The reverse order (Masking → Concatenation) used to lose every repeat but one: the chain was handed the whole
-/// array only when its FIRST step was a join, so the later Concatenation got one collapsed name and joined nothing.
+/// Which value the chain STARTS from is the long-standing contract, unchanged by the de-identification work: a chain
+/// is handed every repeat only when its FIRST step is a join (Concatenation/ArrayList); otherwise it gets the one
+/// value Instance Selection picked. (A column whose De-identification rule is deferred until after its
+/// Transformations is the one exception — see TransformBeforeDeIdentificationTests.)
 /// </summary>
 public sealed partial class MappingNodeExecutorTests
 {
@@ -134,21 +136,24 @@ public sealed partial class MappingNodeExecutorTests
     }
 
     [Fact]
-    public async Task Masking_then_concatenation_masks_each_name_then_joins_them_without_dropping_any()
+    public async Task Masking_then_concatenation_starts_from_the_collapsed_value_as_before()
     {
+        // The first step is not a join, so the chain starts from Instance Selection's value — exactly as it did
+        // before this PR. Each step still runs on the previous step's output.
         var mask = new RecordingNode(new HashingMaskingNode());
+        var concat = new RecordingNode(new ConcatenationTemplatingNode());
 
         var value = await RunChainAsync(
             [
                 ChainRule(TransformNodeType.HashingMasking, Mask(4), order: 0),
                 ChainRule(TransformNodeType.ConcatenationTemplating, Concat(" "), order: 1),
             ],
-            collapsedValue: "DB", repeats: GivenNames, mask, new ConcatenationTemplatingNode());
+            collapsedValue: "DB", repeats: GivenNames, mask, concat);
 
-        mask.Inputs.Should().Equal(["DB", "Tester"]);  // once per name — never once over the list, never only "DB"
-        var maskedNames = GivenNames.Select(n => Apply(new HashingMaskingNode(), n, Mask(4))).ToArray();
-        value.Should().Be(Apply(new ConcatenationTemplatingNode(), maskedNames, Concat(" ")));
-        value.Should().Be("DB **ster");                // "DB" is within keepLength 4, so the rule leaves it as-is.
+        mask.Inputs.Should().Equal(["DB"]);
+        var masked = Apply(new HashingMaskingNode(), "DB", Mask(4));
+        concat.Inputs.Should().Equal([masked]);
+        value.Should().Be(Apply(new ConcatenationTemplatingNode(), masked, Concat(" ")));
     }
 
     [Fact]
@@ -180,10 +185,13 @@ public sealed partial class MappingNodeExecutorTests
             ],
             collapsedValue: "DB", repeats: GivenNames, upper, concat, mask);
 
-        upper.Inputs.Should().Equal(["DB", "Tester"]);
-        concat.Inputs.Should().ContainSingle().Which.Should().BeEquivalentTo(new[] { "DB", "TESTER" });
-        mask.Inputs.Should().Equal(["DB TESTER"]);
-        value.Should().Be("*****STER");
+        // A → B → C, each on the previous output; the first step is not a join, so A starts from the collapsed value.
+        upper.Inputs.Should().Equal(["DB"]);
+        var upperOut = Apply(new StringNormalizationNode(), "DB", Upper());
+        concat.Inputs.Should().Equal([upperOut]);
+        var concatOut = Apply(new ConcatenationTemplatingNode(), upperOut, Concat(" "));
+        mask.Inputs.Should().Equal([concatOut]);
+        value.Should().Be(Apply(new HashingMaskingNode(), concatOut, Mask(4)));
     }
 
     [Fact]
@@ -215,8 +223,8 @@ public sealed partial class MappingNodeExecutorTests
     [Fact]
     public async Task A_join_step_that_is_skipped_still_writes_one_string_never_the_raw_list()
     {
-        // The Concatenation rule's ConfigJson is corrupt, so the executor skips it. The steps before it have already
-        // run once per name; the column must still receive ONE value (the repeats joined), not a List object.
+        // The Concatenation rule's ConfigJson is corrupt, so the executor skips it. The column must still receive ONE
+        // string — the collapsed value the chain started from, transformed — never a List object.
         var value = await RunChainAsync(
             [
                 ChainRule(TransformNodeType.StringNormalization, Upper(), order: 0),
@@ -225,7 +233,7 @@ public sealed partial class MappingNodeExecutorTests
             ],
             collapsedValue: "DB", repeats: GivenNames, new StringNormalizationNode(), new ConcatenationTemplatingNode());
 
-        value.Should().BeOfType<string>().Which.Should().Be("DB, TESTER");
+        value.Should().BeOfType<string>().Which.Should().Be((string?)Apply(new StringNormalizationNode(), "DB", Upper()));
     }
 
     [Fact]
@@ -239,6 +247,46 @@ public sealed partial class MappingNodeExecutorTests
             collapsedValue: "Body temperature", repeats: ["Body temperature", "Temp"],
             new StringNormalizationNode(), new ConcatenationTemplatingNode());
 
-        value.Should().Be("BODY TEMPERATURE; TEMP");
+        value.Should().Be(Apply(new ConcatenationTemplatingNode(),
+            Apply(new StringNormalizationNode(), "Body temperature", Upper()), Concat("; ")));
+    }
+
+    [Fact]
+    public async Task Concatenation_only_joins_every_repeat()
+    {
+        var value = await RunChainAsync(
+            [ChainRule(TransformNodeType.ConcatenationTemplating, Concat(" | "), order: 0)],
+            collapsedValue: "DB", repeats: GivenNames, new ConcatenationTemplatingNode());
+
+        value.Should().Be(Apply(new ConcatenationTemplatingNode(), GivenNames, Concat(" | ")));
+    }
+
+    [Fact]
+    public async Task ArrayList_only_operates_on_every_repeat()
+    {
+        var last = new Dictionary<string, string> { ["operation"] = "last" };
+
+        var value = await RunChainAsync(
+            [ChainRule(TransformNodeType.ArrayListOperations, last, order: 0)],
+            collapsedValue: "DB", repeats: GivenNames, new ArrayListOperationsNode());
+
+        value.Should().Be("Tester");   // only reachable when the chain was handed both repeats
+    }
+
+    [Fact]
+    public async Task Concatenation_then_ArrayList_runs_each_on_the_previous_output()
+    {
+        var arrayList = new RecordingNode(new ArrayListOperationsNode());
+        var first = new Dictionary<string, string> { ["operation"] = "first" };
+
+        var value = await RunChainAsync(
+            [
+                ChainRule(TransformNodeType.ConcatenationTemplating, Concat(" "), order: 0),
+                ChainRule(TransformNodeType.ArrayListOperations, first, order: 1),
+            ],
+            collapsedValue: "DB", repeats: GivenNames, new ConcatenationTemplatingNode(), arrayList);
+
+        arrayList.Inputs.Should().Equal(["DB Tester"]);   // the joined output, not the original repeats
+        value.Should().Be("DB Tester");
     }
 }

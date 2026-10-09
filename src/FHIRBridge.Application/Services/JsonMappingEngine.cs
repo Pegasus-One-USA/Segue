@@ -25,6 +25,8 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         // Every field's full resolved value list, BEFORE whatever ArrayPolicy collapses it into `parent` —
         // see MappingTestResultDto.RawArrayValues for why this survives alongside the collapsed view.
         var rawArrayValues = new Dictionary<string, IReadOnlyList<object?>>(StringComparer.OrdinalIgnoreCase);
+        // See MappingTestResultDto.PrimitiveArrayItems — separate from rawArrayValues so existing chains are unchanged.
+        var primitiveArrayItems = new Dictionary<string, IReadOnlyList<object?>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var field in fields)
         {
@@ -220,14 +222,14 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
                         : values);
 
             // A path that stops ON an array of plain values ("$.name[*].given" rather than "...given[*]") resolves
-            // each array as ONE value, so the parts above held a single, already ", "-joined string and a template's
-            // {0} {1} swallowed it whole: ["DB","Tester"] became "DB, Tester". Hand the chain the array's items
-            // instead — the same parts "...given[*]" yields, narrowed by the same instance selection. Only the
-            // chain's input changes; the column's own value above is exactly what it was.
+            // each array as ONE value, so its parts above are a single, ", "-joined string — the long-standing
+            // contract every existing transform chain relies on, left as it is. The array's ITEMS (the same parts
+            // "...given[*]" yields, narrowed by the same instance selection) are recorded alongside, for the one
+            // consumer that needs them: a column whose De-identification rule runs after its Transformations.
             if (matches is not null && correlatedPositions is null && !HasCsvAggregate(field.Format)
                 && TryReadPrimitiveArrayItems(matches, field, policy, instanceIndex) is { } arrayItems)
             {
-                rawArrayValues[field.TargetField] = arrayItems;
+                primitiveArrayItems[field.TargetField] = arrayItems;
             }
 
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
@@ -338,7 +340,8 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         return new MappingTestResultDto(
             rowsList[0], errors, rowsList, childTableDtos,
             referenceLookups.Count > 0 ? referenceLookups : null,
-            rawArrayValues.Count > 0 ? rawArrayValues : null);
+            rawArrayValues.Count > 0 ? rawArrayValues : null,
+            primitiveArrayItems.Count > 0 ? primitiveArrayItems : null);
     }
 
     /// <summary>Extracts the resource-local id from a FHIR reference string — "Patient/xyz" or an absolute URL

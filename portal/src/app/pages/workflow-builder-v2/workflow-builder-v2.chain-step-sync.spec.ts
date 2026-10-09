@@ -21,7 +21,11 @@ import { CanvasNode } from '../../models/node-v2.model';
 describe('WorkflowBuilderV2 — chain steps follow their rules', () => {
   const WORKFLOW_ID = 'wf-1';
   let store: PipelineStoreV2;
-  let builder: { syncChainNodes(destination: CanvasNode): void; currentWorkflowId: { set(id: string): void } };
+  let builder: {
+    syncChainNodes(destination: CanvasNode): void;
+    onTransformSelected(e: object): void;
+    currentWorkflowId: { set(id: string): void };
+  };
   let transformationRules: Observable<object[]>;
   let profiles: Observable<object[]>;
   let deIdRules: Observable<object[]>;
@@ -229,5 +233,31 @@ describe('WorkflowBuilderV2 — chain steps follow their rules', () => {
     builder.syncChainNodes(destination);
 
     expect(chain().map(id => store.byId(id)!.x)).toEqual([0, 300, 600]);
+  });
+  it('never auto-removes a step once the user has opened and saved it (marker claimed)', () => {
+    const destination = seedChain();
+    // The node library's edit flow for a chain step: the destination is what is saved, chainNodeId names the step.
+    builder.onTransformSelected({
+      attachNode: destination, transformId: 'dest-sqlserver', status: 'enabled', config: {},
+      editNodeId: 'dest', chainLabel: 'Transformation', chainNodeId: 'tra',
+    });
+    expect(store.byId('tra')!.fields['__autoAdded']).toBeUndefined();
+
+    transformationRules = of([]);
+    deIdRules = of([]);
+    builder.syncChainNodes(store.byId('dest')!);
+
+    expect(store.byId('tra')).toBeDefined();         // claimed by the user: kept
+    expect(store.byId('deid')).toBeUndefined();      // still only builder-added: removed
+  });
+
+  it('removes nothing while no column is mapped yet — only a confirmed server answer removes a step', () => {
+    const destination = seedChain();
+    store.updateNode('dest', { fields: { ...destination.fields, dest_mappings: '[]' } });
+    transformationRules = of([]);
+
+    builder.syncChainNodes(store.byId('dest')!);
+
+    expect(store.byId('tra')).toBeDefined();
   });
 });

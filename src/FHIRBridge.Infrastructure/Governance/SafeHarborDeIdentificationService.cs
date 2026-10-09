@@ -57,6 +57,8 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         }
 
         var hops = new List<DeIdentificationFieldHop>();
+        // Each applied rule's path, and whether every rule on that path was deferrable — see DeferrableOriginalJson.
+        var appliedPaths = new Dictionary<string, (string[] Segments, bool AllDeferrable)>(StringComparer.Ordinal);
         var rules = await _ruleRepository.GetPreMappingRulesAsync(profileId, request.ResourceType, cancellationToken);
         foreach (var rule in rules)
         {
@@ -78,6 +80,12 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
             ApplyPath(resource, pathSegments, 0, strategy, rule.ConfigJson);
             var afterValue = TryReadValueAt(resource, pathSegments, 0);
 
+            var pathKey = string.Join('.', pathSegments);
+            var deferrable = DeIdentificationStrategyNames.DeferrableAfterTransformations.Contains(strategy.ToString());
+            appliedPaths[pathKey] = appliedPaths.TryGetValue(pathKey, out var seen)
+                ? (pathSegments, seen.AllDeferrable && deferrable)
+                : (pathSegments, deferrable);
+
             hops.Add(new DeIdentificationFieldHop(
                 rule.SourceField,
                 strategy.ToString(),
@@ -93,7 +101,65 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         // self-reference sees the final value.
         hops.AddRange(await RewriteReferencesAsync(resource, profileId, string.Empty, cancellationToken));
 
-        return new DeIdentificationResult(resource.ToJsonString(), hops);
+        return new DeIdentificationResult(
+            resource.ToJsonString(), hops, BuildDeferrableOriginal(resource, request.RawJson, appliedPaths.Values));
+    }
+
+    /// <summary>
+    /// The redacted resource with ONLY the paths every applied rule treated with a deferrable strategy (Mask, Redact,
+    /// Remove) put back to their original values — the least unredacted data a Mapping node needs to run a column's
+    /// Transformations first and apply that rule afterwards. A path any other rule touched (Hash, Generalize) stays
+    /// redacted: no column can defer it, so its original is never kept. Null when nothing deferrable was applied.
+    /// </summary>
+    private static string? BuildDeferrableOriginal(
+        JsonObject redacted, string rawJson, IEnumerable<(string[] Segments, bool AllDeferrable)> appliedPaths)
+    {
+        var restorable = appliedPaths.Where(path => path.AllDeferrable).Select(path => path.Segments).ToArray();
+        if (restorable.Length == 0 || JsonNode.Parse(rawJson) is not JsonObject original)
+        {
+            return null;
+        }
+
+        var copy = (JsonObject)redacted.DeepClone();
+        foreach (var segments in restorable)
+        {
+            RestorePath(copy, original, segments, 0);
+        }
+
+        return copy.ToJsonString();
+    }
+
+    /// <summary>Copies the value at <paramref name="path"/> from <paramref name="original"/> into
+    /// <paramref name="target"/>, walking arrays element by element exactly as ApplyPath does.</summary>
+    private static void RestorePath(JsonNode? target, JsonNode? original, IReadOnlyList<string> path, int index)
+    {
+        switch (target, original)
+        {
+            case (JsonArray targetArray, JsonArray originalArray):
+                for (var i = 0; i < Math.Min(targetArray.Count, originalArray.Count); i++)
+                {
+                    RestorePath(targetArray[i], originalArray[i], path, index);
+                }
+
+                break;
+
+            case (JsonObject targetObject, JsonObject originalObject) when index == path.Count - 1:
+                if (originalObject.TryGetPropertyValue(path[index], out var value))
+                {
+                    targetObject[path[index]] = value?.DeepClone();
+                }
+
+                break;
+
+            case (JsonObject targetObject, JsonObject originalObject):
+                if (targetObject.TryGetPropertyValue(path[index], out var targetChild)
+                    && originalObject.TryGetPropertyValue(path[index], out var originalChild))
+                {
+                    RestorePath(targetChild, originalChild, path, index + 1);
+                }
+
+                break;
+        }
     }
 
     /// <summary>
@@ -192,7 +258,7 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
 
         return new DeIdentificationFieldHop(
             path,
-            rule.Strategy + ":Reference",
+            rule.Strategy + DeIdentificationStrategyNames.ReferenceSuffix,
             rule.ConfigJson,
             JsonSerializer.Serialize(reference),
             JsonSerializer.Serialize(rewritten),
@@ -348,25 +414,34 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
             return null;
         }
 
-        return value switch
+        // Remove deletes the whole value, whatever its shape — exactly as ApplyStrategy removes the whole property —
+        // rather than a list of nulls ("[null,null]") a destination would still receive.
+        if (strategy == DeIdentificationStrategy.Remove)
         {
-            string text => RedactValue(text, strategy, hop.ConfigJson),
-            // A transform chain can hand back a list of strings (split, a PerItem step): each one is one value.
-            // Only a plain list of strings qualifies — not a dictionary, a JSON object/array node or a byte[],
-            // which are IEnumerable too but carry structure (or raw bytes) this cannot redact item by item.
-            System.Collections.IEnumerable items
-                when value is not (System.Collections.IDictionary or JsonNode or byte[])
-                    && items.Cast<object?>().All(item => item is null or string)
-                => items.Cast<string?>()
-                    .Select(item => item is null ? null : RedactValue(item, strategy, hop.ConfigJson))
-                    .ToArray(),
-            _ => null,
-        };
-    }
+            return null;
+        }
 
-    // Same outcomes as ApplyStrategy for a single property: Remove deletes, every other strategy rewrites the string.
-    private static string? RedactValue(string raw, DeIdentificationStrategy strategy, string configJson) =>
-        strategy == DeIdentificationStrategy.Remove ? null : TransformScalar(raw, strategy, configJson);
+        switch (value)
+        {
+            case string text:
+                return TransformScalar(text, strategy, hop.ConfigJson);
+
+            // A transform chain can hand back a list of strings (split, a PerItem step): each one is one value. Only a
+            // plain list of strings qualifies — not a dictionary, a JSON object/array node or a byte[], which are
+            // IEnumerable too but carry structure (or raw bytes) this cannot redact item by item.
+            case System.Collections.IEnumerable items
+                when value is not (System.Collections.IDictionary or JsonNode or byte[])
+                    && items.Cast<object?>().All(item => item is null or string):
+                var redacted = items.Cast<string?>()
+                    .Select(item => item is null ? null : TransformScalar(item, strategy, hop.ConfigJson))
+                    .ToArray();
+                // Nothing left in it: the value is gone, and is reported as such (null), not as an empty-looking list.
+                return redacted.All(item => item is null) ? null : redacted;
+
+            default:
+                return null;
+        }
+    }
 
     private static bool TryReadStrategy(string configJson, out DeIdentificationStrategy strategy)
     {

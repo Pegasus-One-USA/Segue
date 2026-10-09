@@ -224,7 +224,7 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
             {
                 var originalJson = Convert.ToString(resource.Payload) ?? "{}";
                 string sourceJson;
-                string? preDeIdentificationPayload = null;
+                string? deferrableOriginalJson = null;
                 if (_deIdentificationService is null)
                 {
                     sourceJson = originalJson;
@@ -243,13 +243,21 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                     if (result.Hops.Count > 0)
                     {
                         redactionsByResourceId[resource.ResourceId] = result.Hops;
-                        // Kept (in memory only — see ResourceEnvelope.PreDeIdentificationPayload) so a mapped column
-                        // with its own Transformations can run them on the real values and be redacted afterwards.
-                        preDeIdentificationPayload = originalJson;
                     }
+
+                    deferrableOriginalJson = result.DeferrableOriginalJson;
                 }
 
-                deIdentifiedResources.Add(resource with { Payload = sourceJson, PreDeIdentificationPayload = preDeIdentificationPayload });
+                var redactedEnvelope = resource with { Payload = sourceJson };
+                // Held in memory against THIS envelope only (see DeIdentificationSnapshots), so a mapped column with its
+                // own Transformations can run them on real values and be redacted afterwards. It holds only the fields
+                // a deferrable rule (Mask/Redact/Remove) covered, and only when such a rule actually applied.
+                if (deferrableOriginalJson is not null)
+                {
+                    DeIdentificationSnapshots.Attach(redactedEnvelope, deferrableOriginalJson, sourceJson);
+                }
+
+                deIdentifiedResources.Add(redactedEnvelope);
             }
 
             // De-identification was asked for and nothing at all was redacted. Almost always a misconfiguration

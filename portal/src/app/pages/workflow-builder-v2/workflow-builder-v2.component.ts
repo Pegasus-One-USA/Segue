@@ -631,6 +631,9 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       // destination, so without chainLabel this would confusingly report "SQL Server configuration
       // updated" after saving the Mapping/Transformation/De-identification node.
       this.toast.show('Updated', `${e.chainLabel ?? t.name} configuration updated.`);
+      // The user has now opened and saved this chain step themselves, so it is theirs: drop the marker that let
+      // the builder remove it automatically (see removeChainStep).
+      if (e.chainNodeId) this.claimChainStep(e.chainNodeId);
       const edited = this.store.byId(e.editNodeId);
       if (edited && e.transformId.startsWith('dest-')) this.syncChainNodes(edited);
       return;
@@ -766,11 +769,9 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     if (!workflowId) return;
 
     const mappedKeys = this.mappedRuleKeys(fields);
-    // No mapped column means no rule can apply here (the intersection below would find nothing either).
-    if (mappedKeys.size === 0) {
-      this.removeChainStep(destination, 'transformation');
-      return;
-    }
+    // No mapped column yet: nothing to ask about. Nothing is removed here either — a step is only ever taken away
+    // on a CONFIRMED server answer below, never on a momentarily empty mapping list.
+    if (mappedKeys.size === 0) return;
 
     this.transformationRules.list({ destinationType, resourcePipelineRouteId: workflowId }).subscribe({
       next: rules => {
@@ -958,6 +959,15 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     }
 
     this.layoutChain(destination);
+  }
+
+  /** Marks an automatically added chain step as the user's (removes __autoAdded), so it is never auto-removed. */
+  private claimChainStep(nodeId: string): void {
+    const node = this.store.byId(nodeId);
+    if (node?.fields?.[AUTO_ADDED_FIELD] !== 'true') return;
+    const fields = { ...node.fields };
+    delete fields[AUTO_ADDED_FIELD];
+    this.store.updateNode(nodeId, { fields });
   }
 
   /** Starts a new chain sync for `destination` and returns a check that stays true only while it is the latest. */
