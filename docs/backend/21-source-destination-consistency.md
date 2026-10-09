@@ -1,7 +1,7 @@
 # 21 — Source / destination consistency: sources read, destinations write
 
 > Part of the [Backend Architecture Guide](README.md). Admin how-to: [EHR write-back user guide](../user-guide/ehr-write-back.md).
-> **Status: built 2026-10-08 / 2026-10-09 on `feature/ehr-write-back-multi-vendor`, commits `a7a0b9f2` … `e349c08a`
+> **Status: built 2026-10-08 / 2026-10-09 on `feature/ehr-write-back-multi-vendor`, commits `a7a0b9f2` … `f84029f3`
 > (everything after `4c956468`). Verified end to end on the local stack on 2026-10-09 (section 13).**
 > Builds on [20 — EHR write-back](20-epic-r4-write-back.md); this file records what changed in how sources,
 > destinations and their connections are set up, not the write-back rules themselves.
@@ -33,15 +33,17 @@ every type. The aim was that a source and a destination look and behave the same
 | B (fix) | `4a476817` | Patient kept as the search anchor; `POST /workflows` checks the subset rule too |
 | E (fix) | `35445473` | CSV / SQL node reopens with its database, files and filter columns chosen |
 | C (lists) | `9abd43cf` | One connection list per page; delete locking; Test only on database rows |
-| D | `f4d72a2b` | One destination tile per EHR; Run mode: Live / Dry run / Test on FHIR server |
+| D | `f4d72a2b` | One destination tile per EHR; Run mode: Live / Dry run / Test on FHIR server (replaced in `f84029f3`) |
 | D (fix) | `c14a5acd` | A test run's report says "Test run", not "Live run to Epic" |
 | B (UX) | `8ff9be1d` | Destination Resource types start ticked with the source's types |
 | — | `29c2e4a7` | FHIR repository destination skips a refused record instead of failing the run |
 | — | `a06008d0` | 25 long-failing portal specs fixed (one real bug: System Settings tab for `ehrendpoints.view`) |
 | D (UX) | `e349c08a` | Review and Destination Connections name the EHR ("EHR write-back — Epic") |
+| E (tiles) | `3b3f294f` | "SQL database" and "CSV file" tiles; automatic name; dataset key under Advanced |
+| D (Step 1) | `f84029f3` | Step 1 is only the Connection; run mode follows the connection; Dry run under Options; live writes confirmed; FHIR server tile removed |
 | F | — | End-to-end runs and these docs |
 
-Steps were done in the order E → C + A → B → one list → D → F. A alone would have left nowhere to create a write
+Steps were done in the order E → C + A → B → one list → D → F; `3b3f294f` and `f84029f3` came after F. A alone would have left nowhere to create a write
 connection, so A and C shipped as one commit.
 
 ## 4. Step E — CSV / SQL source: one query or file per resource type
@@ -72,6 +74,16 @@ Test, New database), `tabular-database-editor`, `tabular-csv-files`, `tabular-st
 `tabular-form-shared.scss`. Fix `35445473`: each `<option>` marks itself `[selected]`, because a `<select>`'s own
 `[value]` was applied before its options (saved databases, files, columns) had loaded and the browser dropped it.
 
+**Two tiles (`3b3f294f`).** The "CSV / SQL Table" tile is now **SQL database** (`tabular-sql`,
+`tabular-sql-source-form`) and **CSV file** (`tabular-csv`, `tabular-csv-source-form`), sharing
+`tabular-source-form-base.ts`. Both still save a `TabularSourceNode`; a saved node reopens as the tile its `tab_kind`
+names (`source-node-vendor.util.ts`). The name is no longer required: it fills in as "SQL: {database}" or "CSV: {first
+file}" until the user types one. The dataset key moved under **Advanced → Data set identity**
+(`tabular-dataset-identity`, opened only when the key is invalid) and is made for the user (`tabular-dataset-key.ts`,
+same normalisation as the API's `NormalizeDatasetKey`): SQL `sql-{name}-{connection id}`, so two databases with the
+same name never share a ledger; CSV `csv-{random}`, made once when the node is created. A saved key, or one the user
+edits, is never replaced.
+
 ## 5. Steps C + A — sources only read; write connections under Destination Connections
 
 **A — the Access dropdown is gone from every source form** (EHR vendor forms v1 and v2, Generic FHIR). A source save
@@ -82,7 +94,8 @@ can therefore never downgrade a Write / Read & Write connection or clear its "Ve
 **C — EHR write connections.** Still `SourceConnection` rows (`Access` = Write or ReadWrite), but created, listed and
 edited from **Destination Connections**: Epic, eClinicalWorks and athenahealth through the existing vendor forms opened
 in a *write purpose* (Backend System, Access Write, the "Vendor write APIs activated" switch, athena **Department ID**),
-and a FHIR server through a new small form (`generic-fhir-write-connection-form`: name, FHIR base URL, no auth).
+and a FHIR server through a new small form (`generic-fhir-write-connection-form`: name, FHIR base URL, no auth;
+since `f84029f3` the card and default name read "FHIR test server").
 
 | Area | Change | Where |
 |---|---|---|
@@ -142,7 +155,7 @@ runs at run time) or on copy, so a workflow saved before the rule still runs.
 **EHR destination greys what it cannot take.** `ehr-write-type-grid` lists every type the source reads
 (`ehr-write-type-grid.model.ts`, `classifyEhrWriteTypes`). In the wizard the greyed reasons are only:
 
-- "Not accepted by {EHR}" ("Not accepted by this FHIR server" on the FHIR server tile);
+- "Not accepted by {EHR}" ("Not accepted by this FHIR server" on a saved plain FHIR server node);
 - "Needs a CSV / SQL Table source" (every way the EHR files it needs the EHR's own ids);
 - "Not read by this destination's source" (only for an already-selected type the source no longer reads).
 
@@ -182,61 +195,80 @@ its records are not handed on and its sync cursor is not advanced (`SourceNodeEx
 reference targets, the one documented exception); a legacy source to what its reachable destinations write, mapping
 rows included.
 
-## 7. Step D — one tile per EHR, Run mode
+## 7. Step D — one tile per EHR; Step 1 is the connection
 
-**Tiles.** The Node Library shows an **EHR** heading with Epic, eClinicalWorks, athenahealth and FHIR server tiles
-(`transforms-v2.data.ts`: `dest-ehr-group`, `dest-ehr-epic` / `-ecw` / `-athena` / `-fhir`, `ehrTileFor`) in place
-of the single EHR Write-Back tile. Every destination follows **Connection → Resource types → (Map fields | Options) →
+**Tiles.** The Node Library shows an **EHR** heading with Epic, eClinicalWorks and athenahealth tiles
+(`transforms-v2.data.ts`: `dest-ehr-group`, `dest-ehr-epic` / `-ecw` / `-athena`, `ehrTileFor`) in place of the single
+EHR Write-Back tile. The FHIR server tile (`dest-ehr-fhir`) was removed in `f84029f3`: a FHIR server is now only a
+"FHIR test server" connection. Every destination follows **Connection → Resource types → (Map fields | Options) →
 Review**, and Step 1 reads "Write to …". Saved nodes keep `transformId` `dest-ehr-writeback`; the tile is recovered from
-`dest_testAsVendor` / `dest_ehrVendor` (`savedWriteVendorOf`, `ehr-write-back.model.ts`).
+`dest_testAsVendor` / `dest_ehrVendor` (`savedWriteVendorOf`, `ehr-write-back.model.ts`). A saved plain FHIR server
+write-back (no testable vendor) still reopens, with every write connection listed and a note, and still runs.
 
-**Run mode** (`ehr-run-mode-picker`) replaces the Dry run checkbox and the Test as dropdown. No new key is stored:
+**Step 1 is only the Connection (`f84029f3`).** The run-mode radios (`ehr-run-mode-picker`), the "Copy settings from
+a saved {EHR} destination" box and the blue / orange notes are gone. `ehr-write-connection-picker` is one
+**Connection** dropdown with two groups (`connectionGroupsFor`): "{EHR}" (the EHR's own write connections) and "Test
+servers (receive exactly what {EHR} would)" (FHIR test server connections whose `testableVendors` include it). Without
+a vendor (a node whose tile cannot be recovered) it lists every write connection flat. The connection decides the run;
+no new key is stored:
 
-| Run mode | `dest_dryRun` | `dest_testAsVendor` | Connection offered (`connectionsFor`) |
-|---|---|---|---|
-| Live: write into {EHR} | `false` | empty | the EHR's own write connections |
-| Dry run: check every record, send nothing | `true` | empty | the EHR's own write connections |
-| Test on a FHIR server (Epic, eCW, athena only) | `false` | the EHR | FHIR server write connections that can stand in for it |
+| Chosen | `dest_dryRun` | `dest_testAsVendor` |
+|---|---|---|
+| An EHR connection: live | `false` | empty |
+| A test server: test run | `false` | the EHR |
+| Either, with Dry run ticked under Options | `true` | as above |
 
-The radios are listed Live, Dry run, Test (`runModesFor`). **Dry run is offered only while the system setting
-`EhrWriteBack:DryRunEnabled` is on** (`EhrWriteBackSettings.DryRunEnabledKey`, default **false** like
-`CloneModeEnabled`; seeded by `SystemSettingsSeeder`, exposed as `DryRunEnabled` on `EhrWriteCapabilitiesDto`; a
-missing value or failed call counts as off; saving System Settings clears `EhrWriteCapabilitiesService`'s cache).
-With it on, a new destination preselects Dry run; with it off, Epic / eCW / athena preselect Test and the FHIR server
-tile leaves Run mode unselected so Live is always a deliberate choice. A saved node with `dest_dryRun` true stays a dry
-run whatever the setting says (the Runtime executor and the writer never read it) and shows a note. A FHIR server tile offers Live and Dry run only. Reading back (`runModeOf`): anything but an explicit
-`dest_dryRun` = `false` is a dry run, as in the executor. A legacy node with **both** a dry run and a test vendor
-reopens as a plain **Dry run** without losing its connection (`droppedTestServer` tells the form the saved test server
-no longer fits). Test always sends to a FHIR server write connection; the backend still refuses a test run on any
-other connection type (doc 20, section 14.2).
+Nothing is ever selected for the user. **New {EHR} connection** / **New test server** create one in place
+(`ehr-write-connection-create`, shared with Destination Connections), offered only to a role with
+`sourceconnections.view` plus `ehrwriteback.create` and the vendor's own `.create`. A new test server that fits is
+picked; a new EHR connection is not ("The new connection was added. Choose it above to write into {EHR}."), so a
+live run is always chosen on purpose. Reading back (`runModeOf`): anything but an explicit `dest_dryRun` = `false` is a
+dry run, as in the executor. Test always sends to a FHIR server write connection; the backend still refuses a test run
+on any other connection type (doc 20, section 14.2).
 
-**Connection.** `ehr-write-connection-picker` ("Write to", or "Test server" in a test run) lists the write
-connections fitting the EHR and run mode; **New connection** creates one in place (`ehr-write-connection-create`,
-shared with Destination Connections), offered only to a role with `sourceconnections.view` plus `ehrwriteback.create`
-and the vendor's own `.create`. The optional "Copy settings from a saved {EHR} destination (optional)" box copies a
-saved destination's settings; it shows only when the destination is created from the canvas
-(`showConnectionModeToggle`), not when an existing one is reopened.
+**Name.** No destination asks for a name on Step 1 any more: each type's own "Destination name" field is hidden in the
+wizard (`dw-form-host`; Destination Connections still shows it). Step 1 of the other destinations is the saved
+connections plus **New connection**; the type's form opens for a new one or fills in from a chosen one. The name
+takes the connection's name and is edited on Review (`ehr-review-name`, "Destination name", the connection's name
+as placeholder). A reopened write-back whose saved name was just its connection's is treated as automatic, so it
+follows a newly chosen connection; a typed name is kept.
+
+**Dry run** (`ehr-dry-run-option`) is a checkbox under Options, "Dry run: check every record, send nothing", shown
+only while the system setting `EhrWriteBack:DryRunEnabled` is on (`EhrWriteBackSettings.DryRunEnabledKey`, default
+**false** like `CloneModeEnabled`; seeded by `SystemSettingsSeeder`, exposed as `DryRunEnabled` on
+`EhrWriteCapabilitiesDto`; a missing value or failed call counts as off; saving System Settings clears
+`EhrWriteCapabilitiesService`'s cache). A new destination starts unticked. A saved node with `dest_dryRun` true stays a
+dry run whatever the setting says (the Runtime executor and the writer never read it) and shows "Dry run is turned off
+in System Settings. This destination stays a dry run until you untick it."
 
 **Options** (Step 3): `ehr-write-general-options` (Max writes per run, Clinical notes are filed as "Preliminary (a
 clinician reviews and signs)" or "Final (signed under the integration user)", Create the patient when the EHR has no
 match), `ehr-ecw-write-options` (note author only), `ehr-athena-write-options` (Department id placeholder shows the
 connection default; with no department on the node or the connection, new patients are rejected),
-`ehr-clone-mode-option`. Options holds only how records are written; what is written is chosen on Step 2. A new
+`ehr-clone-mode-option`, and the Dry run checkbox above. Options holds only how records are written; what is written is chosen on Step 2. A new
 write-back is saved once, on leaving Options.
 
-**Review.** An EHR write-back's Review step shows the cards Destination type, De-identification, Name, Writes to,
-Mode, Patients and Resource types (each type with the kinds written, `ehr-review-resource-types`).
+**Review.** An EHR write-back's Review step shows the Destination name field, then the cards Destination type,
+De-identification, Writes to, Mode, Patients and Resource types (each type with the kinds written,
+`ehr-review-resource-types`). A live run into an EHR adds a red line (`ehr-live-warning`): "Live: records will be
+written into {EHR}. This cannot be undone." (not for a test run, a dry run or a plain FHIR server).
 
 - `e349c08a` changed the **Destination type** card: `reviewDestLabel()` returns
   `ehrWriteBackLabel(ehrVendor() ?? savedWriteVendorOf(activeFormConfig()))`, e.g. "EHR write-back — Epic" (a test
   run is named by the EHR it stands in for). It used to read "EHR Write-Back".
-- The same commit names the EHR in the Destination Connections Type column of a saved write-back destination and in
-  the "Copy settings from" list, both through `savedWriteVendorOfMetadata`. Write connection rows read "EHR write
+- The same commit names the EHR in the Destination Connections Type column of a saved write-back destination
+  through `savedWriteVendorOfMetadata`. Write connection rows read "EHR write
   connection — Epic".
-- **Writes to** and **Mode** (`ehrReviewLines`, from `f4d72a2b`) read e.g. "{connection} (Epic)" and "Dry run: checks
-  every record, sends nothing, up to 500 records per run"; a test run reads "{connection} (FHIR test server), shaped
-  as Epic" and "Test on FHIR server: nothing reaches Epic, …".
+- **Writes to** and **Mode** (`ehrReviewLines`) read e.g. "{connection} (Epic)" and "Live: writes into Epic, up to
+  500 records per run" (dry run: "Dry run: checks every record, sends nothing, …"); a test run reads "{connection}
+  (FHIR test server), shaped as Epic" and "Test run: nothing reaches Epic, …".
 - The wizard binds only the inputs a Step 1 form declares (no NG0303).
+
+**Run confirmation (`f84029f3`).** **Run** on the Workflows list (`workflow-list.component.ts`,
+`EhrLiveWriteCheckService`) asks "Write into {EHR} now?" ("… writes records into {EHR}. Records written cannot be
+undone.", button Run) when the workflow has a live EHR write-back (`liveEhrWritesOf`: not a test run, a dry run or a
+plain FHIR server) and no run has succeeded since its last save (`hasCompletedRunSince` against `modifiedOnUtc`). So
+saving an edit brings the question back. Unreadable run history counts as no successful run, so it asks.
 
 **Report (`c14a5acd`).** The runtime `EhrWriteSummary` (`DestinationWriteResult.cs`) lacked `TestRun`, so a test run's
 stored report read "Live run to Epic". It is now carried through (`DestinationNodeExecutors`). The report dialog title
@@ -265,16 +297,17 @@ keeps mutual references.
 |---|---|---|
 | EHR / Generic FHIR source | `Resources` | Types read |
 | | `Resource types declared` | `"true"` = the list is declared (subset rule and scopes apply); absent = legacy |
-| CSV / SQL source | `tab_kind` | `sql` or `csv` |
+| CSV / SQL source | `tab_kind` | `sql` or `csv`; picks the tile (SQL database / CSV file) on reopen |
 | | `tab_streams` | `[{ resourceType, template, query \| fileId, rowFilterColumn?, rowFilterValue? }]` |
 | | `tab_sqlConnectionId` | Saved database (`TabularSqlConnections`) |
 | | `tab_sqlConnectionName`, `tab_sqlEngine`, `tab_secretKeyVaultName`, `tab_secretName` | The saved database's name, engine and secret reference, for display and run (SQL only) |
 | | `Resources` | The ticked types, comma-separated; read by the node library and, after `tab_streams` / `tab_templates`, by `ReadSourceDeclared` |
-| | `tab_datasetKey`, `tab_maxRows` | Unchanged (doc 20, section 10) |
+| | `tab_datasetKey` | Made by the portal (SQL: from the database connection id; CSV: once, at creation); a saved key is never changed. Edited under Advanced → Data set identity |
+| | `tab_maxRows` | Unchanged (doc 20, section 10) |
 | | `tab_query`, `tab_fileId`, `tab_templates` | Legacy single-query form; still runs |
 | Any destination | `dest_resources` | Types written (must be a subset of the source's declared types) |
 | EHR write-back | `dest_sourceConnectionId` | The write connection (name kept for compatibility) |
-| | `dest_dryRun`, `dest_testAsVendor` | Run mode (table in section 7) |
+| | `dest_dryRun`, `dest_testAsVendor` | Dry run option and test server (table in section 7) |
 | | `dest_ehrVendor` | The EHR written to; with `dest_testAsVendor`, picks the tile |
 | | `dest_targetDepartmentId` | athena; overrides the connection's `DepartmentId` |
 | | others | `dest_maxWritesPerRun`, `dest_noteDocStatus`, `dest_createPatientIfMissing`, `dest_targetProviderId`, `dest_createHolderEncounter`, `dest_enabledVariants`, `dest_cloneMode` — unchanged |
@@ -293,7 +326,9 @@ keeps mutual references.
   ledger, the granted scope — and sends nothing. Test on FHIR server writes to a different server, so it cannot prove
   any of that (doc 20, section 14.2, "What a test run does not prove"). Epic writes cannot be undone (no delete, no
   update for allergies and problems), so a check against the real target before the first Live run stays the
-  recommended step, and Dry run stays the default mode.
+  recommended step where an admin turns Dry run on (off by default).
+- **A live write is never chosen for the user.** Nothing is preselected on Step 1, a new EHR connection is not picked
+  for the user, Review warns in red, and the Workflows list asks before the first run after each save.
 - **Patients are matched, never guessed.** No change; it is why a Live write to a FHIR server needs findable patients
   (section 12).
 - **Test only on database rows** until EHR read / write and destination test endpoints exist; a Test button that did
@@ -308,7 +343,9 @@ keeps mutual references.
 | Source node still carrying `Access` | Ignored on save; the connection's access is never changed from a source |
 | Source node bound to a write-only connection | On build or copy the binding is kept untouched (the connection is not rewritten), so the rest of the workflow still saves; the run refuses to read through it until the node is pointed at a readable connection |
 | CSV / SQL node with `tab_query` / `tab_fileId` + `tab_templates` | Runs unchanged; opens as one entry per template reading the same query or file; saving rewrites it as `tab_streams`. Counts as declared (its `tab_templates` types, or `Resources`), so the subset rule applies on its next save |
-| Write-back node with `dest_dryRun` = true and a `dest_testAsVendor` | Reopens as Dry run; the test server is dropped from the form; runs as before until re-saved |
+| Write-back node with `dest_dryRun` = true and a `dest_testAsVendor` | Reopens with the test server chosen and Dry run ticked; runs as before |
+| Write-back node to a plain FHIR server (FHIR server tile, removed) | Reopens with every write connection listed and a note; runs as before |
+| CSV / SQL Table node (single tile, before `3b3f294f`) | Reopens as the SQL database or CSV file tile from `tab_kind`; its name and `tab_datasetKey` are kept |
 | Write-back node with only `transformId` `dest-ehr-writeback` | Tile from `dest_testAsVendor` / `dest_ehrVendor`; "EHR write-back" when neither names a vendor |
 | Read & Write connection | On both pages; delete locked while a workflow reads or writes through it |
 | Workflow saved before the subset rule | Still runs; the rule applies on its next save |
@@ -319,8 +356,8 @@ git history.)
 
 ## 12. Limitations
 
-- **Live write to the FHIR server tile needs patients findable by identifier.** Patients are resolved by identifier,
-  then `Patient/$match` (Generic FHIR declares `supportsPatientMatch: true`, `EhrWriteCapabilities`). A patient is
+- **Live write to a plain FHIR server (a saved FHIR server tile node) needs patients findable by identifier.**
+  Patients are resolved by identifier, then `Patient/$match` (Generic FHIR declares `supportsPatientMatch: true`, `EhrWriteCapabilities`). A patient is
   created only when `$match` answers an explicit "no one" (`EhrPatientMatchKind.None`: Epic's issue code 4101 with no
   error alongside it, `FhirSourceConnectorBase.Write.cs`). A server without `$match` (a local HAPI without MDM)
   answers with an error instead, so the record is reported "Patient match failed", or "Uncertain patient match, left

@@ -55,8 +55,8 @@ They coexist — know which one you're touching:
 | [07 — Adding Permissions (How-To)](06-adding-permissions-howto.md) | Practical steps: adding a Category/Group/Action, applying `[StandardPermission]`, reusing a permission across endpoints, seed-declared vs. discovered-only |
 | [08 — Governance Logging Status](08-governance-logging-status.md) | Phase-by-phase completion status of the audit/governance logging rebuild — what's done, what's dormant, what's not started, and what to pick up next |
 | [20 — EHR Write-Back](20-epic-r4-write-back.md) | Writing records back into Epic, eClinicalWorks, athenahealth or a FHIR server: verified vendor facts, write profiles, phases 0–7, test runs |
-| [21 — Source / Destination Consistency](21-source-destination-consistency.md) | Sources only read, destinations write: CSV / SQL per-type queries and Check, write connections under Destination Connections, resource types chosen on the source, one connection list per page, per-EHR tiles and Run mode, compatibility, verification |
-| [Admin guide: EHR write-back](../user-guide/ehr-write-back.md) | Plain-language, click-by-click guide for admins: connections, sources, EHR and database destinations, Run mode, reading the report, troubleshooting |
+| [21 — Source / Destination Consistency](21-source-destination-consistency.md) | Sources only read, destinations write: CSV / SQL per-type queries and Check, write connections under Destination Connections, resource types chosen on the source, one connection list per page, per-EHR tiles with one Connection dropdown (live or test server), Dry run option, live-write confirmation, SQL database / CSV file tiles, compatibility, verification |
+| [Admin guide: EHR write-back](../user-guide/ehr-write-back.md) | Plain-language, click-by-click guide for admins: connections, sources, EHR and database destinations, live and test runs, reading the report, troubleshooting |
 
 ## Maturity flags (as of this review)
 

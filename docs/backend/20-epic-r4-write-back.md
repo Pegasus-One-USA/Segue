@@ -10,10 +10,11 @@
 >
 > **Set-up changed 2026-10-08 / 09 — see [21 — Source / destination consistency](21-source-destination-consistency.md)
 > and the [admin guide](../user-guide/ehr-write-back.md).** Write connections are now created and listed under
-> **Destination Connections** (Epic, eClinicalWorks, athenahealth, FHIR server); source forms have no Access field
-> and only read. The destination is one tile per EHR, and **Run mode** (Live / Dry run / Test on FHIR server)
-> replaced the separate Dry run checkbox and Test as dropdown; it is still saved as `dest_dryRun` +
-> `dest_testAsVendor`. Where sections below say "Access", "Dry run" or "Test as", read them in that light;
+> **Destination Connections** (Epic, eClinicalWorks, athenahealth, FHIR test server); source forms have no Access
+> field and only read. The destination is one tile per EHR (Epic, eClinicalWorks, athenahealth). Its one
+> **Connection** dropdown decides the run: an EHR connection is live, a test server is a test run; Dry run is a
+> checkbox under Options, offered only when the System Setting is on (off by default). It is still saved as
+> `dest_dryRun` + `dest_testAsVendor`. Where sections below say "Access", "Dry run" or "Test as", read them in that light;
 > section 16 summarises the differences.
 
 Everything below comes from Epic's own published material, fetched 2026-09-30: the sandbox R4 CapabilityStatement
@@ -381,7 +382,8 @@ ledger compares is computed on the shaped note.
 
 ## 10. Phase 4 — non-FHIR sources (CSV / SQL Table)
 
-A new Runtime source node, **CSV / SQL Table** (`TabularSourceNode`, portal tile `tabular`), reads rows and builds
+A new Runtime source node, **CSV / SQL Table** (`TabularSourceNode`; since `3b3f294f` the portal tiles **SQL
+database** `tabular-sql` and **CSV file** `tabular-csv`), reads rows and builds
 FHIR resources from templates. Its output is an ordinary `ResourceBatch`, so the EHR write-back writer, FHIR
 destinations and FHIR transforms take it unchanged.
 
@@ -412,7 +414,8 @@ and DocumentReference (clinical note) use conventional column names. A resource 
 same id (a patient on each of their allergy rows) is kept once. `POST api/v1/tabular-sources/preview` renders the
 first five rows and lists the columns the templates read that the table lacks.
 
-**Identity for write-back.** A required **dataset key** (`tab_datasetKey`) becomes the source's stand-in base URL,
+**Identity for write-back.** A **dataset key** (`tab_datasetKey`; made by the portal since `3b3f294f`, see doc 21,
+section 4) becomes the source's stand-in base URL,
 `urn:fhirbridge:tabular:<key>`, which the destination executor hands the writer for a Tabular upstream. The ledger
 keys every record on it, so uploading a corrected copy of the file, or cloning the workflow, does not file rows
 again. There is no source to fetch a missing patient from, so for write-back the rows must build the Patient too
@@ -651,7 +654,8 @@ EHRs, so every write can be rehearsed end to end before it is pointed at the rea
 - A Generic FHIR connection gets an **Access** field (Read / Write / Read & Write) on its form; Write makes it a
   write-back target. It has no authentication (anonymous, as the Generic FHIR source already was). *Since
   `7424a2a7` the Access field is gone from the source form; a FHIR server write connection is created under
-  Destination Connections → New → FHIR server (doc 21, section 5).*
+  Destination Connections → New → FHIR test server (doc 21, section 5); the FHIR server destination tile was removed
+in `f84029f3`, and saved plain FHIR server nodes still run.*
 
 ### 14.2 Test runs ("Test as")
 
@@ -717,12 +721,12 @@ APIs (`IsFhir: false` in Epic's catalog), with no public spec, which a FHIR test
 ### 14.4 To test a write before going live
 
 1. Start a FHIR server (docker-compose `hapi-fhir`) and add it under Destination Connections → **New** → **FHIR
-   server**.
-2. Add the EHR's destination tile (Epic, eClinicalWorks or athenahealth), choose Run mode **Test on a FHIR server**,
-   pick the server under **Test server**, select the types (and tick the extra Epic APIs to try), run.
+   test server**.
+2. Add the EHR's destination tile (Epic, eClinicalWorks or athenahealth), pick the server under **Connection** →
+   **Test servers**, select the types (and tick the extra Epic APIs to try), run.
 3. Read the test-run report, then the server: the records (or, for athena, the `Basic` call records).
-4. Switch the same destination to Run mode **Dry run**, pick the real write connection under **Write to**, run once,
-   then switch to **Live**.
+4. Pick the real write connection under **Connection**. With Dry run turned on in System Settings, tick **Dry run**
+   under Options and run once, then untick it. The first live run asks "Write into {EHR} now?".
 
 ## 15. Sources
 
@@ -742,8 +746,8 @@ Full detail in [21](21-source-destination-consistency.md). In short, for this wr
 |---|---|
 | Access (Read / Write / Read & Write) on a source connection form | Gone from source forms; write connections are made under Destination Connections; `?access=read\|write` lists each side |
 | Athena department only on the node (`dest_targetDepartmentId`) | Also on the write connection (`SourceConnection.DepartmentId`); the node's value wins |
-| One "EHR Write-Back" tile | An EHR heading with Epic, eClinicalWorks, athenahealth and FHIR server tiles; saved nodes keep `dest-ehr-writeback` |
-| Dry run checkbox + Test as dropdown | Run mode: Live / Dry run / Test on FHIR server (`dest_dryRun`, `dest_testAsVendor`); an old dry-run + test node reopens as Dry run |
+| One "EHR Write-Back" tile | An EHR heading with Epic, eClinicalWorks and athenahealth tiles (the FHIR server tile was removed in `f84029f3`); saved nodes keep `dest-ehr-writeback` |
+| Dry run checkbox + Test as dropdown | One Connection dropdown: an EHR connection is live, a test server is a test run; Dry run is a checkbox under Options when the System Setting is on (`dest_dryRun`, `dest_testAsVendor`) |
 | Destination chose any type | Source declares its types; the destination picks a subset (refused on save otherwise); types the EHR cannot take are greyed with the reason, and a type that only needs an option stays tickable with a note and holds Options' Next until that option is on |
 | Test-run report read "Live run to …" | The report dialog is titled "Test-run report" with a "Test run" badge (dry run: "Dry-run report" / "Dry run"; live: "Write-back report" / "Live"); the Copy report text says "Test run" |
 

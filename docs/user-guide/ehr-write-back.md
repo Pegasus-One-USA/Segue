@@ -1,7 +1,7 @@
 # Writing data back into an EHR — admin guide
 
 This guide shows how to set up a workflow that reads records from one place and writes them into an EHR (Epic,
-eClinicalWorks or athenahealth) or into a FHIR server. It also covers sending EHR data to a database such as SQL
+eClinicalWorks or athenahealth), or into a FHIR test server to try it first. It also covers sending EHR data to a database such as SQL
 Server or MongoDB.
 
 Technical background: [21 — Source / destination consistency](../backend/21-source-destination-consistency.md) and
@@ -32,7 +32,7 @@ Technical background: [21 — Source / destination consistency](../backend/21-so
 | **Backend System** | The kind of EHR app login Segue uses when it works on its own, with no person signed in to the EHR. |
 | **Audience** | Who an EHR app login is for (for example Backend System). Shown in the Source Connections list. |
 | **Vendor write APIs** | The writing features eClinicalWorks or athenahealth must switch on for your practice before Segue can really write there. |
-| **Dataset key** | A short name you choose for a CSV / SQL source. Segue uses it to remember which rows it has already written. |
+| **Data set identity** | A key Segue makes for a SQL database or CSV file source (under **Advanced**). Segue uses it to remember which rows it has already written. You rarely need to change it. |
 | **Partial success** | The run finished, but some records were skipped; the report says which and why. |
 | **Ready** | A workflow's status once it is saved and complete enough to run. |
 
@@ -80,8 +80,8 @@ This list holds every destination and every **EHR write connection** (the login 
      turned those APIs on; until then every write to this connection only checks and sends nothing. Ticking it
      needs the EHR Write-Back edit permission. For athenahealth, fill in **Department ID**: the department new
      patients are registered in.
-   - **FHIR server**: a small form with **Name** and **FHIR base URL**. Use it for a plain FHIR server, or as a
-     test server that receives exactly what an EHR would.
+   - **FHIR test server**: a small form with **Name** and **FHIR base URL**. A test server receives exactly what
+     an EHR would; nothing reaches the EHR.
 5. Click **Save**.
 6. **Edit** is always available on an EHR write connection, so you can tick **Vendor write APIs activated** later.
    **Delete** is greyed out ("used by a workflow") while a workflow writes through it, or, for a "Read & Write"
@@ -97,15 +97,18 @@ This list holds every destination and every **EHR write connection** (the login 
 
 ### 2a. A SQL database or CSV files as the source
 
-1. Click **CSV / SQL Table**.
-2. Enter a **Name** and a **Dataset key** (for example `clinic-allergies`). Keep the dataset key the same forever
-   for this data: it is how Segue knows a row was already written, so a corrected file is not written twice.
-3. Under **Read from**, choose:
-   - **A database (one query per resource type)**: under **Read from database**, pick a saved database. Click
-     **Test** to check that Segue can log in, that the login can only read, and that a simple query runs, or **New database** to add one here (it is then also listed under Source
-     Connections);
-   - **CSV files**: under **CSV files**, upload one file per resource type, or one file with a column that says
+1. Click **SQL database** or **CSV file**.
+2. Choose where the rows come from:
+   - **SQL database**: under **Read from database**, pick a saved database. Click **Test** to check that Segue can
+     log in, that the login can only read, and that a simple query runs, or **New database** to add one here (it is
+     then also listed under Source Connections);
+   - **CSV file**: under **CSV files**, upload one file per resource type, or one file with a column that says
      which type each row is. Up to 10 MB and 50,000 rows each; the first line must be the column names.
+3. The **Name** fills in by itself ("SQL: <database>" or "CSV: <first file>"). You can change it, but you do not
+   have to. Segue also makes the **Data set identity** (under **Advanced**): it is how Segue knows a row was already
+   written, so a corrected file is not written twice. For a database it comes from that saved database; for CSV files
+   it is made once, when you add the source. A saved identity never changes by itself. Change it only when you
+   replace a source with a new one that reads the same data.
 4. Under **Resource types to read**, tick each type this source reads. For writing into an EHR, include
    **Patient**, and give every record an id column.
 5. A card appears for each ticked type. In each card:
@@ -141,36 +144,25 @@ This list holds every destination and every **EHR write connection** (the login 
 ## 3. Add an EHR destination
 
 1. On the source node, click **＋** (Add next module).
-2. In the node library, click the **EHR** heading. It opens to show four tiles: **Epic**, **eClinicalWorks**,
-   **athenahealth** and **FHIR server**. Click the one to write to. The heading and tiles appear only if your role
+2. In the node library, click the **EHR** heading. It opens to show three tiles: **Epic**, **eClinicalWorks** and
+   **athenahealth**. Click the one to write to. The heading and tiles appear only if your role
    has an EHR Write-Back permission; if you do not see them, ask an administrator.
 3. The window shows four steps: **Connection → Resource types → Options → Review**. Use **Next** and **Back** at
    the bottom.
 
 ### Step 1 — Connection ("Write to …")
 
-1. Optional: **Copy settings from a saved … destination (optional)** copies the settings of an earlier destination.
-   It is shown only when you add a new destination, not when you reopen one.
-2. Enter a **Destination name**.
-3. Choose the **Run mode**. **Dry run is shown only when an admin has turned it on** under **Settings → System
-   Settings** (`EhrWriteBack:DryRunEnabled`, off by default, like clone mode). Without it, an Epic, eClinicalWorks or
-   athenahealth destination starts on **Test on a FHIR server**; the FHIR server tile offers only **Live**, which you
-   must choose yourself. With it on, the choices are Live, Dry run, Test and Dry run is already selected:
+1. Under **Connection**, choose where to write. The list has two groups:
+   - **Epic** (or eClinicalWorks / athenahealth): the EHR's own write connections. Choosing one is a **live** run:
+     records are written into the EHR, and EHR writes cannot be undone;
+   - **Test servers (receive exactly what Epic would)**: FHIR test servers. Choosing one is a **test run**: the
+     records are really written, but to the test server, shaped exactly as the EHR would receive them. Nothing
+     reaches the EHR. The line under the list reads "Test run: nothing reaches Epic."
 
-   | Run mode | What happens | When to use it |
-   |---|---|---|
-   | **Live: write into …** | Records are written into the EHR. EHR writes cannot be undone. | Only after a dry run of this workflow looks right. |
-   | **Dry run: check every record, send nothing** | Segue checks each record against the real EHR — finds the patient, looks for a visit where needed, checks what Segue has already sent — and writes nothing. | Always first, and after any change, when your admin has turned Dry run on. |
-   | **Test on a FHIR server: send exactly what … would get to a test server instead** | The records are really written, but to a FHIR test server, shaped exactly as the EHR would receive them. Nothing reaches the EHR. Not offered on the FHIR server tile. | To see the actual records an EHR would get, before any live write. |
-
-   Why keep Dry run when Test exists: only a dry run checks against the **real** EHR (its patients, its visits, and
-   what Segue's app there is allowed to do). A test server cannot tell you whether the EHR will find your patients.
-   A destination already saved as a dry run stays a dry run even if the setting is later turned off; it shows "Dry run
-   is turned off in System Settings. This destination stays a dry run until you choose another Run mode." A change to
-   the setting shows in the destination form after the System Settings are saved.
-4. Under **Write to** (or **Test server** in a test run), choose a connection. Only connections that fit the EHR and
-   run mode are listed. To make one here, click **New connection**.
-5. A blue note lists the types this EHR accepts. Click **Next**.
+   Nothing is chosen for you, so a live run is always your own choice. To make a connection here, click **New Epic
+   connection** or **New test server**. A new test server is chosen for you; a new EHR connection is not ("The new
+   connection was added. Choose it above to write into Epic.").
+2. Click **Next**. The destination takes the connection's name; you can change it on Review.
 
 ### Step 2 — Resource types
 
@@ -180,8 +172,7 @@ This list holds every destination and every **EHR write connection** (the login 
    **Resource types to read**; a reopened destination keeps what was saved.)
 2. Untick what this destination should not write.
 3. **Greyed types** are read by the source but cannot be written here. The card says why:
-   - "Not accepted by Epic" ("Not accepted by this FHIR server" on the FHIR server tile) — this EHR has no way to
-     receive that type;
+   - "Not accepted by Epic" — this EHR has no way to receive that type;
    - "Needs a CSV / SQL Table source" — it needs the EHR's own ids, which only your own data can supply;
    - "Not read by this destination's source" — it was ticked before, but the source no longer reads it. Untick it.
 4. A type the EHR writes in more than one way lists its **kinds of record** under it, for example Observation →
@@ -217,22 +208,32 @@ This list holds every destination and every **EHR write connection** (the login 
 - eClinicalWorks: **Note author (eCW practitioner id)**.
 - athenahealth: **Provider id (athena)** and **Department id (athena)**. Leave the department empty to use the
   connection's department. If neither this box nor the connection has a department, new patients are rejected.
+- **Dry run: check every record, send nothing**: shown only when an admin has turned Dry run on under **Settings →
+  System Settings** (`EhrWriteBack:DryRunEnabled`, off by default). Segue checks each record against the real EHR —
+  finds the patient, looks for a visit where needed, checks what Segue has already sent — and writes nothing. Only a
+  dry run checks against the **real** EHR; a test server cannot tell you whether the EHR will find your patients. A
+  destination saved as a dry run stays one even if the setting is later turned off, and shows "Dry run is turned off
+  in System Settings. This destination stays a dry run until you untick it."
 
 Click **Next**.
 
 ### Step 4 — Review
 
-Check the cards: **Destination type** (for example "EHR write-back — Epic"), **De-identification**, **Name**,
-**Writes to** (connection and EHR), **Mode**, **Patients** and **Resource types** (each with the kinds of record
-written, for example "Observation: Vital signs, Lines, drains and airways"). Then click **✓ Add to Workflow**,
-and click **Save** at the top of the workflow builder.
+1. **Destination name**: left empty, the destination takes the connection's name (shown in grey). Type to change it.
+2. Check the cards: **Destination type** (for example "EHR write-back — Epic"), **De-identification**, **Writes to**
+   (connection and EHR), **Mode** (for example "Live: writes into Epic" or "Test run: nothing reaches Epic"),
+   **Patients** and **Resource types** (each with the kinds of record written, for example "Observation: Vital signs,
+   Lines, drains and airways").
+3. For a live run, a red line reads "Live: records will be written into Epic. This cannot be undone."
+4. Click **✓ Add to Workflow**, then click **Save** at the top of the workflow builder.
 
 ## 4. A database destination (SQL Server, MongoDB and others)
 
 1. On the source node click **＋**, then the destination, for example **SQL Server** or **MongoDB**.
 2. Steps: **Connection → Resource types → Map fields → Review**.
-3. **Connection**: pick an existing connection or fill in a new one, then **Test connection & Next** (SQL) or
-   **Next**.
+3. **Connection**: choose a saved connection, or click **New connection** and fill in the form, then **Test
+   connection & Next** (SQL) or **Next**. There is no name to type here: the destination takes the connection's
+   name, and you can change it on **Review** (**Destination name**).
 4. **Resource types**: on a new destination whose source lists its types, the source's types start ticked. Untick the ones this destination does not need. One source
    can feed several destinations that each take a different part, for example three types to SQL Server and two
    to MongoDB.
@@ -241,7 +242,9 @@ and click **Save** at the top of the workflow builder.
 
 ## 5. Run the workflow and read the report
 
-1. Go to **Workflows**. In the row's **⋮** menu click **Run** (the workflow must be Ready).
+1. Go to **Workflows**. In the row's **⋮** menu click **Run** (the workflow must be Ready). If the workflow writes
+   live into an EHR, Segue first asks "Write into Epic now?" (records written cannot be undone). Click **Run** to go
+   ahead. It asks until a run of the workflow succeeds; after you edit and save the workflow, it asks again.
 2. When it has finished, open **Execution History** and click the run.
 3. On the write-back step click **View dry-run report** (after a dry run) or **View write-back report** (after a
    live run, and also after a test run).
@@ -257,8 +260,7 @@ and click **Save** at the top of the workflow builder.
    - **Unknown** means it was sent but no answer came back. It is not resent automatically; check it in the EHR.
 6. **Copy report** copies the report text. Reports hold counts and reasons only, no patient details.
 
-**Other FHIR destinations.** On the **Aidbox** and **Azure FHIR Service** destinations (not the EHR group's **FHIR
-server** tile) with the write mode **Upsert by resource id (PUT)**, a record the server refuses is now skipped and
+**Other FHIR destinations.** On the **Aidbox** and **Azure FHIR Service** destinations (not an EHR write-back) with the write mode **Upsert by resource id (PUT)**, a record the server refuses is now skipped and
 reported with the reason; the rest of the run carries on and finishes as a partial success.
 
 ## 6. Troubleshooting
@@ -266,7 +268,7 @@ reported with the reason; the rest of the run carries on and finishes as a parti
 | You see | Why | What to do |
 |---|---|---|
 | "Patient could not be found in the EHR", "Patient not found by identifier", "Uncertain patient match, left for review" | Segue only writes to a patient it can find for certain. | Make sure the source sends identifiers the EHR knows (and name, birth date, gender, phone, address for matching). If the EHR clearly answers that it has no such patient, ticking **Create the patient when the EHR has no match** under Options lets Segue create one. |
-| Live run to the **FHIR server** tile writes nothing for new patients ("Patient match failed" or "Uncertain patient match, left for review") | Many plain FHIR servers (for example a local test server) cannot compare patient details, so they answer with an error instead of "no such patient". Segue never guesses, and **Create the patient when the EHR has no match** does not help here: it is used only after a clear "no such patient". | Send patients with an identifier the server already has. (A **Test** run treats "not found" as "no such patient", so there the create option does work.) |
+| An older destination that writes plain FHIR to a FHIR server (made with the former **FHIR server** tile; it still runs) writes nothing for new patients ("Patient match failed" or "Uncertain patient match, left for review") | Many plain FHIR servers (for example a local test server) cannot compare patient details, so they answer with an error instead of "no such patient". Segue never guesses, and **Create the patient when the EHR has no match** does not help here: it is used only after a clear "no such patient". | Send patients with an identifier the server already has. (A **Test** run treats "not found" as "no such patient", so there the create option does work.) |
 | A type is **greyed** on Resource types | The EHR does not accept it, or it needs your own data source, or the source no longer reads it. The card gives the reason. | Follow the reason, or leave the type out. |
 | **Next** stays unavailable on Options | A ticked type needs an option turned on (its note on Resource types says which). | Turn that option on, or go **Back** and untick the type. |
 | A type you want is **not listed at all** | The source does not read it. | Open the source and tick it under **Resource types to read**. |
@@ -274,4 +276,4 @@ reported with the reason; the rest of the run carries on and finishes as a parti
 | CSV / SQL card says **Needs fixing** | A table, view or column is missing, the query returns too few columns for the template, or (CSV) the file has no column the template needs. | Fix the query, file or template as the message says, then click **Check** again. |
 | Everything runs as a dry run on eClinicalWorks or athenahealth | **Vendor write APIs activated** is off on the write connection. | Turn it on (Destination Connections → Edit) once the practice has those APIs. You need the EHR Write-Back edit permission. Types noted "Sent as a dry run only for now" stay dry runs even then. |
 | **Delete** (or **Edit** on Source Connections) is greyed on a connection | A workflow still reads or writes through it. Only administrators see this lock. | Change or remove that workflow first. |
-| No **Test** on an EHR or destination row | Only database rows can be tested for now. | Use a **Dry run** of the workflow to check an EHR connection. |
+| No **Test** on an EHR or destination row | Only database rows can be tested for now. | Run the workflow against a test server, or as a **Dry run** when your admin has turned it on, to check an EHR connection. |
