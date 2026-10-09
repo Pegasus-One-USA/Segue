@@ -17,6 +17,7 @@ import {
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
 import { NewWorkflowDialogComponent } from '../../components/shared/new-workflow-dialog/new-workflow-dialog.component';
+import { LiveEhrWriteBadgeComponent } from '../../components/shared/live-ehr-write-badge/live-ehr-write-badge.component';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
 import { AuthStore } from '../../auth/store/auth.store';
@@ -63,7 +64,7 @@ type FilterCategory = 'status' | 'audience' | 'source' | 'destination' | 'lastRu
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule, RouterLink, NewWorkflowDialogComponent],
+  imports: [CommonModule, DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule, RouterLink, NewWorkflowDialogComponent, LiveEhrWriteBadgeComponent],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })

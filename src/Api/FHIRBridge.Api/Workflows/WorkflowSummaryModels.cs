@@ -45,7 +45,11 @@ public sealed record WorkflowSummaryDto(
     IReadOnlyList<string>? ResourceTypes = null,
     /// <summary>The run status of the most recent run, if any — same value as <see cref="LastRun"/>, restated here
     /// only so the facet contract reads symmetrically with the filter that consumes it.</summary>
-    string? LastRunStatus = null);
+    string? LastRunStatus = null,
+    /// <summary>The EHR vendor codes (e.g. <c>Epic</c>, <c>Athenahealth</c>) this workflow's EHR Write-Back nodes write
+    /// into for real; empty when every write-back is a test or dry run, or there is none. See
+    /// <see cref="FHIRBridge.Runtime.Application.Workflows.LiveEhrWriteTargets"/>. Drives the list's "Writes to" badge.</summary>
+    IReadOnlyList<string>? LiveEhrWriteTargets = null);
 
 /// <summary>One server-side page of the workflow-list screen — <see cref="Items"/> is just this page's rows;
 /// <see cref="TotalCount"/> is the count across every row matching the active search/filters (before paging), for

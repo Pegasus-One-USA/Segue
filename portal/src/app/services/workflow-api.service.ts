@@ -363,6 +363,9 @@ export interface WorkflowSummary {
   destinationTypes?: string[] | null;
   /** Every FHIR resource type this workflow's source nodes name in their stored configuration. */
   resourceTypes?: string[] | null;
+  /** The EHR vendor codes (Epic, Healow, Athenahealth, GenericFhir) this workflow's EHR Write-Back destinations write
+   *  into for real; empty when every write-back is a test or dry run, or there is none. */
+  liveEhrWriteTargets?: string[] | null;
 }
 
 /** Server-side page of /workflows/summary — items is just this page's rows, totalCount is the full matching-row

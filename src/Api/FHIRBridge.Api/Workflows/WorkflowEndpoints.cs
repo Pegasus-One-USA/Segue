@@ -763,7 +763,8 @@ public static class WorkflowEndpoints
                     workflow.WorkflowNumber,
                     workflowDestinationTypes.ToArray(),
                     workflowResourceTypes.ToArray(),
-                    lastRun?.Status.ToString()));
+                    lastRun?.Status.ToString(),
+                    LiveEhrWriteTargets.Of(workflow.Nodes)));
             }
 
             // Resolve each summary's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/pre-conversion

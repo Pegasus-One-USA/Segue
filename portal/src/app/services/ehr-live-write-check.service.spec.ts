@@ -9,14 +9,14 @@ const definition = (...nodes: WorkflowNodeDto[]) => ({ nodes }) as WorkflowDefin
 
 /** Before a run: a live EHR write-back that has not completed a run asks "Write into <EHR> now?". */
 describe('EhrLiveWriteCheckService', () => {
-  it('finds the live EHR write-backs, never a test run, a dry run or a plain FHIR server', () => {
+  it('finds the live EHR write-backs, never a test run or a dry run; a plain FHIR server written for real counts', () => {
     expect(liveEhrWritesOf(definition(
       node({ dest_ehrVendor: 'Epic', dest_dryRun: 'false' }),
       node({ dest_ehrVendor: 'Healow', dest_dryRun: 'false', dest_testAsVendor: 'Healow' }),
       node({ dest_ehrVendor: 'Athenahealth', dest_dryRun: 'true' }),
       node({ dest_ehrVendor: 'GenericFhir', dest_dryRun: 'false' }),
       { id: 'x', configurationJson: '{bad' } as WorkflowNodeDto,
-    ))).toEqual(['Epic']);
+    ))).toEqual(['Epic', 'FHIR test server']);
   });
 
   it('counts only a successful run since the workflow was last saved', () => {
@@ -46,6 +46,13 @@ describe('EhrLiveWriteCheckService', () => {
     const runs = jasmine.createSpy('runs');
     expect(check(definition(node({ dest_ehrVendor: 'Epic', dest_dryRun: 'true' })), runs)).toBeNull();
     expect(runs).not.toHaveBeenCalled();
+  });
+
+  it('names every live EHR', () => {
+    expect(check(definition(
+      node({ dest_ehrVendor: 'Epic', dest_dryRun: 'false' }),
+      node({ dest_ehrVendor: 'Athenahealth', dest_dryRun: 'false' }),
+    ), () => of([]))).toBe('Epic and athenahealth');
   });
 
   it('asks when the run history cannot be read', () => {

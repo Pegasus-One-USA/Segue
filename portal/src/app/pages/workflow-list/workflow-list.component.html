@@ -306,6 +306,7 @@
                       }
                       {{ w.action === 'Launch' ? 'Interactive launch' : 'Backend / on-demand' }}
                     </span>
+                    <app-live-ehr-write-badge [vendors]="w.liveEhrWriteTargets" />
                   </div>
                 </div>
               </td>

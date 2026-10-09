@@ -18,6 +18,12 @@ import { WorkflowBuildAssemblerServiceV2 } from '../../services/workflow-build-a
 import { SOURCES } from '../../data/sources-v2.data';
 import { TRANSFORMS } from '../../data/transforms-v2.data';
 import { SQL_FAMILY_DESTINATION_TYPES } from '../../models/transform-v2.model';
+import { LiveEhrSaveConfirmService } from '../../services/live-ehr-save-confirm.service';
+import {
+  LiveEhrWriteTarget,
+  liveEhrWriteTargetsOfCanvas,
+  liveEhrWriteTargetsOfDefinition,
+} from '../../services/live-ehr-write-targets.util';
 
 import { Source } from '../../models/source.model';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node-v2.model';
@@ -65,6 +71,11 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private readonly blockingConfirm = inject(BlockingConfirmService);
   private readonly permissions = inject(PermissionService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+  private readonly liveEhrSaveConfirm = inject(LiveEhrSaveConfirmService);
+
+  /** The live EHR writes in the last saved version of this workflow (none for a brand-new one). Save asks before it
+   *  adds live EHR writing that is not in here; see LiveEhrSaveConfirmService. */
+  private savedLiveEhrTargets: LiveEhrWriteTarget[] = [];
 
   constructor() {
     this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges(), undefined, () => this.isSaveInProgress());
@@ -377,13 +388,27 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     // future gap in assemble()'s own detection), routing it to the plain save would silently persist the secret
     // in plaintext node config while leaving the backing connection's Key Vault reference untouched. Never let
     // that happen — force the provisioning path whenever an unresolved secret is present, regardless of hasSpecs.
-    if (hasSpecs || this.hasUnresolvedSecrets()) {
-      this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
-      return;
-    }
+    const provisions = hasSpecs || this.hasUnresolvedSecrets();
 
-    // No wizard-drawn specs → plain design save.
-    this.saveWorkflow(name, existingId, isLaunch);
+    // Saving a new live EHR write asks first: from then on every run writes into the EHR, scheduled and triggered
+    // runs included. Cancel saves nothing and leaves the canvas as it is.
+    this.liveEhrSaveConfirm
+      .confirmSave(this.savedLiveEhrTargets, liveEhrWriteTargetsOfCanvas(this.store.nodes()))
+      .subscribe(confirmed => {
+        if (!confirmed) return;
+        if (provisions) {
+          this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
+          return;
+        }
+
+        // No wizard-drawn specs → plain design save.
+        this.saveWorkflow(name, existingId, isLaunch);
+      });
+  }
+
+  /** After a save succeeds: what is on the canvas now is the last saved version. */
+  private markLiveEhrTargetsSaved(): void {
+    this.savedLiveEhrTargets = liveEhrWriteTargetsOfCanvas(this.store.nodes());
   }
 
   /** True if any canvas node holds a freshly typed secret (source Client Secret, destination password/secret/
@@ -413,6 +438,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       next: result => {
         this.currentWorkflowId.set(result.workflowId);
         this.workflowIdInput.set(result.workflowId);
+        this.markLiveEhrTargetsSaved();
         const synced =
           Object.keys(result.sourceConnectionIds).length +
           Object.keys(result.destinationIds).length +
@@ -553,6 +579,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     this.workflowApi.load(id).subscribe({
       next: workflow => {
         this.graphMapper.loadDefinition(workflow);
+        this.savedLiveEhrTargets = liveEhrWriteTargetsOfDefinition(workflow.nodes);
         this.currentWorkflowId.set(workflow.id);
         this.workflowName.set(workflow.name);
         this.workflowDescription.set(workflow.description ?? '');
@@ -1078,6 +1105,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         this.workflowStatus.set('Saving workflow...');
         this.workflowApi.save(request, workflowId).subscribe({
           next: saved => {
+            this.markLiveEhrTargetsSaved();
             this.currentWorkflowId.set(saved.id);
             this.workflowIdInput.set(saved.id);
             this.workflowName.set(saved.name);
@@ -1212,6 +1240,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
    *  ngOnInit/onReset), not after a save (see finishSave). */
   private resetCanvasAndWorkflowState(): void {
     this.store.reset();
+    this.savedLiveEhrTargets = [];
     this.currentWorkflowId.set(null);
     this.workflowName.set('');
     // Otherwise the freshly-blanked name field reads as invalid immediately — nameTouched stays true from
