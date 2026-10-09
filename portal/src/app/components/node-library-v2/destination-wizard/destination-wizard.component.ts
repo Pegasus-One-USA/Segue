@@ -37,7 +37,7 @@ import {
 } from '../../../services/mapping-catalog.service';
 import { EhrWriteCapabilitiesService } from '../../../services/ehr-write-capabilities.service';
 import { EhrWriteTypeGridComponent } from './ehr-write-type-grid/ehr-write-type-grid.component';
-import { EhrWriteTarget, classifyEhrWriteTypes } from './ehr-write-type-grid/ehr-write-type-grid.model';
+import { EhrWriteTarget, classifyEhrWriteTypes, missingOptInsFor } from './ehr-write-type-grid/ehr-write-type-grid.model';
 import { EhrWriteTargetService } from './ehr-write-type-grid/ehr-write-target.service';
 import {
   EhrWriteVendor,
@@ -665,6 +665,9 @@ export class DestinationWizardComponent implements OnInit {
   // Same pattern for ehrVendor(): two EHR tiles share destType 'ehrwriteback', so a switch between them keeps this
   // instance and only rebinds the vendor. Undefined until the first effect run records the starting vendor.
   private _lastEhrVendor: EhrWriteVendor | null | undefined = undefined;
+  // Whether Step 2's one-time "start with every type the source reads ticked" has been decided (see the pre-tick
+  // effect). Once true it never ticks again, so a user who unticks types and goes back and forth keeps their choice.
+  private _resourcePreTickDone = false;
   // Same pattern, passed straight through to the mapping canvas — its "Load JSON payload"/"Preview
   // output" actions now live in the dialog header (see NodeLibraryDialogComponent), not this canvas's
   // own toolbar, so the wizard just forwards these without reacting to them itself.
@@ -1342,6 +1345,13 @@ export class DestinationWizardComponent implements OnInit {
     return this.selectedResources().filter((r) => !strictSet.has(r));
   });
   readonly selectedResources = signal<string[]>([]);
+  /** The Step 2 hint's "These are the N resource types your source reads": for an EHR every type the source reads
+   *  (greyed ones included, as the grid shows them), otherwise what is offered from the source's list. */
+  readonly sourceTypesShownCount = computed(() =>
+    this.isEhrWriteBack()
+      ? new Set(this.sourceResources()).size
+      : this.strictAvailableGroups().length,
+  );
   readonly groupSearchQuery = signal<string>('');
   readonly filteredGroups = computed(() => {
     const q = this.groupSearchQuery().trim().toLowerCase();
@@ -2479,7 +2489,42 @@ export class DestinationWizardComponent implements OnInit {
         this.ehrWritableResourceTypes.set(null);
         this.ehrWriteTarget.set(null);
         this._hasProgressed.set(false);
+        // Starting over for the new EHR: its own accepted types are ticked the first time Step 2 opens again.
+        this._resourcePreTickDone = false;
       });
+    });
+
+    // A NEW destination whose source declares the types it reads opens Step 2 with all of them ticked (for an EHR,
+    // only those the EHR accepts — never the greyed ones), so a user who wants everything just clicks Next. Decided
+    // once: a reopened destination keeps its saved selection, a chain-node entry keeps its own, a legacy source with
+    // no declared list starts unticked as before, and nothing is ever re-ticked after the user unticks it.
+    effect(() => {
+      if (this.step() !== 2 || this._resourcePreTickDone) return;
+      if (this.editNode() || this.chainNodeEntry() || this.selectedResources().length > 0
+        || this.sourceResources().length === 0) {
+        this._resourcePreTickDone = true;
+        return;
+      }
+      let toTick: string[];
+      if (this.isEhrWriteBack()) {
+        // Wait for the target EHR's rows: until then nothing is known to be writable.
+        // A type that only becomes writable once an option is turned on (an API variant, a holder encounter) is left
+        // for the user to choose: ticking it would hold Options' Next until that option is on.
+        const rows = this.ehrWriteTypeRows();
+        const target = this.ehrWriteTarget();
+        if (!rows || !target) return;
+        const sourceIsTabular = this.sourceIsTabular();
+        toTick = rows
+          .filter((r) => r.selectable)
+          .map((r) => r.resourceType)
+          .filter((t) => missingOptInsFor([t], target.capabilities, target.optIns, sourceIsTabular).length === 0);
+      } else {
+        // Wait for a live probe of the source, which may still narrow what is offered.
+        if (this.discoverProbeStatus() === 'probing') return;
+        toTick = this.strictAvailableGroups();
+      }
+      this._resourcePreTickDone = true;
+      untracked(() => this.selectedResources.set([...toTick]));
     });
 
     // Fetch the array-aware FHIR catalog for every data group on offer. The field picker prefers it

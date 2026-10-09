@@ -324,12 +324,16 @@
         <span class="dw-section-hint">
           @if (discoverProbeStatus() === 'probing') {
             Choose which FHIR resources to include in this destination. Checking which ones this source supports…
+          } @else if (sourceResources().length > 0 && (!isEhrWriteBack() || ehrWriteTypeRows())) {
+            @if (sourceTypesShownCount() === 1) {
+              This is the 1 resource type your source reads.
+            } @else {
+              These are the {{ sourceTypesShownCount() }} resource types your source reads. Untick any this destination doesn't need.
+            }
           } @else if (isEhrWriteBack() && ehrWriteTypeRows()) {
-            Showing the {{ ehrWriteTypeRows()!.length }} resource type{{ ehrWriteTypeRows()!.length === 1 ? '' : 's' }} this source reads.
+            Choose from the {{ ehrWriteTypeRows()!.length }} resource type{{ ehrWriteTypeRows()!.length === 1 ? '' : 's' }} {{ ehrLabel() }} accepts.
           } @else if (discoverProbeStatus() === 'done' && availableGroups().length < SUPPORTED_RESOURCE_TYPES.length) {
-            Showing {{ availableGroups().length }} of {{ SUPPORTED_RESOURCE_TYPES.length }} resources — filtered to what this source supports.
-          } @else if (sourceResources().length > 0) {
-            Choose from the resource types this destination's source reads.
+            Choose from the {{ availableGroups().length }} resource type{{ availableGroups().length === 1 ? '' : 's' }} this source supports.
           } @else {
             Choose which FHIR resources to include in this destination.
           }
@@ -370,8 +374,6 @@
               <strong class="dw-rc-name" [title]="r">{{ r }}</strong>
               @if (isEhrWriteBack()) {
                 <span class="dw-rc-scope">Create in the EHR</span>
-              } @else {
-                <span class="dw-rc-scope" [title]="'user/' + r + '.read'">{{ 'user/' + r + '.read' }}</span>
               }
               @if (unsupportedSelectedResources().includes(r)) {
                 <span class="dw-rc-warn-badge" title="No longer confirmed supported by this source">⚠ not confirmed supported</span>
