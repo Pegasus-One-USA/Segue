@@ -70,9 +70,6 @@ describe('DestinationWizardComponent — Step 2 starts ticked', () => {
     destinations.hasExecutionHistory.and.returnValue(of({ hasExecutionHistory: false }) as never);
 
     TestBed.configureTestingModule({
-      // The wizard hands every Step 1 form the same input bag (activeFormInputs); the SQL form does not declare the
-      // Fabric-only 'destinationType', which the test module would otherwise report as an error on render.
-      errorOnUnknownProperties: false,
       imports: [DestinationWizardComponent],
       providers: [
         provideHttpClient(),

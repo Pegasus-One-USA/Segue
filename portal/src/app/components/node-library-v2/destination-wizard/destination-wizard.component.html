@@ -290,7 +290,7 @@
     }
     @if (!isFhir()) {
       <div [class.dw-hidden]="!isStepActive(1) && !(isStepActive(3) && isEhrWriteBack() && !chainNodeEntry())">
-        <ng-container [ngComponentOutlet]="activeFormType()" [ngComponentOutletInputs]="activeFormInputs()" />
+        <ng-container [ngComponentOutlet]="activeFormType()" [ngComponentOutletInputs]="boundFormInputs()" />
       </div>
     }
 
@@ -973,7 +973,7 @@
       <div class="dw-review-grid">
         <div class="dw-review-card">
           <span class="dw-review-key">Destination type</span>
-          <span class="dw-review-val">{{ destLabel() }}</span>
+          <span class="dw-review-val">{{ reviewDestLabel() }}</span>
         </div>
         <div class="dw-review-card">
           <span class="dw-review-key">De-identification</span>

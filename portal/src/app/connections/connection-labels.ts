@@ -44,6 +44,13 @@ export function destinationTypeLabel(type: string): string {
     ?? type;
 }
 
+/** An EHR write-back destination named by the EHR it writes to, as its Node Library tile names it
+ *  ("EHR write-back — Epic"); just "EHR write-back" when no write vendor is known. */
+export function ehrWriteBackLabel(vendor: string | null | undefined): string {
+  const base = destinationTypeLabel('EhrWriteBack');
+  return vendor ? `${base} — ${writeVendorLabel(vendor)}` : base;
+}
+
 /** The SMART application type an EHR read connection is set up under — the "Audience" column. */
 export const AUDIENCE_LABELS: Readonly<Record<string, string>> = {
   Backend: 'Backend System',

@@ -119,6 +119,19 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
       expect(inputs['sourceIsTabular']).toBeTrue();
     });
 
+    it('binds only the inputs the loaded form declares', () => {
+      create('sql');
+      expect(Object.keys(wizard.activeFormInputs())).toContain('destinationType');
+      expect(Object.keys(wizard.boundFormInputs()).sort()).toEqual(['existingDestinationId', 'reusingExisting']);
+
+      create('fabricwarehouse');
+      expect(wizard.boundFormInputs()['destinationType']).toBe('DataFabricWarehouse');
+
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      expect(Object.keys(wizard.boundFormInputs()).sort())
+        .toEqual(['ehrVendor', 'section', 'selectedResourceTypes', 'sourceIsTabular']);
+    });
+
     it('shows the options half on Step 3, but not for a chain node', () => {
       create('ehrwriteback', { ehrVendor: 'Epic' });
       wizard.step.set(3);
@@ -272,6 +285,25 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
 
       useForm(fakeEhrForm({ reviewLines: () => ({ writesTo: 'w', mode: 'm' }) }));
       expect(wizard.ehrReviewLines()).toEqual({ writesTo: 'w', mode: 'm' });
+    });
+
+    it('names the destination type by the EHR of the tile', () => {
+      create('ehrwriteback', { ehrVendor: 'Healow' });
+      expect(wizard.reviewDestLabel()).toBe('EHR write-back — eClinicalWorks');
+
+      create('ehrwriteback', { ehrVendor: 'GenericFhir' });
+      expect(wizard.reviewDestLabel()).toBe('EHR write-back — FHIR server');
+
+      create('sql');
+      expect(wizard.reviewDestLabel()).toBe('SQL Server');
+    });
+
+    it('without a tile, a test run is named by the EHR it stands in for, not the test server', () => {
+      create('ehrwriteback');
+      const form = fakeEhrForm();
+      Object.assign(form.config, { dest_ehrVendor: 'GenericFhir', dest_testAsVendor: 'Athenahealth', dest_dryRun: 'false' });
+      useForm(form);
+      expect(wizard.reviewDestLabel()).toBe('EHR write-back — athenahealth');
     });
   });
 

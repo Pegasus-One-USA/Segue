@@ -60,6 +60,33 @@ describe('DestinationConfigurationKindComponent', () => {
     expect(mongo.address).toBeNull();
   });
 
+  it('names an EHR write-back by the EHR it writes to, a test run by the EHR it stands in for', () => {
+    const writeBack = (id: string, metadata: Record<string, string> | string | null) => ({
+      ...SQL, id, destinationType: 'EhrWriteBack',
+      connectionMetadataJson: typeof metadata === 'string' || metadata === null ? metadata : JSON.stringify(metadata),
+    }) as DestinationConfigurationDto;
+    const { kind } = create();
+    svc.getAllPages.and.returnValue(of([
+      writeBack('w1', { dest_ehrVendor: 'Epic', dest_testAsVendor: '' }),
+      writeBack('w2', { dest_ehrVendor: 'GenericFhir', dest_testAsVendor: 'Healow', dest_dryRun: 'false' }),
+      writeBack('w3', { dest_ehrVendor: 'GenericFhir' }),
+      writeBack('w4', null),
+      writeBack('w5', '{not json'),
+    ]));
+
+    const listed = rows(kind);
+
+    expect(listed.map(r => r.typeLabel)).toEqual([
+      'EHR write-back — Epic',
+      'EHR write-back — eClinicalWorks',
+      'EHR write-back — FHIR server',
+      'EHR write-back',
+      'EHR write-back',
+    ]);
+    // One type key for every write-back, so the "EHR write-back" filter option lists them all.
+    expect(listed.every(r => r.filterKeys.includes('destination:EhrWriteBack'))).toBeTrue();
+  });
+
   it('cannot list without destinationconnections.view', () => {
     expect(create(code => code !== 'destinationconnections.view').kind.canList()).toBeFalse();
     TestBed.resetTestingModule();

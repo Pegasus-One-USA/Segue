@@ -159,11 +159,6 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
   private readonly permissions = inject(PermissionService);
   private readonly destroyRef = inject(DestroyRef);
 
-  /** Declared so the wizard's activeFormInputs() can pass them uniformly; this form has no secret to reuse. */
-  readonly reusingExisting = input<boolean>(false);
-  readonly existingDestinationId = input<string | null>(null);
-  readonly destinationType = input<string | null>(null);
-  readonly fabricLandingMode = input<string | null>(null);
   /** The vendor the Node Library tile presets; null when the form was opened without one. */
   readonly ehrVendor = input<EhrWriteVendor | null>(null);
   /** Which half the wizard shows: the connection (Step 1) or the options (Step 3). */

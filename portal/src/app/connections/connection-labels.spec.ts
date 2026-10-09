@@ -1,4 +1,4 @@
-import { audienceLabel, databaseTypeLabel, destinationTypeLabel, ehrVendorLabel, writeVendorLabel } from './connection-labels';
+import { audienceLabel, databaseTypeLabel, destinationTypeLabel, ehrVendorLabel, ehrWriteBackLabel, writeVendorLabel } from './connection-labels';
 
 describe('connection labels', () => {
   it('names EHR vendors the way admins do', () => {
@@ -27,6 +27,14 @@ describe('connection labels', () => {
     expect(destinationTypeLabel('SqlServer')).toBe('SQL Server');
     expect(destinationTypeLabel('EhrWriteBack')).toBe('EHR write-back');
     expect(destinationTypeLabel('Unknown')).toBe('Unknown');
+  });
+
+  it('names an EHR write-back by its EHR as the tile does', () => {
+    expect(ehrWriteBackLabel('Epic')).toBe('EHR write-back — Epic');
+    expect(ehrWriteBackLabel('Healow')).toBe('EHR write-back — eClinicalWorks');
+    expect(ehrWriteBackLabel('Athenahealth')).toBe('EHR write-back — athenahealth');
+    expect(ehrWriteBackLabel('GenericFhir')).toBe('EHR write-back — FHIR server');
+    expect(ehrWriteBackLabel(null)).toBe('EHR write-back');
   });
 
   it('labels audiences, null when unknown or unset', () => {

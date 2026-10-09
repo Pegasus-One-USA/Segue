@@ -81,6 +81,17 @@ export function savedWriteVendorOf(fields: Readonly<Record<string, string | unde
   return isEhrWriteVendor(own) ? own : null;
 }
 
+/** savedWriteVendorOf for a saved destination's connectionMetadataJson; null when it cannot be read. The wizard's
+ *  "copy settings from" list and the Destination Connections Type column both read a saved row through this. */
+export function savedWriteVendorOfMetadata(metadataJson: string | null | undefined): EhrWriteVendor | null {
+  try {
+    const fields: unknown = JSON.parse(metadataJson || '{}');
+    return fields && typeof fields === 'object' ? savedWriteVendorOf(fields as Record<string, string | undefined>) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The run modes a vendor offers: a FHIR server (or a vendor not known yet) has no test server to stand in for. */
 export function runModesFor(vendor: EhrWriteVendor | null): EhrRunMode[] {
   return vendor === null || vendor === 'GenericFhir' ? ['live', 'dryRun'] : ['live', 'dryRun', 'test'];

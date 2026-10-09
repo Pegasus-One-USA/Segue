@@ -22,7 +22,8 @@ import {
   ConnectionRow,
   ConnectionRowAction,
 } from '../../../connections/connection-row.model';
-import { destinationTypeLabel } from '../../../connections/connection-labels';
+import { destinationTypeLabel, ehrWriteBackLabel } from '../../../connections/connection-labels';
+import { savedWriteVendorOfMetadata } from '../../../components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-back.model';
 
 /**
  * Destinations (DestinationConfiguration rows) on the Destination Connections page. Edit and Delete are gated by
@@ -73,7 +74,8 @@ export class DestinationConfigurationKindComponent implements ConnectionKindHost
       key: `${this.kind}:${d.id}`,
       id: d.id,
       name: d.name,
-      typeLabel: destinationTypeLabel(d.destinationType),
+      typeLabel: DestinationConfigurationKindComponent.typeLabel(d),
+      // A write-back keeps the one type key whatever its EHR, so the "EHR write-back" filter option lists them all.
       filterKeys: ['kind:destination', `destination:${d.destinationType}`],
       audience: null,
       address: d.target || null,
@@ -84,6 +86,13 @@ export class DestinationConfigurationKindComponent implements ConnectionKindHost
       actionOn: d.modifiedOnUtc || d.createdOnUtc || null,
       raw: d,
     };
+  }
+
+  /** The Type column: an EHR write-back is named by the EHR it writes to (the one a test run stands in for). */
+  private static typeLabel(d: DestinationConfigurationDto): string {
+    return d.destinationType === 'EhrWriteBack'
+      ? ehrWriteBackLabel(savedWriteVendorOfMetadata(d.connectionMetadataJson))
+      : destinationTypeLabel(d.destinationType);
   }
 
   /** Loads the execution-history flag for rows now on screen that have none yet. Silent: a background flag. */

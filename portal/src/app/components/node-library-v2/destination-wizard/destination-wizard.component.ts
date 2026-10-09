@@ -13,6 +13,7 @@ import {
   viewChild,
   afterNextRender,
   OnInit,
+  reflectComponentType,
 } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -42,8 +43,10 @@ import { EhrWriteTargetService } from './ehr-write-type-grid/ehr-write-target.se
 import {
   EhrWriteVendor,
   savedWriteVendorOf,
+  savedWriteVendorOfMetadata,
   vendorLabel,
 } from './destination-forms/ehr-write-back/ehr-write-back.model';
+import { ehrWriteBackLabel } from '../../../connections/connection-labels';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import {
   CreateDestinationConfigurationRequest,
@@ -916,6 +919,19 @@ export class DestinationWizardComponent implements OnInit {
           }
         : {}),
     };
+  }
+
+  /** The inputs the loaded Step 1 form declares, by the name a binding uses. */
+  private readonly activeFormInputNames = computed<ReadonlySet<string>>(() => {
+    const type = this.activeFormType();
+    return new Set(type ? (reflectComponentType(type)?.inputs ?? []).map((i) => i.templateName) : []);
+  });
+
+  /** activeFormInputs() narrowed to what the loaded form declares — what the outlet binds. The bag is shared by
+   *  every form, and setting an input a form does not declare is an error (NG0303). */
+  boundFormInputs(): Record<string, unknown> {
+    const declared = this.activeFormInputNames();
+    return Object.fromEntries(Object.entries(this.activeFormInputs()).filter(([name]) => declared.has(name)));
   }
 
   /** Live instance of whatever DESTINATION_FORM_REGISTRY component is currently loaded, or null before the
@@ -2031,7 +2047,7 @@ export class DestinationWizardComponent implements OnInit {
     const options = this.existingOptions();
     const vendor = this.ehrVendor();
     if (!this.isEhrWriteBack() || !vendor) return options;
-    return options.filter((o) => DestinationWizardComponent.ehrVendorOfDestination(o) === vendor);
+    return options.filter((o) => savedWriteVendorOfMetadata(o.connectionMetadataJson) === vendor);
   });
   readonly existingOptionsLoading = signal(false);
   readonly selectedExistingId = signal<string | null>(null);
@@ -2121,15 +2137,6 @@ export class DestinationWizardComponent implements OnInit {
   private static readonly FABRIC_WAREHOUSE_TYPES: DestinationTypeV2[] = ['DataFabricWarehouse'];
   private static readonly APIENDPOINT_TYPES: DestinationTypeV2[] = ['ApiEndpoint'];
   private static readonly EHR_WRITEBACK_TYPES: DestinationTypeV2[] = ['EhrWriteBack'];
-  /** The vendor a saved EHR write-back destination writes as (savedWriteVendorOf: the vendor a test run stands in
-   *  for, else its own); null when its settings cannot be read or name no write vendor. */
-  private static ehrVendorOfDestination(o: DestinationConfigurationDto): EhrWriteVendor | null {
-    try {
-      return savedWriteVendorOf(JSON.parse(o.connectionMetadataJson || '{}') as Record<string, string>);
-    } catch {
-      return null;
-    }
-  }
 
   // ── computed helpers ──────────────────────────────────────────────────────
   // MySQL/PostgreSQL reuse the SQL family's form/steps (server/database/auth + live table/column introspection) —
@@ -2255,6 +2262,13 @@ export class DestinationWizardComponent implements OnInit {
                                 ? 'EHR Write-Back'
                                 : 'CSV',
   );
+  /** The Review step's "Destination type": an EHR write-back names the EHR it writes to, as its tile does (a test
+   *  run's is the EHR it stands in for; the test server shows under "Writes to"). A plain method: the form's saved
+   *  fields are not a signal. */
+  reviewDestLabel(): string {
+    if (!this.isEhrWriteBack()) return this.destLabel();
+    return ehrWriteBackLabel(this.ehrVendor() ?? savedWriteVendorOf(this.activeFormConfig()));
+  }
   readonly resourceKeys = computed(() => this.selectedResources());
 
   /** Resource field/target definition — the built-in catalog entry, or a generic fallback for any other resource. */
