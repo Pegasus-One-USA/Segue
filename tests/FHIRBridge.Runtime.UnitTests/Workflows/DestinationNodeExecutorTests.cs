@@ -422,6 +422,61 @@ public sealed class DestinationNodeExecutorTests
             "cancellation must surface as cancellation, not as an InvalidOperationException blaming earlier writes");
     }
 
+    /// <summary>
+    /// Epic -> FHIR repository: when the destination refuses one Observation (HAPI-1094, its focus points at an
+    /// Observation the server doesn't have), the writer reports that record instead of throwing. The node must then
+    /// finish normally with the written count and surface the record's reason as a skipped type, which is what makes
+    /// the run end PartialSuccess rather than Failed. Synthetic ids only.
+    /// </summary>
+    [Fact]
+    public async Task Fhir_repository_record_rejected_by_the_destination_is_reported_and_the_node_still_completes()
+    {
+        const string Rejection =
+            "Observation/obs-a: the destination rejected it (400): HAPI-1094: Resource Observation/obs-b not found, " +
+            "specified in path: Observation.focus — record was not written.";
+
+        var writer = new Mock<IConfiguredDestinationWriter>();
+        writer.Setup(w => w.WriteAsync(
+                It.IsAny<DestinationConfiguration>(), It.IsAny<MappingProfile>(),
+                It.IsAny<IReadOnlyCollection<MappedDestinationRecord>>(), It.IsAny<PipelineWriteContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult(
+                2, RecordErrors: [Rejection], WrittenResourceIds: ["pat-1", "obs-c"]));
+
+        var writerFactory = new Mock<IConfiguredDestinationWriterFactory>();
+        writerFactory.Setup(f => f.Create(DestinationType.FhirRepository)).Returns(writer.Object);
+
+        var executor = new FhirRepositoryDestinationNodeExecutor(writerFactory.Object);
+        var config = new Dictionary<string, object>
+        {
+            ["destinationId"] = Guid.NewGuid().ToString(),
+            ["secretKeyVaultName"] = "workflow-secrets",
+            ["secretName"] = "dest-test",
+        };
+        var node = new WorkflowDefinition(Guid.NewGuid(), "fhir-repository-destination-node-test", 1).AddNode(
+            WorkflowNodeTypes.FhirRepositoryDestination,
+            WorkflowNodeCategory.Destination,
+            90,
+            configurationJson: JsonSerializer.Serialize(config, JsonOptions));
+
+        var batch = new ResourceBatch(new[]
+        {
+            new ResourceEnvelope("Patient", "pat-1", """{"resourceType":"Patient","id":"pat-1"}"""),
+            new ResourceEnvelope("Observation", "obs-a", """{"resourceType":"Observation","id":"obs-a","focus":[{"reference":"Observation/obs-b"}]}"""),
+            new ResourceEnvelope("Observation", "obs-c", """{"resourceType":"Observation","id":"obs-c"}"""),
+        });
+        var upstream = new WorkflowNodeOutput(
+            Guid.NewGuid(), WorkflowNodeTypes.EpicSource, batch, WorkflowDataContract.ResourceBatch);
+
+        var output = await executor.ExecuteAsync(CreateContext(), node, [upstream], CancellationToken.None);
+
+        output.Metadata["recordsWritten"].Should().Be(2);
+        var skipped = output.Metadata["skippedResourceTypes"].Should().BeAssignableTo<IEnumerable<string>>().Subject.ToList();
+        skipped.Should().ContainSingle()
+            .Which.Should().StartWith("Observation: 1 of 3 record(s) failed to write")
+            .And.Contain("Observation/obs-a")
+            .And.Contain("HAPI-1094: Resource Observation/obs-b not found");
+    }
+
     private static WorkflowNode CreateMedplumNode(Guid destinationId, string? resourceSelection)
     {
         var config = new Dictionary<string, object>

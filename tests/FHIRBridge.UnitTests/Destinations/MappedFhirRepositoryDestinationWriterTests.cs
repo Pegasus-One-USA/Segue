@@ -1402,4 +1402,215 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
         result.RecordErrors.Should().BeNullOrEmpty();
         handler.Requests.Should().ContainSingle();
     }
+
+    // ---- One resource the destination rejects no longer fails the whole write ---------------------------------
+    // Seen live: Epic -> HAPI, two Observations of the same patient referencing each other (focus one way, a
+    // reference back the other). Both are "in the batch", so the pre-write check is satisfied, but whichever is PUT
+    // first points at one HAPI doesn't have yet: "HAPI-1094: Resource Observation/... not found, specified in path:
+    // Observation.focus". That 400 used to throw and fail the run. Synthetic ids only — no patient data.
+
+    /// <summary>
+    /// A HAPI-like destination that enforces referential integrity on write: a PUT whose body references a
+    /// relative <c>Type/id</c> it hasn't stored yet is refused with HAPI's own 400 OperationOutcome.
+    /// </summary>
+    private static Func<HttpRequestMessage, string?, HttpResponseMessage> ReferentialIntegrityServer(HashSet<string> stored) =>
+        (request, body) =>
+        {
+            if (request.Method != HttpMethod.Put)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"resourceType":"Bundle","type":"searchset","total":0}"""),
+                };
+            }
+
+            var resource = System.Text.Json.Nodes.JsonNode.Parse(body!)!.AsObject();
+            var resourceType = resource["resourceType"]!.GetValue<string>();
+            var self = $"{resourceType}/{resource["id"]!.GetValue<string>()}";
+            foreach (var (path, reference) in References(resource, resourceType))
+            {
+                if (reference != self && !stored.Contains(reference))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                    {
+                        Content = new StringContent(
+                            $$"""{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"HAPI-1094: Resource {{reference}} not found, specified in path: {{path}}"}]}"""),
+                    };
+                }
+            }
+
+            stored.Add(self);
+            return new HttpResponseMessage(HttpStatusCode.Created);
+        };
+
+    private static IEnumerable<(string Path, string Reference)> References(System.Text.Json.Nodes.JsonNode? node, string path)
+    {
+        switch (node)
+        {
+            case System.Text.Json.Nodes.JsonObject obj:
+                foreach (var (key, value) in obj)
+                {
+                    if (key == "reference" && value is System.Text.Json.Nodes.JsonValue text)
+                    {
+                        yield return (path, text.GetValue<string>());
+                    }
+                    else
+                    {
+                        foreach (var found in References(value, $"{path}.{key}"))
+                        {
+                            yield return found;
+                        }
+                    }
+                }
+
+                break;
+            case System.Text.Json.Nodes.JsonArray array:
+                foreach (var item in array)
+                {
+                    foreach (var found in References(item, path))
+                    {
+                        yield return found;
+                    }
+                }
+
+                break;
+        }
+    }
+
+    [Fact]
+    public async Task Individual_mode_skips_and_reports_an_observation_whose_focus_the_destination_rejects_and_writes_the_rest()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var stored = new HashSet<string>();
+        handler.RespondWith = ReferentialIntegrityServer(stored);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"pat-1"}""", sourceResourceId: "pat-1"),
+            // obs-a.focus -> obs-b and obs-b.derivedFrom -> obs-a: each needs the other to exist first.
+            Record("""{"resourceType":"Observation","id":"obs-a","subject":{"reference":"Patient/pat-1"},"focus":[{"reference":"Observation/obs-b"}]}""",
+                sourceResourceId: "obs-a", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-b","subject":{"reference":"Patient/pat-1"},"derivedFrom":[{"reference":"Observation/obs-a"}]}""",
+                sourceResourceId: "obs-b", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-c","subject":{"reference":"Patient/pat-1"}}""",
+                sourceResourceId: "obs-c", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        // Everything else is written; the write is a partial success, not a failure.
+        stored.Should().BeEquivalentTo("Patient/pat-1", "Observation/obs-c");
+        result.Count.Should().Be(2);
+        result.WrittenResourceIds.Should().BeEquivalentTo(new[] { "pat-1", "obs-c" });
+
+        // Whichever of the pair went first is reported with the server's own reason naming the missing reference...
+        result.RecordErrors.Should().HaveCount(2);
+        result.RecordErrors.Should().ContainSingle(e =>
+            e.Contains("the destination rejected it (400)")
+            && e.Contains("HAPI-1094: Resource Observation/obs-")
+            && e.Contains("not found, specified in path: Observation.")
+            && e.Contains("record was not written"));
+        // ...and the other one is never sent, so it can't be written pointing at a resource that isn't there.
+        result.RecordErrors.Should().ContainSingle(e =>
+            e.Contains("references Observation/obs-") && e.Contains("not written to the destination in this run"));
+        handler.Requests.Count(r => r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.AbsolutePath.Contains("/Observation/obs-"))
+            .Should().Be(2, "the rejected Observation and obs-c are sent; the one depending on the rejected one is not");
+    }
+
+    [Fact]
+    public async Task Individual_mode_does_not_send_a_record_that_references_one_the_destination_rejected()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.Method != HttpMethod.Put
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            : request.RequestUri!.AbsolutePath.EndsWith("/Observation/obs-bad", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+                {
+                    Content = new StringContent(
+                        """{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"invalid","diagnostics":"Observation.status: minimum required = 1, but only found 0"}]}"""),
+                }
+                : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"obs-bad"}""", sourceResourceId: "obs-bad", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-panel","hasMember":[{"reference":"Observation/obs-bad"}]}""",
+                sourceResourceId: "obs-panel", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-ok","status":"final"}""", sourceResourceId: "obs-ok", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(1);
+        result.WrittenResourceIds.Should().Equal("obs-ok");
+        result.RecordErrors.Should().HaveCount(2);
+        result.RecordErrors.Should().Contain(e =>
+            e.StartsWith("Observation/obs-bad:") && e.Contains("(422)") && e.Contains("minimum required"));
+        result.RecordErrors.Should().Contain(e =>
+            e.StartsWith("Observation/obs-panel:") && e.Contains("references Observation/obs-bad"));
+        handler.Requests.Should().NotContain(r => r.Request.RequestUri!.AbsolutePath.EndsWith("/Observation/obs-panel", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task Individual_mode_still_fails_the_write_when_the_destination_itself_is_unusable(HttpStatusCode status)
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.Method == HttpMethod.Put
+            ? new HttpResponseMessage(status)
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"pat-1"}""", sourceResourceId: "pat-1"),
+            Record("""{"resourceType":"Patient","id":"pat-2"}""", sourceResourceId: "pat-2"),
+        };
+
+        var act = () => writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        await act.Should().ThrowAsync<HttpRequestException>().WithMessage($"*returned {(int)status}*");
+        handler.Requests.Count(r => r.Request.Method == HttpMethod.Put).Should().Be(1, "the first failure stops the write");
+    }
+
+    [Fact]
+    public async Task Individual_mode_still_fails_the_write_when_the_destination_cannot_be_reached()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.Method == HttpMethod.Put
+            ? throw new HttpRequestException("Connection refused")
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+
+        var act = () => writer.WriteAsync(
+            destination, Mapping(), [Record("""{"resourceType":"Patient","id":"pat-1"}""", sourceResourceId: "pat-1")],
+            Context(), CancellationToken.None);
+
+        await act.Should().ThrowAsync<HttpRequestException>().WithMessage("*Connection refused*");
+    }
+
+    [Fact]
+    public async Task Individual_mode_with_no_rejections_reports_no_errors_and_counts_every_record()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var stored = new HashSet<string>();
+        handler.RespondWith = ReferentialIntegrityServer(stored);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"obs-a","focus":[{"reference":"Observation/obs-b"}]}""",
+                sourceResourceId: "obs-a", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-b"}""", sourceResourceId: "obs-b", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(2);
+        result.RecordErrors.Should().BeNull();
+        result.WrittenResourceIds.Should().BeNull();
+        stored.Should().BeEquivalentTo("Observation/obs-a", "Observation/obs-b");
+    }
 }

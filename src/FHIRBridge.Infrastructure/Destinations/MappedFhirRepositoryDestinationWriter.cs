@@ -26,8 +26,9 @@ namespace FHIRBridge.Infrastructure.Destinations;
 /// byte identical to before: no secret re-parsing, no header attached.
 ///
 /// Writing is opt-in via the non-secret <c>dest_fhirWriteMode</c> metadata flag (absent/"individual", "bundle", or
-/// "transaction"). Absent/"individual" — every row before this capability existed — keeps the exact one-<c>PUT</c>-
-/// per-record loop, byte-for-byte. "bundle" and "transaction" both send every record with real FHIR JSON as one FHIR
+/// "transaction"). Absent/"individual" — every row before this capability existed — keeps the one-<c>PUT</c>-
+/// per-record loop; a resource the destination refuses on its own (400/409/412/422) is reported for that record
+/// instead of failing the run (see <see cref="WriteIndividuallyAsync"/>). "bundle" and "transaction" both send every record with real FHIR JSON as one FHIR
 /// <c>Bundle</c> POSTed once to the repository root, differing only in the Bundle's own <c>type</c> and — as a direct
 /// consequence — their failure-isolation model:
 /// <list type="bullet">
@@ -171,30 +172,22 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
         if (!isBundleFamily)
         {
-            // Exactly today's behavior — byte-for-byte — when dest_fhirWriteMode is absent or anything other than
-            // "bundle"/"transaction". One PUT per writable record; a failure throws and fails the whole route, as
-            // before. Records with a confirmed-missing reference were already excluded from `records` above and
-            // never reach here.
-            foreach (var record in records)
-            {
-                var (resourceType, resourceId, body) = BuildFhirResource(record, resolvedResourceCache);
-                var endpoint = $"{baseUrl}/{resourceType}/{resourceId}";
-                using var request = new HttpRequestMessage(HttpMethod.Put, endpoint)
-                {
-                    Content = new StringContent(body, Encoding.UTF8, "application/fhir+json")
-                };
-                if (authHeader is not null)
-                {
-                    request.Headers.Authorization = authHeader;
-                }
-
-                using var response = await httpClient.SendAsync(request, cancellationToken);
-                await EnsureSuccessOrThrowAsync(response, HttpMethod.Put, endpoint, cancellationToken);
-            }
+            // Used when dest_fhirWriteMode is absent or anything other than "bundle"/"transaction": one PUT per
+            // writable record. Records with a confirmed-missing reference were already excluded from `records` above
+            // and never reach here. A destination that rejects ONE resource (400/409/412/422 — e.g. HAPI's
+            // referential-integrity check on a reference this run could not satisfy) skips and reports just that
+            // record; anything that says the destination itself is unusable (auth, 404 base, 5xx, network) still
+            // throws and fails the run. See WriteIndividuallyAsync.
+            var individualErrors = new List<string>(referenceErrors);
+            var individualWrittenIds = new List<string?>();
+            await WriteIndividuallyAsync(
+                httpClient, baseUrl, authHeader, records, resolvedResourceCache, sourceBaseUrl,
+                individualErrors, individualWrittenIds, cancellationToken);
 
             return new DestinationWriteResult(
-                records.Count,
-                RecordErrors: referenceErrors.Count > 0 ? referenceErrors : null);
+                individualWrittenIds.Count,
+                RecordErrors: individualErrors.Count > 0 ? individualErrors : null,
+                WrittenResourceIds: individualErrors.Count > 0 ? individualWrittenIds : null);
         }
 
         // Bundle mode: split into records with real FHIR JSON (bundleable) and the non-FHIR fallback flow
@@ -228,23 +221,9 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             }
         }
 
-        foreach (var record in fallbackRecords)
-        {
-            var (resourceType, resourceId, body) = BuildFhirResource(record, resolvedResourceCache);
-            var endpoint = $"{baseUrl}/{resourceType}/{resourceId}";
-            using var request = new HttpRequestMessage(HttpMethod.Put, endpoint)
-            {
-                Content = new StringContent(body, Encoding.UTF8, "application/fhir+json")
-            };
-            if (authHeader is not null)
-            {
-                request.Headers.Authorization = authHeader;
-            }
-
-            using var response = await httpClient.SendAsync(request, cancellationToken);
-            await EnsureSuccessOrThrowAsync(response, HttpMethod.Put, endpoint, cancellationToken);
-            writtenResourceIds.Add(record.SourceResourceId);
-        }
+        await WriteIndividuallyAsync(
+            httpClient, baseUrl, authHeader, fallbackRecords, resolvedResourceCache, sourceBaseUrl,
+            recordErrors, writtenResourceIds, cancellationToken);
 
         return new DestinationWriteResult(
             writtenResourceIds.Count,
@@ -881,6 +860,126 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
     private static string Truncate(string text, int maxLength)
         => text.Length <= maxLength ? text : text[..maxLength] + "…";
+
+    /// <summary>
+    /// One <c>PUT</c> per record, in the order given (already dependency-ordered by the caller). The pre-write
+    /// reference check can't catch everything: two records in the same batch that reference each other (Epic
+    /// Observations do this — e.g. <c>focus</c>/<c>hasMember</c> one way, <c>derivedFrom</c> back) are both "present
+    /// in the batch", yet whichever is written first points at one that doesn't exist yet, and a server enforcing
+    /// referential integrity (HAPI: "HAPI-1094: Resource Observation/... not found, specified in path:
+    /// Observation.focus") rejects it. That used to throw and fail the whole run on one resource. Now:
+    /// <list type="bullet">
+    /// <item>a per-resource rejection (<see cref="IsRecordLevelRejection"/>) is reported for that record, with the
+    /// server's own reason, and the run goes on;</item>
+    /// <item>a later record that references one the destination rejected (or that was skipped for this reason) is
+    /// not sent at all and is reported naming that reference — it would only be rejected too, or, on a lenient
+    /// server, written with a reference to something that isn't there;</item>
+    /// <item>anything else non-2xx (401/403, a 404 base URL, 5xx, ...) and every transport failure still throws,
+    /// so a destination that can't be written to at all still fails the run.</item>
+    /// </list>
+    /// </summary>
+    private static async Task WriteIndividuallyAsync(
+        HttpClient httpClient,
+        string baseUrl,
+        System.Net.Http.Headers.AuthenticationHeaderValue? authHeader,
+        IReadOnlyCollection<MappedDestinationRecord> records,
+        Dictionary<MappedDestinationRecord, (string ResourceType, JsonObject Resource)?> resolvedResourceCache,
+        string? sourceBaseUrl,
+        List<string> recordErrors,
+        List<string?> writtenResourceIds,
+        CancellationToken cancellationToken)
+    {
+        var notWritten = new HashSet<ResourceReference>();
+
+        foreach (var record in records)
+        {
+            var recordLabel = $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}";
+            ResourceReference? identity = TryParseFhirResource(record, resolvedResourceCache, out var ownType, out var ownResource)
+                ? new ResourceReference(ownType, ownResource["id"]!.GetValue<string>())
+                : null;
+
+            var blockedBy = ExtractReferencedResources(record.SourceJson, sourceBaseUrl)
+                .Where(notWritten.Contains)
+                .Distinct()
+                .ToList();
+            if (blockedBy.Count > 0)
+            {
+                if (identity is { } skipped)
+                {
+                    notWritten.Add(skipped);
+                }
+
+                recordErrors.Add(
+                    $"{recordLabel}: references {string.Join(", ", blockedBy.Select(m => $"{m.Type}/{m.Id}"))}, which " +
+                    $"{(blockedBy.Count == 1 ? "was" : "were")} not written to the destination in this run — record was not written.");
+                continue;
+            }
+
+            var (resourceType, resourceId, body) = BuildFhirResource(record, resolvedResourceCache);
+            var endpoint = $"{baseUrl}/{resourceType}/{resourceId}";
+            using var request = new HttpRequestMessage(HttpMethod.Put, endpoint)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/fhir+json")
+            };
+            if (authHeader is not null)
+            {
+                request.Headers.Authorization = authHeader;
+            }
+
+            using var response = await httpClient.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                writtenResourceIds.Add(record.SourceResourceId);
+                continue;
+            }
+
+            if (!IsRecordLevelRejection(response.StatusCode))
+            {
+                await EnsureSuccessOrThrowAsync(response, HttpMethod.Put, endpoint, cancellationToken);
+            }
+
+            if (identity is { } rejected)
+            {
+                notWritten.Add(rejected);
+            }
+
+            var reason = await ReadRejectionReasonAsync(response, cancellationToken);
+            recordErrors.Add(
+                $"{recordLabel}: the destination rejected it ({(int)response.StatusCode}): {reason} — record was not written.");
+        }
+    }
+
+    /// <summary>
+    /// Statuses a FHIR server uses to refuse one resource's content while staying perfectly usable for the rest —
+    /// invalid content or an unresolvable reference (400, 422), a version/state conflict (409, 412). Everything else
+    /// (401/403 auth, 404/405 wrong base or unsupported type, 429/5xx, ...) describes the destination, not the record.
+    /// </summary>
+    private static bool IsRecordLevelRejection(System.Net.HttpStatusCode statusCode) =>
+        statusCode is System.Net.HttpStatusCode.BadRequest
+            or System.Net.HttpStatusCode.Conflict
+            or System.Net.HttpStatusCode.PreconditionFailed
+            or System.Net.HttpStatusCode.UnprocessableEntity;
+
+    /// <summary>The server's own reason from an <c>OperationOutcome</c> body, made safe to show; else the bare status.</summary>
+    private static async Task<string> ReadRejectionReasonAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var fallback = $"{(int)response.StatusCode} {response.ReasonPhrase}".TrimEnd();
+        string? outcomeText = null;
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(body) && JsonNode.Parse(body) is JsonObject outcome)
+            {
+                outcomeText = ExtractOutcomeText(outcome);
+            }
+        }
+        catch (JsonException)
+        {
+            // Not an OperationOutcome (e.g. an HTML error page) — fall back to the bare status.
+        }
+
+        return SafeErrorText.SanitizeOr(outcomeText, fallback);
+    }
 
     /// <summary>
     /// Replaces a bare <c>response.EnsureSuccessStatusCode()</c> with one that captures the response body — a
