@@ -46,8 +46,9 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'athena',
     'healow',
     'generic-fhir',
-    // CSV / SQL Table rows → FHIR (feeds FHIR destinations and EHR write-back).
-    'tabular',
+    // SQL database / CSV file rows → FHIR (feeds FHIR destinations and EHR write-back).
+    'tabular-sql',
+    'tabular-csv',
     // Phase 2+: 'cerner', 'allscripts', 'meditech', 'hl7v2', 'sample'
   ],
 
@@ -90,7 +91,6 @@ const PHASE_1_CONFIG: PhaseConfig = {
     'dest-ehr-epic',
     'dest-ehr-ecw',
     'dest-ehr-athena',
-    'dest-ehr-fhir',
     // V2's chain steps — all three are the point of this builder, so none is phase-gated. (In V1 these
     // were 'field-mapping' plus the granular normalize/terminology/deid-* ids, all held back to a later
     // phase; V2 collapses them into these two consolidated steps — see transforms-v2.data.ts.)

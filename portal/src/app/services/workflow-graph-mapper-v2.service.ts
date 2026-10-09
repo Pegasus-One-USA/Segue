@@ -375,7 +375,9 @@ export class WorkflowGraphMapperServiceV2 {
       // so matching SOURCES by transformId alone would mislabel those as Epic. __vendorId (see nodeToRequest)
       // is the reliable source for a node saved since it was added; guessVendorId's name-match is the
       // best-effort fallback for anything older.
-      const vendorId = config['__vendorId'] ?? this.guessVendorId(name) ?? transformId;
+      // A CSV / SQL source shows as the tile its tab_kind names (a node saved before the split carries 'tabular').
+      const tabularId = config['tab_kind'] ? (config['tab_kind'] === 'csv' ? 'tabular-csv' : 'tabular-sql') : undefined;
+      const vendorId = tabularId ?? config['__vendorId'] ?? this.guessVendorId(name) ?? transformId;
       const source = SOURCES.find(candidate => candidate.id === vendorId);
       return {
         id: node.id,

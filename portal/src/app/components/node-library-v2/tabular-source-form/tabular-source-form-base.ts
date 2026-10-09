@@ -1,7 +1,7 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { DestroyRef, Directive, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ValidationErrors, Validators } from '@angular/forms';
 import { SourceConfigFormComponent } from '../../shared-v2/config-form/config-form-v2.contract';
 import {
   TabularCheckResult,
@@ -11,12 +11,12 @@ import {
   TabularStreamCheck,
   TabularTemplatePreset,
 } from '../../../services/tabular-source.service';
-import { TabularCsvFilesComponent } from './tabular-csv-files/tabular-csv-files.component';
-import { TabularDatabasePickerComponent } from './tabular-database-picker/tabular-database-picker.component';
+import { normalizeDatasetKey } from './tabular-dataset-key';
 import { TabularEntry } from './tabular-entry.model';
-import { TabularStreamCardComponent } from './tabular-stream-card/tabular-stream-card.component';
 
-const CONNECTOR = 'CSV / SQL Table';
+/** The node's 'Connector' value, kept for both tiles: canvas and run history recognise a CSV / SQL source by it. */
+export const TABULAR_CONNECTOR = 'CSV / SQL Table';
+const CONNECTOR = TABULAR_CONNECTOR;
 
 /** Resource types offered in "Resource types to read". Those with a starting template come first. */
 const READABLE_TYPES = [
@@ -32,21 +32,19 @@ interface SecretRef {
   name: string;
 }
 
+const datasetKeyValidator = (control: AbstractControl): ValidationErrors | null =>
+  normalizeDatasetKey(control.value as string) ? null : { datasetKey: true };
+
 /**
- * Headless form for the CSV / SQL Table source (TabularSourceNode). It puts the steps together; each step is its own
- * component: where rows come from (TabularDatabasePickerComponent / TabularCsvFilesComponent), the resource types to
- * read, and one TabularStreamCardComponent per type (its own query or file, and its own template). "Check" asks the
- * API to verify every query or file against what it reads without reading a row; the form will not save until the
- * current settings have passed. Same contract as the other source forms (getFields() returns a flat field bag).
+ * What the "SQL database" and "CSV file" source forms (TabularSourceNode) share. Each form is its own component with
+ * its own first step (TabularSqlSourceFormComponent / TabularCsvSourceFormComponent); after that both name the
+ * resource types to read, with one TabularStreamCardComponent per type (its own query or file, and its own template).
+ * "Check" asks the API to verify every query or file against what it reads without reading a row; the form will not
+ * save until the current settings have passed. Same contract as the other source forms (getFields() returns a flat
+ * field bag). The name fills itself in until the user types one; the data set key is automatic (see each form).
  */
-@Component({
-  selector: 'app-tabular-source-form',
-  standalone: true,
-  imports: [ReactiveFormsModule, TabularDatabasePickerComponent, TabularCsvFilesComponent, TabularStreamCardComponent],
-  templateUrl: './tabular-source-form.component.html',
-  styleUrl: './tabular-form-shared.scss',
-})
-export class TabularSourceFormComponent implements SourceConfigFormComponent {
+@Directive()
+export abstract class TabularSourceFormBase implements SourceConfigFormComponent {
   private readonly fb = inject(FormBuilder);
   private readonly api = inject(TabularSourceService);
   private readonly destroyRef = inject(DestroyRef);
@@ -54,18 +52,29 @@ export class TabularSourceFormComponent implements SourceConfigFormComponent {
   readonly initialFields = input<Record<string, string> | null>(null);
 
   readonly form = this.fb.nonNullable.group({
-    name: [CONNECTOR, [Validators.required]],
-    datasetKey: ['', [Validators.required, Validators.pattern(/^[A-Za-z0-9][A-Za-z0-9 _.-]{1,62}[A-Za-z0-9]$/)]],
-    kind: ['sql' as 'csv' | 'sql'],
+    name: [''],
+    datasetKey: ['', [datasetKeyValidator]],
     maxRows: ['5000', [Validators.pattern(/^\d{1,5}$/)]],
   });
 
-  readonly kind = signal<'csv' | 'sql'>('sql');
+  /** Where this form's rows come from. */
+  abstract readonly kind: () => 'csv' | 'sql';
+  /** The tile's own name, used when nothing better names the source. */
+  protected abstract readonly tileName: string;
+  /** "SQL: <database>" / "CSV: <first file>", or '' while there is nothing to name it after. */
+  protected abstract autoName(): string;
+
+  /** The user typed a name of their own (or the node was saved with one): stop filling it in. */
+  protected readonly nameEdited = signal(false);
+  /** The user typed a key of their own, or the node was saved with one: it is never changed for them. */
+  protected readonly keyKept = signal(false);
+  /** The Advanced section is open because its key needs fixing. */
+  readonly advancedOpen = signal(false);
   readonly presets = signal<TabularTemplatePreset[]>([]);
   readonly connectionId = signal<string | null>(null);
-  private readonly connection = signal<TabularSqlConnection | null>(null);
+  protected readonly connection = signal<TabularSqlConnection | null>(null);
   /** Kept from a node whose database is not a saved one (saved before databases were listed), so it still runs. */
-  private readonly legacySecret = signal<SecretRef | null>(null);
+  protected readonly legacySecret = signal<SecretRef | null>(null);
   readonly files = signal<TabularSourceFile[]>([]);
   readonly entries = signal<TabularEntry[]>([]);
   readonly busy = signal<'check' | 'preview' | null>(null);
@@ -82,7 +91,6 @@ export class TabularSourceFormComponent implements SourceConfigFormComponent {
 
   constructor() {
     this.api.templatePresets().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ next: p => this.presets.set(p) });
-    this.form.controls.kind.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(k => this.kind.set(k));
 
     effect(() => {
       const fields = this.initialFields();
@@ -92,16 +100,18 @@ export class TabularSourceFormComponent implements SourceConfigFormComponent {
     });
   }
 
-  onConnection(connection: TabularSqlConnection | null): void {
-    this.connection.set(connection);
-    this.connectionId.set(connection?.id ?? null);
-    if (connection) this.legacySecret.set(null);
+  onNameInput(): void {
+    this.nameEdited.set(!!this.form.controls.name.value.trim());
+    if (!this.nameEdited()) this.refreshName();
   }
 
-  onFileUploaded(file: TabularSourceFile): void {
-    this.files.update(list => [...list.filter(f => f.id !== file.id), file]);
-    // A type with no file yet reads the one just uploaded.
-    this.entries.update(list => list.map(e => (e.fileId ? e : { ...e, fileId: file.id })));
+  onKeyEdited(): void {
+    this.keyKept.set(true);
+  }
+
+  /** Fills the name in from what the source reads, unless the user named it. */
+  protected refreshName(): void {
+    if (!this.nameEdited()) this.form.controls.name.setValue(this.autoName());
   }
 
   toggleType(type: string, checked: boolean): void {
@@ -167,7 +177,12 @@ export class TabularSourceFormComponent implements SourceConfigFormComponent {
   getFields(): Record<string, string> | null {
     this.form.markAllAsTouched();
     const streams = this.streamsJson();
-    if (this.form.controls.name.invalid || this.form.controls.datasetKey.invalid || this.form.controls.maxRows.invalid || streams === null) {
+    if (this.form.controls.datasetKey.invalid) {
+      this.advancedOpen.set(true);
+      this.error.set('The data set identity under Advanced is not valid.');
+      return null;
+    }
+    if (this.form.controls.maxRows.invalid || streams === null) {
       return null;
     }
 
@@ -185,7 +200,7 @@ export class TabularSourceFormComponent implements SourceConfigFormComponent {
     const v = this.form.getRawValue();
     const sql = this.kind() === 'sql';
     return {
-      __name: v.name || CONNECTOR,
+      __name: v.name.trim() || this.autoName() || this.tileName,
       Connector: CONNECTOR,
       'App context': 'Tabular data',
       tab_kind: this.kind(),
@@ -250,7 +265,7 @@ export class TabularSourceFormComponent implements SourceConfigFormComponent {
     return JSON.stringify(stored);
   }
 
-  private secret(): SecretRef | null {
+  protected secret(): SecretRef | null {
     const c = this.connection();
     return c ? { engine: c.engine, vault: c.secretKeyVaultName, name: c.secretName } : this.legacySecret();
   }
@@ -279,14 +294,15 @@ export class TabularSourceFormComponent implements SourceConfigFormComponent {
   }
 
   private populate(fields: Record<string, string>): void {
-    const kind = fields['tab_kind'] === 'csv' ? 'csv' : 'sql';
-    this.form.patchValue({
-      name: fields['__name'] || CONNECTOR,
-      datasetKey: fields['tab_datasetKey'] || '',
-      kind,
-      maxRows: fields['tab_maxRows'] || '5000',
-    });
-    this.kind.set(kind);
+    // A name saved before names filled themselves in ('CSV / SQL Table') is replaced by the automatic one.
+    const savedName = fields['__name'] && fields['__name'] !== CONNECTOR ? fields['__name'] : '';
+    this.form.patchValue({ name: savedName, maxRows: fields['tab_maxRows'] || '5000' });
+    this.nameEdited.set(!!savedName);
+    // A saved key is kept exactly as it is: changing it would make rows already written look new.
+    if (fields['tab_datasetKey']) {
+      this.form.controls.datasetKey.setValue(fields['tab_datasetKey']);
+      this.keyKept.set(true);
+    }
     this.connectionId.set(fields['tab_sqlConnectionId'] || null);
     if (!fields['tab_sqlConnectionId'] && fields['tab_secretName']) {
       this.legacySecret.set({ engine: fields['tab_sqlEngine'] || 'sqlserver', vault: fields['tab_secretKeyVaultName'] || '', name: fields['tab_secretName'] });
@@ -324,7 +340,10 @@ export class TabularSourceFormComponent implements SourceConfigFormComponent {
     this.entries.set(entries);
     for (const fileId of new Set(entries.map(e => e.fileId).filter(Boolean))) {
       this.api.getFile(fileId).subscribe({
-        next: f => this.files.update(list => [...list.filter(x => x.id !== f.id), f]),
+        next: f => {
+          this.files.update(list => [...list.filter(x => x.id !== f.id), f]);
+          this.refreshName();
+        },
         error: () => this.error.set('An uploaded CSV for this source no longer exists. Upload it again.'),
       });
     }
