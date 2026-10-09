@@ -10,8 +10,8 @@ public interface IDeIdentificationService
     /// Applies the rule behind one <see cref="DeIdentificationFieldHop"/> (its Strategy and ConfigJson) to a value
     /// that has already been mapped and transformed — used when a mapped column's own Transformations must run
     /// before its De-identification rule. Same strategy definitions as <see cref="DeIdentifyAsync"/>: a string is
-    /// redacted, a list of strings is redacted item by item, and anything without a string form is left as is,
-    /// except Remove (and Redact of a non-string), which yield null.
+    /// redacted and a plain list of strings is redacted item by item. Fails CLOSED, because the value was built from
+    /// unredacted source data: an unreadable strategy, or any other value shape, yields null — never the value.
     /// </summary>
     object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop);
 }

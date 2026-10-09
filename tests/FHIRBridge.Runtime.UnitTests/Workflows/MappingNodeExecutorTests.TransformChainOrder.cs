@@ -213,6 +213,22 @@ public sealed partial class MappingNodeExecutorTests
     }
 
     [Fact]
+    public async Task A_join_step_that_is_skipped_still_writes_one_string_never_the_raw_list()
+    {
+        // The Concatenation rule's ConfigJson is corrupt, so the executor skips it. The steps before it have already
+        // run once per name; the column must still receive ONE value (the repeats joined), not a List object.
+        var value = await RunChainAsync(
+            [
+                ChainRule(TransformNodeType.StringNormalization, Upper(), order: 0),
+                new TransformationRule(TransformScope.Field, TransformNodeType.ConcatenationTemplating, "not json",
+                    resourceType: "Patient", destinationField: "PatientName", order: 1),
+            ],
+            collapsedValue: "DB", repeats: GivenNames, new StringNormalizationNode(), new ConcatenationTemplatingNode());
+
+        value.Should().BeOfType<string>().Which.Should().Be("DB, TESTER");
+    }
+
+    [Fact]
     public async Task Observation_resource_chains_the_same_way()
     {
         var value = await RunChainAsync(

@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { WorkflowBuilderV2Component } from './workflow-builder-v2.component';
 import { PipelineStoreV2 } from '../../services/pipeline-v2.store';
 import { TransformationRulesService } from '../../components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
@@ -33,18 +33,25 @@ describe('WorkflowBuilderV2 — chain steps follow their rules', () => {
   const ownedProfile = { id: 'profile-1', name: WORKFLOW_ID };
   const deIdRule = { deIdentificationProfileId: 'profile-1', isEnabled: true };
 
-  const step = (id: string, transformId: string, x: number): CanvasNode =>
-    ({ id, kind: 'transform', transformId, x, y: 0, fields: { __name: transformId } }) as unknown as CanvasNode;
+  const step = (id: string, transformId: string, x: number, extra: Record<string, string> = {}): CanvasNode =>
+    ({ id, kind: 'transform', transformId, x, y: 0, fields: { __name: transformId, ...extra } }) as unknown as CanvasNode;
 
-  /** Source → Mapping → Transformation → De-identification → SQL Server, as on the ECW Backend workflow. */
-  function seedChain(): CanvasNode {
+  /** Source → Mapping → Transformation → De-identification → SQL Server, as on the ECW Backend workflow. By default
+   *  both steps were added BY THE BUILDER (__autoAdded) and the destination redacts with this workflow's policy. */
+  function seedChain(options: { autoAdded?: boolean; policy?: string } = {}): CanvasNode {
+    const marker: Record<string, string> = options.autoAdded === false ? {} : { __autoAdded: 'true' };
     const destination = {
       ...step('dest', 'dest-sqlserver', 1200),
-      fields: { __name: 'SQL Server', dest_mappings: JSON.stringify([{ resource: 'Patient', column: 'PatientName' }]) },
+      fields: {
+        __name: 'SQL Server',
+        dest_mappings: JSON.stringify([{ resource: 'Patient', column: 'PatientName' }]),
+        deIdentificationProfileId: options.policy ?? 'profile-1',
+      },
     } as unknown as CanvasNode;
     const nodes: CanvasNode[] = [
       { id: 'src', x: 0, y: 0, fields: { __name: 'ECW' } } as unknown as CanvasNode,
-      step('map', 'field-mapping', 300), step('tra', 'transformation', 600), step('deid', 'deidentification', 900),
+      step('map', 'field-mapping', 300), step('tra', 'transformation', 600, marker),
+      step('deid', 'deidentification', 900, marker),
       destination,
     ];
     const ids = nodes.map(n => n.id);
@@ -117,16 +124,77 @@ describe('WorkflowBuilderV2 — chain steps follow their rules', () => {
     expect(chain()).toEqual(['src', 'map', 'deid', 'dest']);
   });
 
-  it('removes De-identification when its policy has only disabled rules, or no policy belongs to the workflow', () => {
+  it('removes De-identification when the workflow\'s own policy, which the step uses, has only disabled rules', () => {
     const destination = seedChain();
     deIdRules = of([transformationRule, { ...deIdRule, isEnabled: false }]);
-    builder.syncChainNodes(destination);
-    expect(store.byId('deid')).toBeUndefined();
 
+    builder.syncChainNodes(destination);
+
+    expect(store.byId('deid')).toBeUndefined();
+  });
+
+  it('never removes De-identification when the step uses a shared or differently named policy', () => {
+    // The destination's policy picker points at a shared policy: this workflow's own (empty) policy is irrelevant.
+    const destination = seedChain({ policy: 'shared-safe-harbor' });
+    deIdRules = of([]);
+    builder.syncChainNodes(destination);
+    expect(store.byId('deid')).toBeDefined();
+
+    // No policy is named after the workflow at all: the step may still use any other policy, or the default.
     const reseeded = seedChain();
     profiles = of([{ id: 'other', name: 'another-workflow' }]);
     builder.syncChainNodes(reseeded);
-    expect(store.byId('deid')).toBeUndefined();
+    expect(store.byId('deid')).toBeDefined();
+  });
+
+  it('never removes a step the user placed (no __autoAdded marker), even with no rules', () => {
+    const destination = seedChain({ autoAdded: false });
+    transformationRules = of([]);
+    deIdRules = of([]);
+
+    builder.syncChainNodes(destination);
+
+    expect(chain()).toEqual(['src', 'map', 'tra', 'deid', 'dest']);
+  });
+
+  it('marks the steps it adds, so only those can be taken away later', () => {
+    const destination = seedChain();
+    transformationRules = of([]);
+    deIdRules = of([]);
+    builder.syncChainNodes(destination);
+
+    transformationRules = of([transformationRule]);
+    deIdRules = of([deIdRule]);
+    builder.syncChainNodes(destination);
+
+    const added = chain().map(id => store.byId(id)!).filter(n => ['transformation', 'deidentification']
+      .includes((n as unknown as { transformId: string }).transformId));
+    expect(added.length).toBe(2);
+    expect(added.every(n => n.fields['__autoAdded'] === 'true')).toBeTrue();
+  });
+
+  it('ignores a stale "no rules" answer that arrives after a newer one added the step back', () => {
+    const destination = seedChain();
+    const olderLookup = new Subject<object[]>();
+    transformationRules = olderLookup;           // first save: its lookup is still in flight…
+    builder.syncChainNodes(destination);
+    transformationRules = of([transformationRule]);   // …second save answers first: rules exist
+    builder.syncChainNodes(destination);
+
+    olderLookup.next([]);                         // the older, now stale, "no rules" lands last
+
+    expect(store.byId('tra')).toBeDefined();
+  });
+
+  it('keeps every link through a removed step, not only the first', () => {
+    const destination = seedChain();
+    store.addNode({ id: 'audit', x: 600, y: 300, fields: { __name: 'Audit' } } as unknown as CanvasNode);
+    store.addEdge({ id: 'e-extra', from: 'tra', to: 'audit' });
+    transformationRules = of([]);
+
+    builder.syncChainNodes(destination);
+
+    expect(store.outboundEdges('map').map(e => e.to).sort()).toEqual(['audit', 'deid']);
   });
 
   it('a failed lookup removes nothing', () => {

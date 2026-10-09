@@ -1,10 +1,12 @@
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Services;
 using FHIRBridge.Application.Services.Transforms;
 using FHIRBridge.Application.Services.Transforms.Nodes;
+using FHIRBridge.Application.Messaging;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
@@ -28,11 +30,16 @@ namespace FHIRBridge.UnitTests.Workflows;
 ///
 /// Runs the REAL De-identification node (with the real Safe Harbor service and the rule above) straight into the
 /// REAL Mapping node and mapping engine — only the rule repository, destination lookup and rule resolver are fakes.
+///
+/// In the "ErrorCaptureRelay" collection: the real Mapping node writes WorkflowDebug trace lines, which are
+/// process-wide, so running alongside the relay tests (ResourceIdEndToEndTests and co.) would feed them lines
+/// they did not produce.
 /// </summary>
+[Collection("ErrorCaptureRelay")]
 public sealed class TransformBeforeDeIdentificationTests
 {
     private const string PatientJson = """
-        {"resourceType":"Patient","id":"p1","name":[{"use":"official","family":"Sable","given":["DB","Tester"]}]}
+        {"resourceType":"Patient","id":"p1","birthDate":"1980-03-15","name":[{"use":"official","family":"Sable","given":["DB","Tester"]}]}
         """;
 
     private const string MaskConfig = """{"mode":"mask","keepLength":"4"}""";
@@ -68,7 +75,10 @@ public sealed class TransformBeforeDeIdentificationTests
             .AddNode(nodeType, category, 50, configurationJson: JsonSerializer.Serialize(config));
 
     /// <summary>Source → De-identification → Mapping, returning the De-identification output and the mapped record.</summary>
-    private static async Task<(WorkflowNodeOutput DeIdentified, MappedDestinationRecord Record)> RunAsync(
+    /// <summary>Every lineage hop the Mapping node dispatched during the last RunAsync.</summary>
+    private readonly List<LineageHopEntryDto> _lineage = [];
+
+    private async Task<(WorkflowNodeOutput DeIdentified, MappedDestinationRecord Record)> RunAsync(
         SafeHarborDeIdentificationService deIdentification,
         IReadOnlyDictionary<string, IReadOnlyList<TransformationRule>> chains,
         params MappingFieldDto[] columns)
@@ -99,7 +109,12 @@ public sealed class TransformBeforeDeIdentificationTests
         var mapping = new MappingNodeExecutor(
             new JsonMappingEngine(), mappingMaterializer: null, configurationRepository: configuration.Object,
             ruleResolver: resolver.Object,
-            transformNodeRegistry: new TransformNodeRegistry([new ConcatenationTemplatingNode(), new HashingMaskingNode()]),
+            transformNodeRegistry: new TransformNodeRegistry(
+            [
+                new ConcatenationTemplatingNode(), new HashingMaskingNode(), new StringNormalizationNode(),
+                new DefaultNullHandlingNode(), new ArrayListOperationsNode(),
+            ]),
+            lineageCaptureDispatcher: new CollectingLineageDispatcher(_lineage),
             deIdentificationService: deIdentification);
         var mappingNode = Node(WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform, new Dictionary<string, object>
         {
@@ -198,6 +213,205 @@ public sealed class TransformBeforeDeIdentificationTests
             DeIdentificationService(familyMask), PatientNameConcat, Column("PatientName", "$.name[*].given"));
 
         record.Values["PatientName"].Should().Be("DB Tester");   // given is not covered by any rule
+    }
+
+    // ── Joined columns ("a|b"): deferred only when EVERY joined path is covered ──────────────────────────────
+
+    private static readonly TransformationRule FamilyMaskRule = new(
+        TransformScope.ResourceType, TransformNodeType.HashingMasking, MaskConfig,
+        resourceType: "Patient", sourceField: "$.name[*].family",
+        executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId);
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<TransformationRule>> FullNameUpper =
+        new Dictionary<string, IReadOnlyList<TransformationRule>>
+        {
+            ["FullName"] =
+            [
+                new TransformationRule(TransformScope.Field, TransformNodeType.StringNormalization,
+                    """{"case":"upper"}""", resourceType: "Patient", destinationField: "FullName"),
+            ],
+        };
+
+    private static MappingFieldDto JoinedFullName() => Column("FullName", "$.name[*].given[*]|$.name[*].family") with
+    {
+        Format = "joinedFields;delimiter= ",
+    };
+
+    [Fact]
+    public async Task A_joined_column_covered_only_in_part_keeps_redaction_first_and_never_masks_the_uncovered_part()
+    {
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), FullNameUpper, JoinedFullName());
+
+        var value = (string)record.Values["FullName"]!;
+        value.Should().NotContain("TESTER");   // the covered part is still redacted (before the join)
+        value.Should().Contain("SABLE");       // the uncovered part is not swept up in the given rule's mask
+    }
+
+    [Fact]
+    public async Task A_joined_column_covered_in_full_runs_its_Transformations_first_then_both_redactions()
+    {
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule, FamilyMaskRule), FullNameUpper, JoinedFullName());
+
+        var value = (string)record.Values["FullName"]!;
+        value.Should().NotContain("TESTER").And.NotContain("SABLE");
+        value.Should().EndWith("ABLE");        // masked as ONE value, keepLength 4
+    }
+
+    // ── DeIdentifyValue fails closed ──────────────────────────────────────────────────────────────────────
+
+    private static DeIdentificationFieldHop Hop(string configJson = MaskConfig) =>
+        new("$.name[*].given[*]", "Mask", configJson, null, null, true, null);
+
+    [Fact]
+    public void DeIdentifyValue_redacts_a_string_and_each_string_of_a_list()
+    {
+        var service = DeIdentificationService();
+
+        service.DeIdentifyValue("DB Tester", Hop()).Should().Be("*****ster");
+        service.DeIdentifyValue(new List<string?> { "Tester", null }, Hop())
+            .Should().BeEquivalentTo(new[] { "**ster", null });
+    }
+
+    [Fact]
+    public void DeIdentifyValue_returns_null_when_it_cannot_redact_with_certainty()
+    {
+        var service = DeIdentificationService();
+
+        service.DeIdentifyValue("DB Tester", Hop("""{"mode":"no-such-strategy"}""")).Should().BeNull();
+        service.DeIdentifyValue("DB Tester", Hop("not json")).Should().BeNull();
+        service.DeIdentifyValue(System.Text.Json.Nodes.JsonNode.Parse("""{"given":"Tester"}"""), Hop()).Should().BeNull();
+        service.DeIdentifyValue(new Dictionary<string, string> { ["given"] = "Tester" }, Hop()).Should().BeNull();
+        service.DeIdentifyValue("Tester"u8.ToArray(), Hop()).Should().BeNull();
+        service.DeIdentifyValue(42, Hop()).Should().BeNull();
+    }
+
+    // ── The unredacted copy never reaches ToString / equality ─────────────────────────────────────────────
+
+    [Fact]
+    public void An_envelopes_ToString_and_equality_leave_out_the_unredacted_copy()
+    {
+        var redacted = new ResourceEnvelope("Patient", "p1", """{"given":["DB","**ster"]}""");
+        var withCopy = redacted with { PreDeIdentificationPayload = PatientJson };
+
+        withCopy.ToString().Should().NotContain("Tester").And.Contain("**ster").And.Contain("p1");
+        withCopy.Should().Be(redacted);
+        withCopy.GetHashCode().Should().Be(redacted.GetHashCode());
+    }
+
+    // ── Deferral is allowed only where it is safe; everything else keeps redaction-first ─────────────────────
+
+    private static TransformationRule PreMapping(string sourceField, string configJson) => new(
+        TransformScope.ResourceType, TransformNodeType.HashingMasking, configJson,
+        resourceType: "Patient", sourceField: sourceField,
+        executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId);
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<TransformationRule>> Chain(string column, params (TransformNodeType Type, string Config)[] steps) =>
+        new Dictionary<string, IReadOnlyList<TransformationRule>>
+        {
+            [column] = steps
+                .Select((step, order) => new TransformationRule(
+                    TransformScope.Field, step.Type, step.Config, resourceType: "Patient", destinationField: column, order: order))
+                .ToArray(),
+        };
+
+    [Theory]
+    [InlineData("name.given")]           // bare, as the seeded Safe Harbor rules are authored
+    [InlineData("Patient.name.given")]   // resource-qualified, as the transformation-rule screens author them
+    [InlineData("$.name[0].given")]      // indexed
+    public async Task Every_rule_path_convention_is_recognised(string rulePath)
+    {
+        var (_, record) = await RunAsync(
+            DeIdentificationService(PreMapping(rulePath, MaskConfig)), PatientNameConcat, Column("PatientName", "$.name[*].given"));
+
+        record.Values["PatientName"].Should().Be("*****ster");
+    }
+
+    [Fact]
+    public async Task A_chain_with_a_step_that_is_not_text_reshaping_keeps_redaction_first()
+    {
+        var chain = Chain("PatientName",
+            (TransformNodeType.ConcatenationTemplating, """{"mode":"concat","separator":"","template":"{0} {1}"}"""),
+            (TransformNodeType.DefaultNullHandling, "{}"));
+
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), chain, Column("PatientName", "$.name[*].given"));
+
+        record.Values["PatientName"].Should().Be("DB **ster");   // each name masked first, then joined
+    }
+
+    [Fact]
+    public async Task A_Hash_rule_keeps_redaction_first_so_pseudonyms_still_match_hashed_references()
+    {
+        var (_, record) = await RunAsync(
+            DeIdentificationService(PreMapping("$.name[*].given[*]", """{"mode":"hash"}""")), PatientNameConcat,
+            Column("PatientName", "$.name[*].given"));
+
+        var value = (string)record.Values["PatientName"]!;
+        value.Should().NotContain("Tester");
+        value.Split(' ').Should().HaveCount(2);   // two per-name pseudonyms, not one hash of "DB Tester"
+    }
+
+    [Fact]
+    public async Task A_Generalize_rule_keeps_redaction_first_because_it_reads_raw_character_positions()
+    {
+        // Reformats YYYY-MM-DD to MM/DD/YYYY. Applied AFTER the transform, generalize-to-year would take the first
+        // four characters of "03/15/1980" — "03/1", exposing the month. Redaction-first gives "1980" (no match).
+        var chain = Chain("BirthYear", (TransformNodeType.StringNormalization,
+            """{"regexPattern":"^(\\d{4})-(\\d{2})-(\\d{2})$","regexReplacement":"$2/$3/$1"}"""));
+
+        var (_, record) = await RunAsync(
+            DeIdentificationService(PreMapping("$.birthDate", """{"mode":"generalizeDateToYear"}""")), chain,
+            Column("BirthYear", "$.birthDate"));
+
+        record.Values["BirthYear"].Should().Be("1980");
+    }
+
+    [Fact]
+    public async Task A_joined_column_whose_parts_have_different_rules_keeps_redaction_first()
+    {
+        var (_, record) = await RunAsync(
+            DeIdentificationService(GivenMaskRule, PreMapping("$.name[*].family", """{"mode":"redact","token":"[X]"}""")),
+            FullNameUpper, JoinedFullName());
+
+        var value = (string)record.Values["FullName"]!;
+        value.Should().Contain("**STER").And.Contain("[X]").And.NotContain("TESTER").And.NotContain("SABLE");
+    }
+
+    [Fact]
+    public async Task A_failing_step_on_a_deferred_column_never_writes_its_error_text_to_lineage()
+    {
+        var chain = Chain("PatientName", (TransformNodeType.StringNormalization, """{"regexPattern":"("}"""));
+
+        await RunAsync(DeIdentificationService(GivenMaskRule), chain, Column("PatientName", "$.name[*].given"));
+
+        var failed = _lineage.Single(hop => hop.DestinationField == "PatientName" && !hop.Success && hop.NodeType == "StringNormalization");
+        failed.ErrorMessage.Should().StartWith("This step failed. Its message is withheld");
+        JsonSerializer.Serialize(_lineage).Should().NotContain("Tester");
+    }
+
+    [Fact]
+    public async Task A_deferred_value_the_redaction_cannot_handle_is_dropped_and_lineage_says_so()
+    {
+        // ArrayList "count" turns the names into a number, which a mask cannot redact: fail closed, and show it.
+        var chain = Chain("PatientName", (TransformNodeType.ArrayListOperations, """{"operation":"count"}"""));
+
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), chain, Column("PatientName", "$.name[*].given"));
+
+        record.Values["PatientName"].Should().BeNull();
+        var redaction = _lineage.Single(hop => hop.DestinationField == "PatientName" && hop.NodeType == "DeIdentification:Mask");
+        redaction.Success.Should().BeFalse();
+        redaction.ErrorMessage.Should().Contain("dropped");
+    }
+
+    private sealed class CollectingLineageDispatcher : ILineageCaptureDispatcher
+    {
+        private readonly List<LineageHopEntryDto> _hops;
+        public CollectingLineageDispatcher(List<LineageHopEntryDto> hops) => _hops = hops;
+
+        public Task EnqueueAsync(LineageCaptureCommand command, CancellationToken cancellationToken)
+        {
+            _hops.AddRange(command.Entries);
+            return Task.CompletedTask;
+        }
     }
 }
 

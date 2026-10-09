@@ -87,9 +87,12 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             // down for why a template's {0}/{1} are meaningless without them.
             var joinedRows = isJoinedFields ? ResolveJoinedFieldRows(root, field) : null;
 
+            // Resolved ONCE and kept: the transform-chain parts below reuse the same matches (see
+            // TryReadPrimitiveArrayItems) rather than walking the path a second time.
+            var matches = joinedRows is null ? ResolveAll(root, field.JsonPath) : null;
             var resolved = joinedRows is not null
                 ? JoinRows(joinedRows, ParseDelimiter(field.Format), field, errors)
-                : ResolveAll(root, field.JsonPath)
+                : matches!
                     .Select(m => (
                         Value: ConvertElement(
                             m.Element, field.ValueType, field.Format, field.TargetField, errors,
@@ -221,8 +224,8 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             // {0} {1} swallowed it whole: ["DB","Tester"] became "DB, Tester". Hand the chain the array's items
             // instead — the same parts "...given[*]" yields, narrowed by the same instance selection. Only the
             // chain's input changes; the column's own value above is exactly what it was.
-            if (joinedRows is null && correlatedPositions is null && !HasCsvAggregate(field.Format)
-                && TryReadPrimitiveArrayItems(root, field, policy, instanceIndex) is { } arrayItems)
+            if (matches is not null && correlatedPositions is null && !HasCsvAggregate(field.Format)
+                && TryReadPrimitiveArrayItems(matches, field, policy, instanceIndex) is { } arrayItems)
             {
                 rawArrayValues[field.TargetField] = arrayItems;
             }
@@ -645,22 +648,17 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         return kept.Count > 0 ? kept : values;
     }
 
-    /// <summary>True when the field's Format carries the "index=N" marker the "Nth instance" instance
-    /// selection stamps (see field-mapping-model.ts) — the counterpart to <see cref="HasCsvAggregate"/>,
-    /// mutually exclusive with it (the UI's instance-selection control offers First/All/Nth/Criteria as one
-    /// choice, never two at once). 0-based: 0 means the first occurrence — the same occurrence "First"
-    /// (no marker at all) already picks — so a row switched from "First" to "Nth instance" at N=0 behaves
-    /// identically.</summary>
     /// <summary>
     /// The items of the arrays-of-plain-values a field's path stops on, as transform-chain parts — each item
     /// carrying its array's index path plus its own position, so <see cref="SelectInstance"/> and
-    /// <see cref="TakeFirstInstance"/> narrow them exactly as they narrow "...[*]" matches. Null when the path
-    /// matched no such array (an object, a scalar, or an array holding objects), leaving the parts as they were.
+    /// <see cref="TakeFirstInstance"/> narrow them exactly as they narrow "...[*]" matches. Takes the matches the
+    /// column's own value was resolved from, so the path is never walked twice. Null when the path matched no
+    /// such array (an object, a scalar, or an array holding objects), leaving the parts as they were.
     /// </summary>
     private static List<object?>? TryReadPrimitiveArrayItems(
-        JsonElement root, MappingFieldDto field, ArrayPolicy policy, int? instanceIndex)
+        IReadOnlyList<(JsonElement Element, IReadOnlyList<int> Indices)> matches, MappingFieldDto field,
+        ArrayPolicy policy, int? instanceIndex)
     {
-        var matches = ResolveAll(root, field.JsonPath);
         if (matches.Count == 0 || !matches.All(m => m.Element.ValueKind == JsonValueKind.Array
                 && m.Element.EnumerateArray().All(item => item.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))))
         {
@@ -688,6 +686,12 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             : values;
     }
 
+    /// <summary>True when the field's Format carries the "index=N" marker the "Nth instance" instance
+    /// selection stamps (see field-mapping-model.ts) — the counterpart to <see cref="HasCsvAggregate"/>,
+    /// mutually exclusive with it (the UI's instance-selection control offers First/All/Nth/Criteria as one
+    /// choice, never two at once). 0-based: 0 means the first occurrence — the same occurrence "First"
+    /// (no marker at all) already picks — so a row switched from "First" to "Nth instance" at N=0 behaves
+    /// identically.</summary>
     private static int? ParseInstanceIndex(string? format)
     {
         if (string.IsNullOrWhiteSpace(format))

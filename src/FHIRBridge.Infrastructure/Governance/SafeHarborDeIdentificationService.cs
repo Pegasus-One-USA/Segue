@@ -301,38 +301,8 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
     /// property name, which is what the traversal already does anyway: it fans out across every element of an
     /// array it meets, so redaction applies to all of them rather than one.
     /// </summary>
-    internal static string[] ParseSourceFieldPath(string sourceField, string resourceType)
-    {
-        var path = sourceField.Trim();
-
-        if (path.StartsWith("$.", StringComparison.Ordinal))
-        {
-            path = path[2..];
-        }
-        else if (path.StartsWith("$", StringComparison.Ordinal))
-        {
-            path = path[1..];
-        }
-
-        var resourcePrefix = resourceType + ".";
-        if (path.StartsWith(resourcePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            path = path[resourcePrefix.Length..];
-        }
-
-        return path
-            .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(StripIndexer)
-            .Where(segment => segment.Length > 0)
-            .ToArray();
-    }
-
-    /// <summary>Reduces "address[0]" / "address[*]" to "address" — see <see cref="ParseSourceFieldPath"/>.</summary>
-    private static string StripIndexer(string segment)
-    {
-        var bracket = segment.IndexOf('[', StringComparison.Ordinal);
-        return bracket < 0 ? segment : segment[..bracket].TrimEnd();
-    }
+    internal static string[] ParseSourceFieldPath(string sourceField, string resourceType) =>
+        DeIdentificationSourcePath.Segments(sourceField, resourceType);
 
     /// <summary>Best-effort read of the same path <see cref="ApplyPath"/> would mutate — used only to capture a
     /// lineage hop's before/after value, so it deliberately mirrors ApplyPath's array-fan-out/object-descent
@@ -370,30 +340,33 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
 
     public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop)
     {
-        // The hop carries the rule's own config, so the strategy is read exactly as DeIdentifyAsync read it.
+        // Fails CLOSED: the value reaching here is a deferred column's chain output, built from UNREDACTED source
+        // data, so anything this cannot redact with certainty is dropped (null), never passed through. The hop
+        // carries the rule's own config, so the strategy is read exactly as DeIdentifyAsync read it.
         if (value is null || !TryReadStrategy(hop.ConfigJson, out var strategy))
         {
-            return value;
+            return null;
         }
 
         return value switch
         {
             string text => RedactValue(text, strategy, hop.ConfigJson),
-            // A transform chain can hand back a list (split, a PerItem step): each string in it is one value.
-            System.Collections.IEnumerable items => items.Cast<object?>()
-                .Select(item => item is string text ? RedactValue(text, strategy, hop.ConfigJson) : RedactNonString(item, strategy))
-                .ToArray(),
-            _ => RedactNonString(value, strategy),
+            // A transform chain can hand back a list of strings (split, a PerItem step): each one is one value.
+            // Only a plain list of strings qualifies — not a dictionary, a JSON object/array node or a byte[],
+            // which are IEnumerable too but carry structure (or raw bytes) this cannot redact item by item.
+            System.Collections.IEnumerable items
+                when value is not (System.Collections.IDictionary or JsonNode or byte[])
+                    && items.Cast<object?>().All(item => item is null or string)
+                => items.Cast<string?>()
+                    .Select(item => item is null ? null : RedactValue(item, strategy, hop.ConfigJson))
+                    .ToArray(),
+            _ => null,
         };
     }
 
     // Same outcomes as ApplyStrategy for a single property: Remove deletes, every other strategy rewrites the string.
     private static string? RedactValue(string raw, DeIdentificationStrategy strategy, string configJson) =>
         strategy == DeIdentificationStrategy.Remove ? null : TransformScalar(raw, strategy, configJson);
-
-    // ApplyStrategy leaves a number/bool alone under every string strategy and removes it under Redact or Remove.
-    private static object? RedactNonString(object? value, DeIdentificationStrategy strategy) =>
-        strategy is DeIdentificationStrategy.Remove or DeIdentificationStrategy.Redact ? null : value;
 
     private static bool TryReadStrategy(string configJson, out DeIdentificationStrategy strategy)
     {
