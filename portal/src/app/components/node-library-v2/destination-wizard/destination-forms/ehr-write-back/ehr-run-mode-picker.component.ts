@@ -6,6 +6,9 @@ import { EhrRunMode, EhrWriteVendor, WritableTarget, runModesFor, vendorLabel } 
  * The EHR Write-Back destination's Run mode: Live, Dry run, or (for Epic, eClinicalWorks and athenahealth) Test on a
  * FHIR server. Below it, what the chosen mode will actually do over the chosen connection: a test run reaches only
  * the test server, and a vendor whose write APIs are not activated (or that takes dry runs only) still only checks.
+ *
+ * Dry run is offered only while the EhrWriteBack:DryRunEnabled system setting is on (`dryRunOffered`), or for a node
+ * saved as a dry run, which stays one until the user picks another mode (`dryRunSettingOff` explains why it shows).
  */
 @Component({
   selector: 'app-ehr-run-mode-picker',
@@ -26,8 +29,20 @@ import { EhrRunMode, EhrWriteVendor, WritableTarget, runModesFor, vendorLabel } 
       @if (!vendor()) {
         <span class="dw-hint">Pick a connection to see every run mode.</span>
       }
-      <span class="dw-hint">Start with a dry run. Switch to Live only after a dry run of this workflow looks right.</span>
-      @if (runMode() !== 'dryRun' && target(); as t) {
+      @if (dryRunSettingOff() && runMode() === 'dryRun') {
+        <span class="dw-hint" data-testid="ewb-dry-run-off-note">Dry run is turned off in System Settings. This
+          destination stays a dry run until you choose another Run mode.</span>
+      }
+      @if (modes().includes('dryRun')) {
+        <span class="dw-hint">Start with a dry run. Switch to Live only after a dry run of this workflow looks right.</span>
+      } @else if (modes().includes('test')) {
+        <span class="dw-hint">Start with a test on a FHIR server. Switch to Live only after a test run of this workflow
+          looks right.</span>
+      }
+      @if (!runMode()) {
+        <span class="dw-hint" data-testid="ewb-run-mode-required">Choose a Run mode.</span>
+      }
+      @if ((runMode() === 'live' || runMode() === 'test') && target(); as t) {
         @if (runMode() === 'test') {
           <span class="dw-hint dw-hint--warn">Test run: the types you select under Resource types are written to
             {{ connectionName() }}, shaped exactly as {{ vendorName() }} would receive them. Nothing reaches
@@ -51,12 +66,17 @@ export class EhrRunModePickerComponent {
   readonly control = input.required<FormControl<EhrRunMode | null>>();
   /** The vendor written to (or stood in for); null while not known. */
   readonly vendor = input<EhrWriteVendor | null>(null);
-  readonly runMode = input<EhrRunMode>('dryRun');
+  /** The chosen run mode; null while none is (only Live offered, so it must be picked on purpose). */
+  readonly runMode = input<EhrRunMode | null>('dryRun');
+  /** Dry run is among the modes: the setting is on, or the node was saved as a dry run. */
+  readonly dryRunOffered = input<boolean>(true);
+  /** The EhrWriteBack:DryRunEnabled setting is off (Dry run shows only for a node saved as one). */
+  readonly dryRunSettingOff = input<boolean>(false);
   /** What the destination writes as: the tested vendor in a test run, else the chosen connection. */
   readonly target = input<WritableTarget | null>(null);
   readonly connectionName = input<string | null>(null);
 
-  readonly modes = computed(() => runModesFor(this.vendor()));
+  readonly modes = computed(() => runModesFor(this.vendor(), this.dryRunOffered()));
   readonly vendorName = computed(() => vendorLabel(this.vendor()) || 'the EHR');
 
   labelFor(mode: EhrRunMode): string {

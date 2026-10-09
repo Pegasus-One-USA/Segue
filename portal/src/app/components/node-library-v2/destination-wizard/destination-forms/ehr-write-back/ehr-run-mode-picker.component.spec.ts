@@ -13,13 +13,20 @@ function target(extra: Partial<WritableTarget> = {}): WritableTarget {
 
 /** Run mode: the modes a vendor offers, and what the chosen one will really do over the chosen connection. */
 describe('EhrRunModePickerComponent', () => {
-  function render(vendor: EhrWriteVendor | null, mode: EhrRunMode, t: WritableTarget | null = null) {
+  function render(
+    vendor: EhrWriteVendor | null,
+    mode: EhrRunMode | null,
+    t: WritableTarget | null = null,
+    dryRun: { offered: boolean; settingOff: boolean } = { offered: true, settingOff: false },
+  ) {
     TestBed.configureTestingModule({ imports: [EhrRunModePickerComponent] });
     const fixture = TestBed.createComponent(EhrRunModePickerComponent);
     const control = new FormControl<EhrRunMode | null>(mode);
     fixture.componentRef.setInput('control', control);
     fixture.componentRef.setInput('vendor', vendor);
     fixture.componentRef.setInput('runMode', mode);
+    fixture.componentRef.setInput('dryRunOffered', dryRun.offered);
+    fixture.componentRef.setInput('dryRunSettingOff', dryRun.settingOff);
     fixture.componentRef.setInput('target', t);
     fixture.componentRef.setInput('connectionName', 'Local HAPI');
     fixture.detectChanges();
@@ -76,5 +83,37 @@ describe('EhrRunModePickerComponent', () => {
 
   it('warns nothing in a dry run', () => {
     expect(render('Epic', 'dryRun', target()).el.querySelector('.dw-hint--warn')).toBeNull();
+  });
+
+  describe('with Dry run turned off in System Settings', () => {
+    const OFF = { offered: false, settingOff: true };
+
+    it('offers no Dry run and suggests starting with a test run', () => {
+      const { modes, text } = render('Epic', 'test', null, OFF);
+      expect(modes()).toEqual(['live', 'test']);
+      expect(text()).not.toContain('Start with a dry run.');
+      expect(text()).toContain('Start with a test on a FHIR server.');
+      expect(text()).not.toContain('Dry run is turned off');
+    });
+
+    it('a FHIR server offers Live only, unchosen, and asks for a choice without warning about Live', () => {
+      const { modes, text, el } = render('GenericFhir', null, target({ vendor: 'GenericFhir' }), OFF);
+      expect(modes()).toEqual(['live']);
+      expect(el.querySelector<HTMLInputElement>('input[data-mode="live"]')!.checked).toBeFalse();
+      expect(text()).toContain('Choose a Run mode.');
+      expect(el.querySelector('.dw-hint--warn')).toBeNull();
+    });
+
+    it('a saved dry run keeps Dry run, with a note saying why', () => {
+      const { modes, el } = render('Epic', 'dryRun', target(), { offered: true, settingOff: true });
+      expect(modes()).toEqual(['live', 'dryRun', 'test']);
+      expect(el.querySelector('[data-testid="ewb-dry-run-off-note"]')?.textContent?.replace(/\s+/g, ' ').trim())
+        .toBe('Dry run is turned off in System Settings. This destination stays a dry run until you choose another Run mode.');
+    });
+
+    it('the note goes once another mode is chosen', () => {
+      const { el } = render('Epic', 'live', target(), { offered: true, settingOff: true });
+      expect(el.querySelector('[data-testid="ewb-dry-run-off-note"]')).toBeNull();
+    });
   });
 });

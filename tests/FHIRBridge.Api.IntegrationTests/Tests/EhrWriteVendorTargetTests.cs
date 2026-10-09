@@ -67,6 +67,17 @@ public sealed class EhrWriteVendorTargetTests(ApiFixture f)
     }
 
     [Fact]
+    public async Task The_capabilities_api_hides_dry_run_until_the_setting_turns_it_on()
+    {
+        // EhrWriteBack:DryRunEnabled is off by default (like clone mode), so the destination form offers no Dry run.
+        var resp = await f.AdminClient.GetAsync("/api/v1/ehr-write-capabilities?vendor=Epic");
+        await ApiFixture.EnsureOkAsync(resp);
+
+        var root = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+        Assert.False(root.GetProperty("dryRunEnabled").GetBoolean());
+    }
+
+    [Fact]
     public async Task Activating_vendor_write_apis_needs_the_ehr_write_back_edit_right()
     {
         // ehrwriteback.create is what creating a connection with write access needs at all (EhrWriteConnectionTests).

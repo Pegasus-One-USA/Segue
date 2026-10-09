@@ -33,6 +33,9 @@ export interface EhrWriteCapabilities {
   vendor: string | null;
   supportsPatientMatch: boolean;
   cloneModeEnabled: boolean;
+  /** The EhrWriteBack:DryRunEnabled system setting: the destination form offers Dry run only while it is on. Older API
+   *  builds (and a failed call) omit it: treat as false, so Dry run stays hidden (it is off by default, like clone mode). */
+  dryRunEnabled?: boolean;
   capabilities: EhrWriteCapability[];
   /** For a test-server vendor (Generic FHIR): the vendors a destination can test as. */
   testableVendors?: string[] | null;
@@ -66,6 +69,12 @@ export class EhrWriteCapabilitiesService {
     }
 
     return stream;
+  }
+
+  /** Forgets every cached answer, so the next call reads the system settings it carries (Dry run, clone mode) afresh.
+   *  Called after a System Settings save, so a changed setting shows in the destination form without a reload. */
+  clear(): void {
+    this.cache.clear();
   }
 
   /** Resource types the vendor can be written to, in the order the API lists them. A vendor that files one type

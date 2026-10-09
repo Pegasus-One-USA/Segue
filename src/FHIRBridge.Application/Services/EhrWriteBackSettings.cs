@@ -13,4 +13,13 @@ public static class EhrWriteBackSettings
     public const string CloneModeEnabledKey = "EhrWriteBack:CloneModeEnabled";
 
     public const bool CloneModeEnabledDefault = false;
+
+    /// <summary>Off by default, like clone mode. When true, the EHR Write-Back destination form offers Dry run as a Run mode. When false,
+    /// new destinations are not offered Dry run (only Live, plus Test on a FHIR server for Epic, eClinicalWorks and
+    /// athenahealth); where only Live is left, the user must choose it. The setting only governs what the portal
+    /// offers: a saved destination with <c>dest_dryRun</c> true keeps running as a dry run whatever it says, because
+    /// the Runtime executor and the writer never read it.</summary>
+    public const string DryRunEnabledKey = "EhrWriteBack:DryRunEnabled";
+
+    public const bool DryRunEnabledDefault = false;
 }

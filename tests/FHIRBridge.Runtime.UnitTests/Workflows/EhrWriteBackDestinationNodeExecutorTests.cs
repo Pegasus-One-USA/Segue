@@ -125,6 +125,25 @@ public sealed class EhrWriteBackDestinationNodeExecutorTests
         channel.Options.CloneMode.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task A_saved_dry_run_runs_as_a_dry_run_whatever_the_dry_run_setting_says()
+    {
+        // EhrWriteBack:DryRunEnabled only decides whether the portal offers Dry run. The executor takes no settings,
+        // so turning it off can never turn a saved dry run into a live write.
+        typeof(EhrWriteBackDestinationNodeExecutor).GetConstructors()
+            .SelectMany(c => c.GetParameters())
+            .Select(p => p.ParameterType)
+            .Should().NotContain(typeof(FHIRBridge.Application.Abstractions.Caching.ISystemSettingsCache))
+            .And.NotContain(typeof(ISystemSettingRepository));
+
+        var (executor, contexts, _) = Build(Connection());
+        var node = Node($$"""{"dest_sourceConnectionId":"{{TargetId}}","dest_dryRun":"true","dest_resources":"AllergyIntolerance"}""");
+
+        await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), node, [], CancellationToken.None);
+
+        contexts.Single().EhrWriteChannel!.Options.DryRun.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("DocumentReference,Patient", true)]
     [InlineData("Condition,Patient", false)]
