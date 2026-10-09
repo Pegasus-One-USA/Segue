@@ -9,13 +9,15 @@ import { SourceConnectionModel } from '../../../../source-connections/models/sou
 import { EhrWriteCapabilitiesService, EhrWriteCapability } from '../../../../services/ehr-write-capabilities.service';
 import { PermissionService } from '../../../../auth/services/permission.service';
 import { EhrWriteBackFormApi } from './destination-form-api';
-import { EhrWriteOptIns, VARIANT_LABELS, missingOptInsFor } from '../ehr-write-type-grid/ehr-write-type-grid.model';
+import { EhrWriteOptIns } from '../ehr-write-type-grid/ehr-write-type-grid.model';
+import { EhrWriteKindSwitches, KIND_LABELS } from '../ehr-write-type-grid/ehr-write-kinds.model';
 import {
   EhrRunMode,
   EhrWriteVendor,
   OptInApi,
   WritableTarget,
   connectionsFor,
+  defaultRunMode,
   ehrReviewLines,
   isEhrWriteVendor,
   isTestableVendor,
@@ -29,7 +31,6 @@ import { EhrWriteConnectionPickerComponent, EhrWriteTargetsError } from './ehr-w
 import { EhrWriteGeneralOptionsComponent } from './ehr-write-back/ehr-write-general-options.component';
 import { EhrEcwWriteOptionsComponent } from './ehr-write-back/ehr-ecw-write-options.component';
 import { EhrAthenaWriteOptionsComponent } from './ehr-write-back/ehr-athena-write-options.component';
-import { EhrOptInApisComponent } from './ehr-write-back/ehr-opt-in-apis.component';
 import { EhrCloneModeOptionComponent } from './ehr-write-back/ehr-clone-mode-option.component';
 
 /** Why the chosen connection cannot be used (shown under the connection picker until another is chosen). */
@@ -47,8 +48,14 @@ type ConnectionNotice = 'droppedTestServer' | 'unavailable' | 'modeChanged' | 'c
  * their types go live only once the connection says the practice has them activated; until then a Live run still
  * only checks and counts.
  *
+ * With the EhrWriteBack:DryRunEnabled system setting off, a new destination is not offered Dry run: it starts as Test
+ * on a FHIR server where the vendor has one, else with no Run mode chosen (never Live by default). A node saved as a
+ * dry run stays one, with Dry run still offered and a note saying why, until the user picks another mode.
+ *
  * The wizard shows the form in two halves (`section`): the connection (Step 1) and the options (Step 3, after the
- * resource types are chosen, so the options a selected type needs can be named). Each visible part is its own
+ * resource types). The options are only HOW records are written; WHAT is written (the resource types and, under each,
+ * the kinds of record) is chosen on Step 2, and the wizard hands the kinds' switches to this form (setWriteKinds),
+ * which saves them in dest_enabledVariants and dest_createHolderEncounter as before. Each visible part is its own
  * component; this host owns the FormGroup, the loaded connections and what is derived from them.
  */
 @Component({
@@ -61,7 +68,6 @@ type ConnectionNotice = 'droppedTestServer' | 'unavailable' | 'modeChanged' | 'c
     EhrWriteGeneralOptionsComponent,
     EhrEcwWriteOptionsComponent,
     EhrAthenaWriteOptionsComponent,
-    EhrOptInApisComponent,
     EhrCloneModeOptionComponent,
   ],
   styleUrls: ['../destination-wizard.component.scss'],
@@ -82,6 +88,8 @@ type ConnectionNotice = 'droppedTestServer' | 'unavailable' | 'modeChanged' | 'c
           [control]="form.controls.runMode"
           [vendor]="vendor()"
           [runMode]="runMode()"
+          [dryRunOffered]="dryRunOffered()"
+          [dryRunSettingOff]="!dryRunSettingEnabled()"
           [target]="effective()"
           [connectionName]="connectionName()" />
 
@@ -118,11 +126,7 @@ type ConnectionNotice = 'droppedTestServer' | 'unavailable' | 'modeChanged' | 'c
           [createPatient]="form.controls.createPatientIfMissing" />
 
         @if (effective()?.vendor === 'Healow') {
-          <app-ehr-ecw-write-options
-            [providerId]="form.controls.targetProviderId"
-            [holderEncounter]="form.controls.createHolderEncounter"
-            [offersHolderEncounter]="effective()?.offersHolderEncounter ?? false"
-            [missing]="missingOptIns()" />
+          <app-ehr-ecw-write-options [providerId]="form.controls.targetProviderId" />
         }
 
         @if (effective()?.vendor === 'Athenahealth') {
@@ -131,16 +135,6 @@ type ConnectionNotice = 'droppedTestServer' | 'unavailable' | 'modeChanged' | 'c
             [departmentId]="form.controls.targetDepartmentId"
             [connectionDepartmentId]="selected()?.departmentId ?? null"
             [runMode]="runMode()" />
-        }
-
-        @if (effective()?.optInApis?.length) {
-          <app-ehr-opt-in-apis
-            [apis]="effective()!.optInApis"
-            [enabled]="enabledVariants()"
-            [vendorLabel]="label(effective()!.vendor)"
-            [missing]="missingOptIns()"
-            [sourceIsTabular]="sourceIsTabular()"
-            (toggled)="toggleVariant($event)" />
         }
 
         @if (selected()?.cloneModeEnabled) {
@@ -163,10 +157,6 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
   readonly ehrVendor = input<EhrWriteVendor | null>(null);
   /** Which half the wizard shows: the connection (Step 1) or the options (Step 3). */
   readonly section = input<'connection' | 'options'>('connection');
-  /** The resource types chosen in Step 2, to name the options they still need. */
-  readonly selectedResourceTypes = input<string[]>([]);
-  /** Every upstream source is a CSV / SQL Table source (the only kind carrying the target EHR's own ids). */
-  readonly sourceIsTabular = input<boolean>(false);
 
   readonly loading = signal(true);
   readonly loadError = signal<EhrWriteTargetsError | null>(null);
@@ -177,6 +167,10 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
   private readonly droppedTestServerId = signal<string | null>(null);
   /** Without a tile: the testable vendor a reopened node was tested as, or the one chosen before switching to Test. */
   private readonly savedTestAs = signal<EhrWriteVendor | null>(null);
+  /** The EhrWriteBack:DryRunEnabled setting, as the capabilities calls report it; on until they say otherwise. */
+  readonly dryRunSettingEnabled = signal(false);
+  /** The node was reopened as a dry run: it keeps Dry run on offer whatever the setting says. */
+  private readonly savedDryRun = signal(false);
   private loadSubscription: Subscription | null = null;
 
   readonly form = this.fb.group({
@@ -189,14 +183,15 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     createHolderEncounter: [false],
     targetProviderId: ['', [Validators.pattern(/^\S{0,64}$/)]],
     targetDepartmentId: ['', [Validators.pattern(/^\S{0,64}$/)]],
-    runMode: ['dryRun' as EhrRunMode],
+    runMode: ['dryRun' as EhrRunMode | null],
   });
 
   /** The form's raw value as a signal, so what is derived from it recomputes as the user types. */
   private readonly formValue = toSignal(this.form.valueChanges.pipe(map(() => this.form.getRawValue())), {
     initialValue: this.form.getRawValue(),
   });
-  readonly runMode = computed<EhrRunMode>(() => this.formValue().runMode ?? 'dryRun');
+  /** Null while none is chosen: only Live is offered, and Live is never chosen for the user. */
+  readonly runMode = computed<EhrRunMode | null>(() => this.formValue().runMode ?? null);
 
   readonly selected = computed(() => this.targets().find(t => t.id === this.formValue().sourceConnectionId) ?? null);
 
@@ -209,6 +204,10 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
   });
   /** The vendor written to, or stood in for in a test run. */
   readonly vendor = computed<EhrWriteVendor | null>(() => this.ehrVendor() ?? this.inferredVendor());
+  /** Dry run is on offer: the setting is on, or the node was saved as a dry run. */
+  readonly dryRunOffered = computed(() => this.dryRunSettingEnabled() || this.savedDryRun());
+  /** The run modes offered for the vendor, as the picker shows them. */
+  private readonly offeredModes = computed(() => runModesFor(this.vendor(), this.dryRunOffered()));
   /** The vendor a test run stands in for, '' when not testing. */
   readonly testAs = computed<string>(() => {
     const vendor = this.vendor();
@@ -245,6 +244,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
   readonly effective = computed(() => (this.testAs() && this.testTarget()) || this.selected());
   readonly targetVendor = computed(() => this.effective()?.vendor ?? null);
   readonly writableResourceTypes = computed(() => this.effective()?.resourceTypes ?? []);
+  /** dest_enabledVariants: the optional kinds ticked on Step 2 (setWriteKinds), or as saved. */
   readonly enabledVariants = signal<string[]>([]);
 
   readonly optIns = computed<EhrWriteOptIns>(() => ({
@@ -252,13 +252,6 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     createHolderEncounter: this.formValue().createHolderEncounter === true,
     createPatientIfMissing: this.formValue().createPatientIfMissing === true,
   }));
-  /** The selected types the writer would skip until an option is turned on; Step 3's Next waits for none. */
-  readonly missingOptIns = computed(() => missingOptInsFor(
-    this.selectedResourceTypes(),
-    this.effective()?.capabilities ?? [],
-    this.optIns(),
-    this.sourceIsTabular(),
-  ));
 
   constructor() {
     this.loadTargets();
@@ -295,13 +288,15 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       if (isTestableVendor(vendor)) this.savedTestAs.set(vendor);
     });
 
-    // A run mode the vendor does not offer (its radio is not shown) falls back to Dry run, the safe default. Not while
-    // the list could not be loaded: then the vendor is not known and nothing is changed.
+    // A run mode that is not offered (its radio is not shown: the vendor has no Test, or Dry run is turned off) falls
+    // back to Dry run, else Test on a FHIR server, else to no mode at all: never to Live, which the user must choose.
+    // No mode chosen stays unchosen. Not while the list could not be loaded: then the vendor and the setting are not
+    // known and nothing is changed.
     effect(() => {
       const mode = this.runMode();
-      const offered = runModesFor(this.vendor());
-      if (this.loading() || this.loadError() || offered.includes(mode)) return;
-      untracked(() => this.form.controls.runMode.setValue('dryRun'));
+      const offered = this.offeredModes();
+      if (this.loading() || this.loadError() || mode === null || offered.includes(mode)) return;
+      untracked(() => this.form.controls.runMode.setValue(defaultRunMode(offered)));
     });
   }
 
@@ -338,8 +333,13 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     }
   }
 
-  toggleVariant(variant: string): void {
-    this.enabledVariants.update(list => list.includes(variant) ? list.filter(v => v !== variant) : [...list, variant]);
+  /** The kinds of record chosen on Step 2, as the switches the writer reads: the variants turned on, and the holder
+   *  encounter some history kinds are filed on. Saved as dest_enabledVariants and dest_createHolderEncounter. */
+  setWriteKinds(kinds: EhrWriteKindSwitches): void {
+    this.enabledVariants.set([...kinds.enabledVariants]);
+    if (this.form.controls.createHolderEncounter.value !== kinds.createHolderEncounter) {
+      this.form.controls.createHolderEncounter.setValue(kinds.createHolderEncounter);
+    }
   }
 
   /** The connection half (Step 1): a name, an offered connection, a run mode this vendor has, and in a test run the
@@ -348,7 +348,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     const id = this.form.controls.sourceConnectionId.value;
     if (!this.form.controls.name.valid || !id || !this.visibleTargets().some(t => t.id === id)) return false;
     const mode = this.runMode();
-    if (!runModesFor(this.vendor()).includes(mode)) return false;
+    if (mode === null || !this.offeredModes().includes(mode)) return false;
     return mode !== 'test' || this.testTarget() !== null;
   }
 
@@ -365,9 +365,11 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
   getFullConfig(): Record<string, string> {
     const v = this.form.getRawValue();
     const vendor = this.vendor();
-    const mode = v.runMode ?? 'dryRun';
-    // Validity keeps an unfit test run from being saved; this guard is only a safety net, never a silent switch.
-    const run = mode === 'test' && !(isTestableVendor(vendor) && this.selected()?.testableVendors.includes(vendor))
+    const mode = v.runMode ?? null;
+    // Validity keeps an unfit test run (or no run mode at all) from being saved; this guard is only a safety net,
+    // never a silent switch, and it falls to a dry run.
+    const unfitTest = mode === 'test' && !(isTestableVendor(vendor) && this.selected()?.testableVendors.includes(vendor));
+    const run = mode === null || unfitTest
       ? { dest_dryRun: 'true' as const, dest_testAsVendor: '' }
       : runModeFields(mode, vendor);
     return {
@@ -412,6 +414,8 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     const { mode, droppedTestServer } = runModeOf(fields);
     const testAs = fields['dest_testAsVendor'];
     this.savedTestAs.set(isTestableVendor(testAs) ? testAs : null);
+    // Set before the patch, so a saved dry run is never seen as a mode the setting no longer offers.
+    this.savedDryRun.set(mode === 'dryRun');
     this.form.patchValue({
       name: fields['dest_name'] || this.form.value.name || 'EHR write-back',
       sourceConnectionId: fields['dest_sourceConnectionId'] || '',
@@ -432,6 +436,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
 
   reset(): void {
     this.savedTestAs.set(null);
+    this.savedDryRun.set(false);
     this.form.reset({
       name: 'EHR write-back',
       sourceConnectionId: '',
@@ -463,17 +468,22 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
     this.loading.set(true);
     this.loadError.set(null);
     // access=write asks the API for write-capable rows; the client-side check stays for an older API that ignores it.
+    // Every capabilities answer carries the Dry run setting (off by default, like clone mode). Dry run is offered only
+    // when every answer says it is on; a failed call or an older API omits it, which counts as off.
     this.loadSubscription = this.sourceConnections.getAll('write').pipe(
       map(connections => connections.filter(c => c.isEnabled && (c.access === 'Write' || c.access === 'ReadWrite'))),
       switchMap(connections => connections.length === 0
-        ? of([] as WritableTarget[])
-        : forkJoin(connections.map(c => this.capabilities.forVendor(c.sourceSystemType).pipe(
-            map(result => this.toTarget(c, result.capabilities, result.cloneModeEnabled, result.testableVendors)))))),
-      map(targets => targets.filter(t => t.resourceTypes.length > 0)),
+        ? of({ targets: [] as WritableTarget[], dryRunEnabled: false })
+        : forkJoin(connections.map(c => this.capabilities.forVendor(c.sourceSystemType))).pipe(map(results => ({
+            targets: results.map((result, i) =>
+              this.toTarget(connections[i], result.capabilities, result.cloneModeEnabled, result.testableVendors)),
+            dryRunEnabled: results.every(result => result.dryRunEnabled === true),
+          })))),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe({
-      next: targets => {
-        this.targets.set(targets);
+      next: ({ targets, dryRunEnabled }) => {
+        this.dryRunSettingEnabled.set(dryRunEnabled);
+        this.targets.set(targets.filter(t => t.resourceTypes.length > 0));
         this.loading.set(false);
         onLoaded?.();
       },
@@ -498,7 +508,7 @@ export class EhrWriteBackDestinationFormComponent implements EhrWriteBackFormApi
       if (!optInApis.some(api => api.variant === capability.variant)) {
         optInApis.push({
           variant: capability.variant!,
-          label: VARIANT_LABELS[capability.variant!] ?? capability.variant!,
+          label: KIND_LABELS[capability.variant!] ?? capability.variant!,
           tabularOnly: capability.requiresTargetReferences === true,
         });
       }

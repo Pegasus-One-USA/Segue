@@ -3,32 +3,50 @@
 } @else if (greyedCount() > 0) {
   <p class="ewtg-hint">Greyed types are read by the source but cannot be written to this EHR.</p>
 }
+@if (anyKinds()) {
+  <p class="ewtg-hint">Some types are written in more than one way: tick the kinds of record to include under each.</p>
+}
 
 <div class="ewtg-grid">
   @for (row of visibleRows(); track row.resourceType) {
-    <button
-      type="button"
+    <div
       class="ewtg-card"
       [class.ewtg-card--selected]="isSelected(row.resourceType)"
       [class.ewtg-card--greyed]="!row.selectable"
-      [disabled]="isLocked(row)"
-      [attr.aria-pressed]="isSelected(row.resourceType)"
-      [title]="row.reason ?? row.note ?? ''"
-      (click)="toggle(row)"
+      [class.ewtg-card--locked]="isLocked(row)"
+      [attr.data-type]="row.resourceType"
     >
-      <span class="ewtg-check">
-        @if (isSelected(row.resourceType)) { ✓ }
-      </span>
-      <span class="ewtg-body">
-        <strong class="ewtg-name" [title]="row.resourceType">{{ row.resourceType }}</strong>
-        @if (row.reason) {
-          <span class="ewtg-reason">{{ row.reason }}</span>
-        } @else if (row.note) {
-          <span class="ewtg-note">{{ row.note }}</span>
-        } @else {
-          <span class="ewtg-sub">Create in the EHR</span>
-        }
-      </span>
-    </button>
+      <button
+        type="button"
+        class="ewtg-toggle"
+        [disabled]="isLocked(row)"
+        [attr.aria-pressed]="isSelected(row.resourceType)"
+        [title]="row.reason ?? row.note ?? ''"
+        (click)="toggle(row)"
+      >
+        <span class="ewtg-check">
+          @if (isSelected(row.resourceType)) { ✓ }
+        </span>
+        <span class="ewtg-body">
+          <strong class="ewtg-name" [title]="row.resourceType">{{ row.resourceType }}</strong>
+          @if (row.reason) {
+            <span class="ewtg-reason">{{ row.reason }}</span>
+          } @else if (row.note) {
+            <span class="ewtg-note">{{ row.note }}</span>
+          } @else {
+            <span class="ewtg-sub">Create in the EHR</span>
+          }
+        </span>
+      </button>
+      @if (row.kinds.length) {
+        <app-ehr-write-kind-list
+          class="ewtg-kinds"
+          [kinds]="row.kinds"
+          [chosen]="chosenKinds()[row.resourceType] ?? []"
+          [typeSelected]="isSelected(row.resourceType)"
+          [shared]="sharedNotes()[row.resourceType] ?? {}"
+          (toggled)="toggleKind(row, $event)" />
+      }
+    </div>
   }
 </div>

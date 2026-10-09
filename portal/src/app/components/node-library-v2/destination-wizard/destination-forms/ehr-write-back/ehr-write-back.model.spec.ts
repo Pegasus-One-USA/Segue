@@ -1,6 +1,7 @@
 import {
   WritableTarget,
   connectionsFor,
+  defaultRunMode,
   ehrReviewLines,
   isEhrWriteVendor,
   isTestableVendor,
@@ -74,6 +75,19 @@ describe('ehr-write-back.model', () => {
     expect(runModesFor(null)).toEqual(['live', 'dryRun']);
   });
 
+  it('leaves Dry run out when it is not offered (turned off in System Settings)', () => {
+    expect(runModesFor('Epic', false)).toEqual(['live', 'test']);
+    expect(runModesFor('GenericFhir', false)).toEqual(['live']);
+    expect(runModesFor(null, false)).toEqual(['live']);
+    expect(runModesFor('Epic', true)).toEqual(['live', 'dryRun', 'test']);
+  });
+
+  it('starts in Dry run, else Test, and never in Live', () => {
+    expect(defaultRunMode(['live', 'dryRun', 'test'])).toBe('dryRun');
+    expect(defaultRunMode(['live', 'test'])).toBe('test');
+    expect(defaultRunMode(['live'])).toBeNull();
+  });
+
   describe('connectionsFor', () => {
     const targets = [
       target('epic', 'Epic'),
@@ -92,6 +106,10 @@ describe('ehr-write-back.model', () => {
     it('offers FHIR servers that can stand in for the vendor in a test run', () => {
       expect(ids(connectionsFor(targets, 'Epic', 'test'))).toEqual(['hapi-all']);
       expect(ids(connectionsFor(targets, 'Healow', 'test'))).toEqual(['hapi-all', 'hapi-ecw']);
+    });
+
+    it('lists the vendor\'s own connections while no run mode is chosen', () => {
+      expect(ids(connectionsFor(targets, 'Epic', null))).toEqual(['epic']);
     });
 
     it('offers everything while no vendor is known', () => {

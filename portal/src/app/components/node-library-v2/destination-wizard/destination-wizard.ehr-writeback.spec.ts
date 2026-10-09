@@ -6,29 +6,35 @@ import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { DestinationWizardComponent } from './destination-wizard.component';
 import { CanvasNode } from '../../../models/node-v2.model';
-import { EhrWriteCapabilitiesService } from '../../../services/ehr-write-capabilities.service';
+import { EhrWriteCapabilitiesService, EhrWriteCapability } from '../../../services/ehr-write-capabilities.service';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { ToastService } from '../../../services/toast.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
 import { DestinationConfigurationDto } from '../../../models/destination-configuration-v2.model';
 import { WizardDestinationFormApi } from './destination-forms/destination-form-api';
-import { EhrMissingOptIn, ehrReviewLines } from './destination-forms/ehr-write-back/ehr-write-back.model';
+import { ehrReviewLines } from './destination-forms/ehr-write-back/ehr-write-back.model';
 import { EhrWriteTarget } from './ehr-write-type-grid/ehr-write-type-grid.model';
+import { EhrWriteKindSwitches } from './ehr-write-type-grid/ehr-write-kinds.model';
+import { ECW_CAPABILITIES, EPIC_CAPABILITIES } from './ehr-write-type-grid/ehr-write-capabilities.fixtures';
 import { AddTransformEvent } from '../node-library-dialog.component';
 
 /** A stand-in for the EHR Write-Back form, so the wizard's own Step 3 / Review logic is tested on its own. */
 function fakeEhrForm(overrides: Partial<Record<string, unknown>> = {}) {
   const config: Record<string, string> = {
     dest_name: 'Epic write', dest_sourceConnectionId: 'c1', dest_ehrVendor: 'Epic', dest_dryRun: 'true',
-    dest_testAsVendor: '', dest_maxWritesPerRun: '200', dest_enabledVariants: '',
+    dest_testAsVendor: '', dest_maxWritesPerRun: '200', dest_enabledVariants: '', dest_createHolderEncounter: 'false',
   };
   return {
     kind: 'ehrWriteBack',
     targetVendor: signal('Epic'),
     writableResourceTypes: signal(['AllergyIntolerance']),
     runMode: signal('dryRun'),
-    missingOptIns: signal<EhrMissingOptIn[]>([]),
     connectionName: () => 'Epic prod',
+    // As the real form does: the kinds ticked on Step 2 become the saved switches.
+    setWriteKinds: (kinds: EhrWriteKindSwitches) => {
+      config['dest_enabledVariants'] = kinds.enabledVariants.join(',');
+      config['dest_createHolderEncounter'] = kinds.createHolderEncounter ? 'true' : 'false';
+    },
     optIns: () => ({ enabledVariants: [], createHolderEncounter: false, createPatientIfMissing: false }),
     optionsValid: () => true,
     reviewLines: () => ehrReviewLines(config, 'Epic', 'Epic prod'),
@@ -115,8 +121,9 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
       const inputs = wizard.activeFormInputs();
       expect(inputs['ehrVendor']).toBe('Athenahealth');
       expect(inputs['section']).toBe('connection');
-      expect(inputs['selectedResourceTypes']).toBe(wizard.selectedResources());
-      expect(inputs['sourceIsTabular']).toBeTrue();
+      // The kinds chosen on Step 2 go through setWriteKinds, not inputs.
+      expect(Object.keys(inputs)).not.toContain('selectedResourceTypes');
+      expect(Object.keys(inputs)).not.toContain('sourceIsTabular');
     });
 
     it('binds only the inputs the loaded form declares', () => {
@@ -129,7 +136,7 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
 
       create('ehrwriteback', { ehrVendor: 'Epic' });
       expect(Object.keys(wizard.boundFormInputs()).sort())
-        .toEqual(['ehrVendor', 'section', 'selectedResourceTypes', 'sourceIsTabular']);
+        .toEqual(['ehrVendor', 'section']);
     });
 
     it('shows the options half on Step 3, but not for a chain node', () => {
@@ -144,17 +151,13 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
   });
 
   describe('Step 3 (Options)', () => {
-    it('Next waits for valid options and for no selected type still needing an option', () => {
+    it('Next waits for valid options only', () => {
       create('ehrwriteback', { ehrVendor: 'Epic' });
       const form = fakeEhrForm();
       useForm(form);
       wizard.step.set(3);
       expect(wizard.isNextDisabled()).toBeFalse();
 
-      form.missingOptIns.set([{ resourceType: 'Procedure', variants: ['external-radiotherapy-summary'], holderEncounter: false }]);
-      expect(wizard.isNextDisabled()).toBeTrue();
-
-      form.missingOptIns.set([]);
       form.optionsValid = () => false;
       expect(wizard.isNextDisabled()).toBeTrue();
     });
@@ -245,6 +248,178 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
       expect(saved!.transformId).toBe('dest-ehr-writeback');
       expect(saved!.config!['dest_inheritSecretFromDestinationId']).toBe('saved-1');
       expect(saved!.config!['destinationResolved']).toBeUndefined();
+    });
+  });
+
+  describe('kinds of record on Step 2', () => {
+    const loadTarget = (vendor: string, caps: EhrWriteCapability[], fields: Record<string, string> = {}) => {
+      capabilities.forVendor.and.callFake((v: string) =>
+        of({ vendor: v, supportsPatientMatch: true, cloneModeEnabled: false, capabilities: caps }));
+      (wizard as unknown as { _loadEhrWriteTarget(f: Record<string, string>): void })._loadEhrWriteTarget({
+        dest_ehrVendor: vendor, dest_sourceConnectionId: 'c1', ...fields,
+      });
+    };
+    const kind = (resourceType: string, kindId: string) => wizard.onKindToggled({ resourceType, kindId });
+    const saved = () => wizard.ehrSavedKinds()!;
+
+    it('ticking an optional kind ticks its type; unticking the last one unticks it', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic', sourceResources: ['Observation', 'BodyStructure'] });
+      loadTarget('Epic', EPIC_CAPABILITIES);
+
+      kind('Observation', 'lines-drains-airways');
+      expect(wizard.selectedResources()).toEqual(['Observation']);
+      expect(saved().enabledVariants).toEqual(['lines-drains-airways']);
+
+      // The always-included kind is locked on while the type is ticked.
+      kind('Observation', 'vital-signs');
+      expect(wizard.selectedResources()).toEqual(['Observation']);
+
+      kind('Observation', 'lines-drains-airways');
+      expect(wizard.selectedResources()).toEqual(['Observation']);
+      expect(saved().enabledVariants).toEqual([]);
+
+      kind('BodyStructure', 'radiotherapy-volume');
+      expect(wizard.selectedResources()).toEqual(['Observation', 'BodyStructure']);
+      kind('BodyStructure', 'radiotherapy-volume');
+      expect(wizard.selectedResources()).toEqual(['Observation']);
+      expect(saved().enabledVariants).toEqual([]);
+    });
+
+    it('ticking a type written only through optional kinds ticks them; ticking one with an always-included kind does not', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      loadTarget('Epic', EPIC_CAPABILITIES);
+
+      wizard.toggleResource('BodyStructure');
+      wizard.toggleResource('Observation');
+      expect(saved().enabledVariants).toEqual(['radiotherapy-volume']);
+
+      wizard.toggleResource('BodyStructure');
+      expect(saved().enabledVariants).toEqual([]);
+      expect(wizard.ehrKindSwitches().enabledVariants).toEqual([]);
+    });
+
+    it('Procedure and ServiceRequest share one switch: unticking one type keeps the other\'s summaries', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      loadTarget('Epic', EPIC_CAPABILITIES);
+      wizard.toggleResource('Procedure');
+      wizard.toggleResource('ServiceRequest');
+
+      kind('Procedure', 'external-radiotherapy-summary');
+
+      expect(wizard.selectedResources()).toEqual(['ServiceRequest']);
+      expect(saved().enabledVariants).toEqual(['external-radiotherapy-summary']);
+    });
+
+    it('an eClinicalWorks history kind turns the telephone encounter on by itself', () => {
+      create('ehrwriteback', { ehrVendor: 'Healow' });
+      loadTarget('Healow', ECW_CAPABILITIES);
+      wizard.toggleResource('Condition');
+      expect(saved().createHolderEncounter).toBeFalse();
+
+      kind('Condition', 'medical-history');
+      expect(saved()).toEqual({ enabledVariants: [], createHolderEncounter: true });
+
+      // One switch for both: Surgical history is ticked too once Procedure is, and unticking Medical history unticks
+      // Procedure, whose only kind it shared.
+      wizard.toggleResource('Procedure');
+      expect(wizard.ehrReviewTypeLines()).toEqual([
+        { resourceType: 'Condition', kinds: ['Problem list', 'Encounter diagnosis', 'Medical history'] },
+        { resourceType: 'Procedure', kinds: ['Surgical history'] },
+      ]);
+      kind('Condition', 'medical-history');
+      expect(wizard.selectedResources()).toEqual(['Condition']);
+      expect(saved().createHolderEncounter).toBeFalse();
+    });
+
+    it('hands the kinds to the form, and saves what the old Options list saved for the same choices', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      const form = fakeEhrForm();
+      useForm(form);
+      loadTarget('Epic', EPIC_CAPABILITIES);
+
+      wizard.toggleResource('Observation');
+      kind('Observation', 'lines-drains-airways');
+      kind('DocumentReference', 'document-information');
+      wizard.toggleResource('Procedure');
+      wizard.step.set(3);
+      wizard.next();
+
+      const [request] = destinations.create.calls.mostRecent().args;
+      const fields = JSON.parse(request.connectionMetadataJson!) as Record<string, string>;
+      // The old flow: Observation, DocumentReference and Procedure ticked, then these three APIs ticked under Options.
+      expect(fields['dest_enabledVariants'].split(',').sort())
+        .toEqual(['document-information', 'external-radiotherapy-summary', 'lines-drains-airways']);
+      expect(fields['dest_createHolderEncounter']).toBe('false');
+    });
+
+    it('a reopened destination starts with its saved kinds; a CSV / SQL-only one is dropped for an EHR source', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      wizard.selectedResources.set(['Observation']);
+      loadTarget('Epic', EPIC_CAPABILITIES, { dest_enabledVariants: 'lines-drains-airways,dicom-image-characteristics' });
+
+      expect(wizard.ehrReviewTypeLines()).toEqual([
+        { resourceType: 'Observation', kinds: ['Vital signs', 'Lines, drains and airways'] },
+      ]);
+      expect(saved().enabledVariants).toEqual(['lines-drains-airways']);
+    });
+
+    it('Step 2 waits for a reopened type with no kind ticked; Options never waits for a kind', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      wizard.selectedResources.set(['Procedure']);
+      loadTarget('Epic', EPIC_CAPABILITIES);
+      wizard.step.set(2);
+      expect(wizard.ehrTypesWithoutKind()).toEqual(['Procedure']);
+      expect(wizard.isNextDisabled()).toBeTrue();
+
+      kind('Procedure', 'external-radiotherapy-summary');
+      expect(wizard.isNextDisabled()).toBeFalse();
+
+      useForm(fakeEhrForm());
+      wizard.selectedResources.set(['Procedure']);
+      wizard.ehrKindSwitches.set({ enabledVariants: [], createHolderEncounter: false });
+      wizard.step.set(3);
+      expect(wizard.isNextDisabled()).toBeFalse();
+    });
+
+    it('a greyed selected type with no kind never holds Step 2 (its card shows no kinds to tick)', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic', sourceResources: ['Observation'] });
+      wizard.selectedResources.set(['Observation', 'BodyStructure']);
+      loadTarget('Epic', EPIC_CAPABILITIES);
+      wizard.step.set(2);
+
+      const body = wizard.ehrWriteTypeRows()!.find((r) => r.resourceType === 'BodyStructure')!;
+      expect(body.selectable).toBeFalse();
+      expect(body.kinds).toEqual([]);
+      expect(wizard.ehrTypesWithoutKind()).toEqual([]);
+      expect(wizard.isNextDisabled()).toBeFalse();
+    });
+
+    it('eClinicalWorks: a greyed Procedure with the telephone encounter off neither holds Step 2 nor is unticked by a kind', () => {
+      create('ehrwriteback', { ehrVendor: 'Healow', sourceResources: ['Condition'] });
+      wizard.selectedResources.set(['Condition', 'Procedure']);
+      loadTarget('Healow', ECW_CAPABILITIES, { dest_createHolderEncounter: 'false' });
+      wizard.step.set(2);
+      expect(wizard.ehrTypesWithoutKind()).toEqual([]);
+      expect(wizard.isNextDisabled()).toBeFalse();
+
+      kind('Condition', 'medical-history');
+      kind('Condition', 'medical-history');
+      // The greyed card stays as it was, for the user to untick.
+      expect(wizard.selectedResources()).toEqual(['Condition', 'Procedure']);
+    });
+
+    it('Review lists the kinds under the resource types', () => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      fixture.detectChanges();
+      loadTarget('Epic', EPIC_CAPABILITIES);
+      wizard.toggleResource('AllergyIntolerance');
+      kind('Observation', 'lines-drains-airways');
+      wizard.step.set(4);
+      fixture.detectChanges();
+
+      const lines = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="ewb-review-type"]'))
+        .map((l) => l.textContent!.trim());
+      expect(lines).toEqual(['AllergyIntolerance', 'Observation: Vital signs, Lines, drains and airways']);
     });
   });
 

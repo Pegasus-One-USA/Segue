@@ -110,7 +110,7 @@ describe('ehrWriteReasonLabel', () => {
     expect(ehrWriteReasonLabel('patient-awaiting-mpi'))
       .toBe('Patient not found by identifier; waiting for the master patient index to match them');
     expect(ehrWriteReasonLabel('holder-encounter-not-enabled'))
-      .toBe('Needs a telephone encounter, which this destination does not create (turn it on to send)');
+      .toBe('Needs a telephone encounter, which this destination does not create (tick the history kind under Resource types to send)');
     expect(ehrWriteReasonLabel('missing-snomed-code')).toBe('No SNOMED code (athena files problems by SNOMED only)');
     expect(ehrWriteReasonLabel('not-completed')).toBe('Not completed');
   });
@@ -155,7 +155,7 @@ describe('a test run on a Generic FHIR server', () => {
     expect(report.TestRun).toBeTrue();
     expect(ehrWriteScopeLabel(report.ScopeStatus).ok).toBeTrue();
     expect(ehrWriteReportToText(report)).toContain('Test run on a FHIR test server, shaped as Athenahealth');
-    expect(ehrWriteReasonLabel('variant-not-enabled')).toContain('has not turned on');
+    expect(ehrWriteReasonLabel('variant-not-enabled')).toContain('has not ticked');
     expect(ehrWriteReasonLabel('target-references-unmappable')).toContain('CSV / SQL Table');
   });
 

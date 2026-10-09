@@ -573,8 +573,8 @@ Encounter Diagnosis API, `medical-history` (or SNOMED 435871000124102) → Medic
 none and is skipped. athena splits Observations into vital signs and lab results.
 
 eCW medical and surgical history are filed only on an open telephone encounter, which eCW will not create for us.
-`CreatesHolderEncounter` capabilities are skipped (`holder-encounter-not-enabled`) unless the destination ticks
-*File medical and surgical history on a new telephone encounter*. Then the channel creates one telephone encounter
+`CreatesHolderEncounter` capabilities are skipped (`holder-encounter-not-enabled`) unless the destination turns on
+`dest_createHolderEncounter` (in the wizard, by ticking the Medical history or Surgical history kind under its type). Then the channel creates one telephone encounter
 per patient per run, **at send time**, after the ledger, the write cap and the live check — so a dry run, or a run
 whose history items are all already written, creates none. A failed create skips the items for this run
 (`holder-encounter-not-created`) without a ledger row, so the next run tries again. The content hash is taken before

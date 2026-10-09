@@ -146,17 +146,31 @@ runs at run time) or on copy, so a workflow saved before the rule still runs.
 - "Needs a CSV / SQL Table source" (every way the EHR files it needs the EHR's own ids);
 - "Not read by this destination's source" (only for an already-selected type the source no longer reads).
 
-A type that only needs an option is **not** greyed: the wizard passes `optInsLater: true`, so it stays tickable with
-the note `Needs "X" turned on under Options (next step)`, and the Options step then holds Next until that option is
-on (`missingOptIns`). The "Enable … under Options" / `Turn on "File medical and surgical history on a new telephone
-encounter" under Options` reasons exist in the model but are not shown in the wizard. Other notes on tickable types:
+**Kinds of record under a type** (`ehr-write-kinds.model.ts`, `ehr-write-kind-list` inside each card). A type the EHR
+files in more than one way, or only through an opt-in, lists its kinds, one per capability from this source
+(`kindsFor`; a `requiresTargetReferences` kind only for a CSV / SQL source), labelled by `KIND_LABELS` per variant. A
+kind without `requiresVariantOptIn` / `createsHolderEncounter` is "always included" (ticked and locked while the type
+is: the writer picks it from the record's shape and has no switch to drop it; while the type is unticked its empty box
+reads "included whenever <type> is ticked"). An optional kind *is* its saved switch,
+a variant in `dest_enabledVariants` or `dest_createHolderEncounter`, held in the wizard's `ehrKindSwitches` (seeded
+from the saved fields) and handed to the form with `setWriteKinds` (on every change, Step 2's Next and Options' Next);
+`switchesFor` keeps only switches a selected type uses. Ticking a kind ticks its type; unticking a type's last kind
+unticks the type; ticking a type with no always-included kind turns all its kinds on. A shared switch (Epic Procedure
+and ServiceRequest radiotherapy summaries; eCW medical and surgical history on one holder encounter) is ticked
+wherever it appears. Its note (`sharedSwitchNote`) says what the next click does: "Also ticks … under …" while
+the switch is off; "Unticking also unticks … under …" (", and so <type> (its only kind)" when that type is left with
+none, which `onKindToggled` then unticks) while on and this type has another kind; otherwise "Same setting as … under
+…". The holder encounter is turned on by ticking a history
+kind, with a note saying so; Options has no holder checkbox and never blocks Next on an opt-in. Step 2's Next waits
+for a selected, tickable type with kinds but none ticked (only a destination saved before this); a greyed selected
+type shows no kinds, so it never holds Next and is never unticked by a kind toggle. Other notes on tickable types:
 "Sent as a dry run until Vendor write APIs activated is ticked on the connection", "Sent as a dry run only for now"
 (regardless of the connection's activation), "Created only when "Create the patient when the EHR has no match" is on
 under Options".
 
 **Pre-tick (`8ff9be1d`).** A *new* destination whose source declares its types starts Step 2 with every source type
 ticked ("These are the N resource types your source reads. Untick any this destination doesn't need."). An EHR ticks
-only types it accepts without an extra option. A reopened destination keeps its saved selection; a legacy source
+only types with an always-included kind, with just those kinds. A reopened destination keeps its saved selection; a legacy source
 starts unticked; the pre-tick happens once. The cards no longer show permission codes.
 
 **Runtime.** The source still fetches only what its destinations chose (narrowing, never widening). Fix `4a476817`:
@@ -184,8 +198,13 @@ Review**, and Step 1 reads "Write to …". Saved nodes keep `transformId` `dest-
 | Dry run: check every record, send nothing | `true` | empty | the EHR's own write connections |
 | Test on a FHIR server (Epic, eCW, athena only) | `false` | the EHR | FHIR server write connections that can stand in for it |
 
-The radios are listed Live, Dry run, Test (`runModesFor`); a new destination has no saved `dest_dryRun`, so Dry run
-is preselected. A FHIR server tile offers Live and Dry run only. Reading back (`runModeOf`): anything but an explicit
+The radios are listed Live, Dry run, Test (`runModesFor`). **Dry run is offered only while the system setting
+`EhrWriteBack:DryRunEnabled` is on** (`EhrWriteBackSettings.DryRunEnabledKey`, default **false** like
+`CloneModeEnabled`; seeded by `SystemSettingsSeeder`, exposed as `DryRunEnabled` on `EhrWriteCapabilitiesDto`; a
+missing value or failed call counts as off; saving System Settings clears `EhrWriteCapabilitiesService`'s cache).
+With it on, a new destination preselects Dry run; with it off, Epic / eCW / athena preselect Test and the FHIR server
+tile leaves Run mode unselected so Live is always a deliberate choice. A saved node with `dest_dryRun` true stays a dry
+run whatever the setting says (the Runtime executor and the writer never read it) and shows a note. A FHIR server tile offers Live and Dry run only. Reading back (`runModeOf`): anything but an explicit
 `dest_dryRun` = `false` is a dry run, as in the executor. A legacy node with **both** a dry run and a test vendor
 reopens as a plain **Dry run** without losing its connection (`droppedTestServer` tells the form the saved test server
 no longer fits). Test always sends to a FHIR server write connection; the backend still refuses a test run on any
@@ -200,13 +219,13 @@ saved destination's settings; it shows only when the destination is created from
 
 **Options** (Step 3): `ehr-write-general-options` (Max writes per run, Clinical notes are filed as "Preliminary (a
 clinician reviews and signs)" or "Final (signed under the integration user)", Create the patient when the EHR has no
-match), `ehr-ecw-write-options` (the history-on-a-telephone-encounter checkbox only when the connection offers holder
-encounters, `offersHolderEncounter`), `ehr-athena-write-options` (Department id placeholder shows the connection
-default; with no department on the node or the connection, new patients are rejected), `ehr-opt-in-apis` ("Also write through these … APIs"), `ehr-clone-mode-option`. A new write-back
-is saved once, on leaving Options.
+match), `ehr-ecw-write-options` (note author only), `ehr-athena-write-options` (Department id placeholder shows the
+connection default; with no department on the node or the connection, new patients are rejected),
+`ehr-clone-mode-option`. Options holds only how records are written; what is written is chosen on Step 2. A new
+write-back is saved once, on leaving Options.
 
 **Review.** An EHR write-back's Review step shows the cards Destination type, De-identification, Name, Writes to,
-Mode, Patients and Resource types.
+Mode, Patients and Resource types (each type with the kinds written, `ehr-review-resource-types`).
 
 - `e349c08a` changed the **Destination type** card: `reviewDestLabel()` returns
   `ehrWriteBackLabel(ehrVendor() ?? savedWriteVendorOf(activeFormConfig()))`, e.g. "EHR write-back — Epic" (a test

@@ -116,7 +116,7 @@ const REASON_LABELS: Record<string, string> = {
   'write-cap-reached': 'Max writes per run reached',
   'not-selected': 'Type not selected under Resource types',
   'not-writable': 'This EHR does not accept this type',
-  'variant-not-enabled': 'Goes through an API this destination has not turned on (tick it under "Also write through")',
+  'variant-not-enabled': 'A kind of record this destination has not ticked (tick it under its type in Resource types)',
   'target-references-unmappable': "Needs the target EHR's own ids, which only a CSV / SQL Table source can give",
   'not-a-fhir-resource': 'Not a FHIR resource',
   'missing-id': 'Source record has no id',
@@ -153,7 +153,7 @@ const REASON_LABELS: Record<string, string> = {
   'patient-deceased-patient': 'Patient is deceased',
   // Visits
   'no-eligible-encounter': 'No suitable visit for this patient in the EHR',
-  'holder-encounter-not-enabled': 'Needs a telephone encounter, which this destination does not create (turn it on to send)',
+  'holder-encounter-not-enabled': 'Needs a telephone encounter, which this destination does not create (tick the history kind under Resource types to send)',
   'holder-encounter-not-created': 'The telephone encounter could not be created (retried next run)',
   // Allergies and problems
   'not-active': 'Not active',

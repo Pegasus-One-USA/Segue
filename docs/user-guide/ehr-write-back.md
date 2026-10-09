@@ -152,25 +152,30 @@ This list holds every destination and every **EHR write connection** (the login 
 1. Optional: **Copy settings from a saved … destination (optional)** copies the settings of an earlier destination.
    It is shown only when you add a new destination, not when you reopen one.
 2. Enter a **Destination name**.
-3. Choose the **Run mode**. The choices are listed Live, Dry run, Test; **Dry run is already selected** for a new
-   destination:
+3. Choose the **Run mode**. **Dry run is shown only when an admin has turned it on** under **Settings → System
+   Settings** (`EhrWriteBack:DryRunEnabled`, off by default, like clone mode). Without it, an Epic, eClinicalWorks or
+   athenahealth destination starts on **Test on a FHIR server**; the FHIR server tile offers only **Live**, which you
+   must choose yourself. With it on, the choices are Live, Dry run, Test and Dry run is already selected:
 
    | Run mode | What happens | When to use it |
    |---|---|---|
    | **Live: write into …** | Records are written into the EHR. EHR writes cannot be undone. | Only after a dry run of this workflow looks right. |
-   | **Dry run: check every record, send nothing** | Segue checks each record against the real EHR — finds the patient, looks for a visit where needed, checks what Segue has already sent — and writes nothing. | Always first, and after any change. This is the default. |
+   | **Dry run: check every record, send nothing** | Segue checks each record against the real EHR — finds the patient, looks for a visit where needed, checks what Segue has already sent — and writes nothing. | Always first, and after any change, when your admin has turned Dry run on. |
    | **Test on a FHIR server: send exactly what … would get to a test server instead** | The records are really written, but to a FHIR test server, shaped exactly as the EHR would receive them. Nothing reaches the EHR. Not offered on the FHIR server tile. | To see the actual records an EHR would get, before any live write. |
 
    Why keep Dry run when Test exists: only a dry run checks against the **real** EHR (its patients, its visits, and
    what Segue's app there is allowed to do). A test server cannot tell you whether the EHR will find your patients.
+   A destination already saved as a dry run stays a dry run even if the setting is later turned off; it shows "Dry run
+   is turned off in System Settings. This destination stays a dry run until you choose another Run mode." A change to
+   the setting shows in the destination form after the System Settings are saved.
 4. Under **Write to** (or **Test server** in a test run), choose a connection. Only connections that fit the EHR and
    run mode are listed. To make one here, click **New connection**.
 5. A blue note lists the types this EHR accepts. Click **Next**.
 
 ### Step 2 — Resource types
 
-1. The types your source reads are listed. On a **new** destination, the types this EHR accepts without needing an
-   extra option are already ticked, and the line at the top reads "These are the N resource types your source
+1. The types your source reads are listed. On a **new** destination, the types this EHR writes without an extra
+   choice are already ticked, and the line at the top reads "These are the N resource types your source
    reads. Untick any this destination doesn't need." (This happens only when the source lists its types under
    **Resource types to read**; a reopened destination keeps what was saved.)
 2. Untick what this destination should not write.
@@ -179,14 +184,27 @@ This list holds every destination and every **EHR write connection** (the login 
      receive that type;
    - "Needs a CSV / SQL Table source" — it needs the EHR's own ids, which only your own data can supply;
    - "Not read by this destination's source" — it was ticked before, but the source no longer reads it. Untick it.
-4. Some tickable types carry a note:
-   - `Needs "…" turned on under Options (next step)` — you may tick it, but you must then turn that option on in
-     Step 3. **Next** stays unavailable on Step 3 until you do;
+4. A type the EHR writes in more than one way lists its **kinds of record** under it, for example Observation →
+   Vital signs, Lines, drains and airways; DocumentReference → Clinical notes, Scanned documents; Condition
+   (eClinicalWorks) → Problem list, Encounter diagnosis, Medical history.
+   - A kind marked "always included" is ticked whenever the type is; Segue picks it from each record's shape. While
+     the type is unticked it reads "included whenever <type> is ticked".
+   - The other kinds start unticked; tick the ones this destination should write. Ticking a kind ticks its type, and
+     unticking a type's last kind unticks the type. A type written only through such kinds (for example Epic
+     BodyStructure → Radiotherapy volumes) ticks all its kinds when you tick the type.
+   - Kinds that need the EHR's own ids are shown only when the source is a CSV / SQL Table source.
+   - eClinicalWorks Medical history and Surgical history are filed on a new telephone encounter. Ticking either turns
+     that on; the note under it says so, and there is nothing to set later. One setting serves both, and the note under
+     each says what clicking it does to the other: "Also ticks …", "Unticking also unticks …" (naming the type too
+     when that was its only kind), or "Same setting as …".
+   - A destination saved before kinds were chosen here may show "Tick at least one, or untick the type." under a
+     type; **Next** waits until you do.
+5. Some tickable types carry a note:
    - "Sent as a dry run until Vendor write APIs activated is ticked on the connection";
    - "Sent as a dry run only for now" — Segue cannot yet write this type for real to this EHR, whatever the
      connection says;
    - "Created only when "Create the patient when the EHR has no match" is on under Options".
-5. Click **Next**.
+6. Click **Next**.
 
 ### Step 3 — Options ("how records are written to …")
 
@@ -196,18 +214,17 @@ This list holds every destination and every **EHR write connection** (the login 
 - **Create the patient when the EHR has no match**: off by default. Patients are matched, never guessed; an
   uncertain match is left for review. It only helps when the EHR clearly answers that it has no such patient (see
   Troubleshooting).
-- eClinicalWorks: **Note author (eCW practitioner id)**, and, when the connection offers it, **File medical and
-  surgical history on a new telephone encounter**.
+- eClinicalWorks: **Note author (eCW practitioner id)**.
 - athenahealth: **Provider id (athena)** and **Department id (athena)**. Leave the department empty to use the
   connection's department. If neither this box nor the connection has a department, new patients are rejected.
-- **Also write through these … APIs** (Epic): extra APIs, each sent only when ticked.
 
 Click **Next**.
 
 ### Step 4 — Review
 
 Check the cards: **Destination type** (for example "EHR write-back — Epic"), **De-identification**, **Name**,
-**Writes to** (connection and EHR), **Mode**, **Patients** and **Resource types**. Then click **✓ Add to Workflow**,
+**Writes to** (connection and EHR), **Mode**, **Patients** and **Resource types** (each with the kinds of record
+written, for example "Observation: Vital signs, Lines, drains and airways"). Then click **✓ Add to Workflow**,
 and click **Save** at the top of the workflow builder.
 
 ## 4. A database destination (SQL Server, MongoDB and others)

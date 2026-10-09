@@ -66,7 +66,7 @@ export class EhrWriteConnectionPickerComponent {
   readonly loading = input<boolean>(false);
   readonly loadError = input<EhrWriteTargetsError | null>(null);
   readonly vendor = input<EhrWriteVendor | null>(null);
-  readonly runMode = input<EhrRunMode>('dryRun');
+  readonly runMode = input<EhrRunMode | null>('dryRun');
 
   /** A connection was created here; the host reloads and picks it. */
   readonly created = output<SourceConnectionModel>();

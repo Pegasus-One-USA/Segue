@@ -59,6 +59,9 @@ interface Options {
   getAll?: () => Observable<SourceConnectionModel[]>;
   /** Vendors whose own capabilities never arrive (a test target still loading). */
   pendingVendors?: string[];
+  /** The EhrWriteBack:DryRunEnabled setting as the capabilities API reports it. Most cases run with it on (the
+   *  default here); 'omitted' sends no value at all, as an older API or a failed call does. */
+  dryRunEnabled?: boolean | 'omitted';
 }
 
 /**
@@ -77,7 +80,9 @@ describe('EhrWriteBackDestinationFormComponent', () => {
           provide: EhrWriteCapabilitiesService,
           useValue: {
             forVendor: (vendor: string) =>
-              (options.pendingVendors ?? []).includes(vendor) ? NEVER : of(BY_VENDOR[vendor]),
+              (options.pendingVendors ?? []).includes(vendor)
+                ? NEVER
+                : of(options.dryRunEnabled === 'omitted' ? BY_VENDOR[vendor] : { ...BY_VENDOR[vendor], dryRunEnabled: options.dryRunEnabled ?? true }),
           },
         },
         {
@@ -107,7 +112,8 @@ describe('EhrWriteBackDestinationFormComponent', () => {
     const optionIds = () => Array.from(el.querySelectorAll<HTMLOptionElement>('#dw-ewb-target option')).map(o => o.value).filter(Boolean);
     const modes = () => Array.from(el.querySelectorAll<HTMLInputElement>('input[type="radio"]')).map(r => r.dataset['mode']);
     const notice = () => el.querySelector('[data-testid="ewb-connection-notice"]')?.textContent?.trim() ?? null;
-    return { fixture, form, el, getAll, pick, mode, optionIds, modes, notice };
+    const text = () => el.textContent?.replace(/\s+/g, ' ') ?? '';
+    return { fixture, form, el, getAll, pick, mode, optionIds, modes, notice, text };
   }
 
   describe('a vendor tile', () => {
@@ -182,9 +188,8 @@ describe('EhrWriteBackDestinationFormComponent', () => {
       mode('test');
       pick('hapi');
 
-      form.toggleVariant('lines-drains-airways');
-      form.toggleVariant('external-radiotherapy-summary');
-      form.toggleVariant('lines-drains-airways');
+      // The kinds ticked on Step 2, handed over by the wizard; a variant the vendor does not offer is never saved.
+      form.setWriteKinds({ enabledVariants: ['external-radiotherapy-summary', 'medical-history'], createHolderEncounter: false });
       expect(form.getFullConfig()['dest_enabledVariants']).toBe('external-radiotherapy-summary');
     });
   });
@@ -360,7 +365,7 @@ describe('EhrWriteBackDestinationFormComponent', () => {
     const { form, pick, mode } = create({ vendor: 'Healow' });
     mode('test');
     pick('hapi');
-    form.form.controls.createHolderEncounter.setValue(true);
+    form.setWriteKinds({ enabledVariants: [], createHolderEncounter: true });
 
     expect(form.effective()!.offersHolderEncounter).toBeTrue();
     expect(form.getFullConfig()['dest_createHolderEncounter']).toBe('true');
@@ -407,19 +412,35 @@ describe('EhrWriteBackDestinationFormComponent', () => {
     });
   });
 
-  it('works out the opt-ins the chosen resource types still need', () => {
-    const { fixture, form, pick, mode } = create({ vendor: 'Epic' });
+  it('the options half lists no vendor APIs and no holder-encounter checkbox: Step 2 chooses the kinds', () => {
+    const { fixture, el, form, pick, mode } = create({ vendor: 'Healow' });
     mode('test');
     pick('hapi');
-    fixture.componentRef.setInput('selectedResourceTypes', ['AllergyIntolerance', 'Procedure']);
+    fixture.componentRef.setInput('section', 'options');
     fixture.detectChanges();
 
-    expect(form.missingOptIns()).toEqual([
-      { resourceType: 'Procedure', variants: ['external-radiotherapy-summary'], holderEncounter: false },
-    ]);
+    expect(el.querySelector('[data-variant]')).toBeNull();
+    expect(el.textContent).not.toContain('Also write through');
+    expect(el.textContent).not.toContain('telephone encounter');
+    expect(el.querySelector('#dw-ewb-provider')).not.toBeNull();
+    expect(form.optionsValid()).toBeTrue();
 
-    form.toggleVariant('external-radiotherapy-summary');
-    expect(form.missingOptIns()).toEqual([]);
+    form.setWriteKinds({ enabledVariants: [], createHolderEncounter: true });
+    expect(form.optIns()).toEqual({ enabledVariants: [], createHolderEncounter: true, createPatientIfMissing: false });
+    form.setWriteKinds({ enabledVariants: [], createHolderEncounter: false });
+    expect(form.getFullConfig()['dest_createHolderEncounter']).toBe('false');
+  });
+
+  it('the Epic options half lists no vendor APIs either', () => {
+    const { fixture, el, pick, mode } = create({ vendor: 'Epic' });
+    mode('test');
+    pick('hapi');
+    fixture.componentRef.setInput('section', 'options');
+    fixture.detectChanges();
+
+    expect(el.querySelector('[data-variant]')).toBeNull();
+    expect(el.textContent).not.toContain('APIs');
+    expect(el.textContent).not.toContain('needs a CSV / SQL source');
   });
 
   describe('listing write connections', () => {
@@ -444,6 +465,7 @@ describe('EhrWriteBackDestinationFormComponent', () => {
 
     it('with no connection yet, points to New connection and Destination Connections', () => {
       const { el, mode } = create({ vendor: 'Athenahealth', connections: [] });
+      mode('live');
       expect(el.textContent).toContain('No athenahealth write connection yet. Click New connection, or add one under Destination Connections.');
       expect(el.querySelector('[data-testid="ewb-new-connection"]')).not.toBeNull();
 
@@ -461,6 +483,111 @@ describe('EhrWriteBackDestinationFormComponent', () => {
       writesTo: 'epic (Epic)',
       mode: 'Live: writes into Epic, up to 500 records per run',
     });
+  });
+
+  describe('with Dry run turned off in System Settings', () => {
+    const OFF_NOTE = 'Dry run is turned off in System Settings. This destination stays a dry run until you choose another Run mode.';
+
+    it('a new destination is offered Live and Test, and starts as Test on a FHIR server', () => {
+      const { form, modes, text } = create({ vendor: 'Epic', dryRunEnabled: false });
+
+      expect(modes()).toEqual(['live', 'test']);
+      expect(form.runMode()).toBe('test');
+      expect(text()).not.toContain(OFF_NOTE);
+      expect(text()).toContain('Start with a test on a FHIR server.');
+    });
+
+    it('the FHIR server tile offers Live only and leaves Run mode unchosen until the user picks it', () => {
+      const { form, modes, pick, mode, el, text } = create({ vendor: 'GenericFhir', dryRunEnabled: false });
+      expect(modes()).toEqual(['live']);
+      expect(form.runMode()).toBeNull();
+      expect(el.querySelector<HTMLInputElement>('input[data-mode="live"]')!.checked).toBeFalse();
+      expect(text()).toContain('Choose a Run mode.');
+
+      pick('hapi');
+      expect(form.isValid()).toBeFalse();
+      expect(form.getMetadata()).toBeNull();
+      // Never a live write by default, even through the safety net.
+      expect(form.getFullConfig()['dest_dryRun']).toBe('true');
+
+      mode('live');
+      expect(form.isValid()).toBeTrue();
+      expect(form.getFullConfig()['dest_dryRun']).toBe('false');
+    });
+
+    it('without a tile, never preselects Live, not even once a connection is chosen', () => {
+      const { form, modes, pick } = create({ dryRunEnabled: false });
+      expect(modes()).toEqual(['live']);
+      expect(form.runMode()).toBeNull();
+
+      pick('epic');
+      expect(modes()).toEqual(['live', 'test']);
+      expect(form.runMode()).toBeNull();
+      expect(form.isValid()).toBeFalse();
+      expect(form.getFullConfig()['dest_dryRun']).toBe('true');
+    });
+
+    it('a saved dry run stays a dry run, with Dry run still offered and a note saying why', () => {
+      const { form, fixture, modes, mode, text } = create({ vendor: 'Epic', dryRunEnabled: false });
+      form.patchFrom({ dest_sourceConnectionId: 'epic', dest_dryRun: 'true' });
+      fixture.detectChanges();
+
+      expect(form.runMode()).toBe('dryRun');
+      expect(modes()).toEqual(['live', 'dryRun', 'test']);
+      expect(text()).toContain(OFF_NOTE);
+      expect(form.isValid()).toBeTrue();
+      expect(form.getFullConfig()).toEqual(jasmine.objectContaining({ dest_dryRun: 'true', dest_testAsVendor: '' }));
+
+      mode('live');
+      expect(text()).not.toContain(OFF_NOTE);
+      expect(form.getFullConfig()['dest_dryRun']).toBe('false');
+    });
+
+    it('a saved dry run on the FHIR server tile stays a dry run too', () => {
+      const { form, fixture, modes, text } = create({ vendor: 'GenericFhir', dryRunEnabled: false });
+      form.patchFrom({ dest_sourceConnectionId: 'hapi', dest_dryRun: 'true' });
+      fixture.detectChanges();
+
+      expect(form.runMode()).toBe('dryRun');
+      expect(modes()).toEqual(['live', 'dryRun']);
+      expect(text()).toContain(OFF_NOTE);
+      expect(form.getFullConfig()['dest_dryRun']).toBe('true');
+    });
+
+    it('a saved live run is offered no Dry run', () => {
+      const { form, fixture, modes } = create({ vendor: 'Epic', dryRunEnabled: false });
+      form.patchFrom({ dest_sourceConnectionId: 'epic', dest_dryRun: 'false' });
+      fixture.detectChanges();
+
+      expect(form.runMode()).toBe('live');
+      expect(modes()).toEqual(['live', 'test']);
+    });
+
+    it('a new destination after reset is offered no Dry run again', () => {
+      const { form, fixture, modes } = create({ vendor: 'Epic', dryRunEnabled: false });
+      form.patchFrom({ dest_sourceConnectionId: 'epic', dest_dryRun: 'true' });
+      fixture.detectChanges();
+
+      form.reset();
+      fixture.detectChanges();
+      expect(modes()).toEqual(['live', 'test']);
+      expect(form.runMode()).toBe('test');
+    });
+  });
+
+  it('treats a missing setting (older API or failed call) as off: Dry run is not offered', () => {
+    const { modes } = create({ vendor: 'Epic', dryRunEnabled: 'omitted' });
+
+    expect(modes()).toEqual(['live', 'test']);
+  });
+
+  it('with Dry run turned on, nothing changes: Dry run is offered, chosen first, and no note shows', () => {
+    const { form, modes, text } = create({ vendor: 'Epic', dryRunEnabled: true });
+
+    expect(modes()).toEqual(['live', 'dryRun', 'test']);
+    expect(form.runMode()).toBe('dryRun');
+    expect(text()).not.toContain('Dry run is turned off');
+    expect(text()).toContain('Start with a dry run.');
   });
 
   describe('a connection created on the go', () => {

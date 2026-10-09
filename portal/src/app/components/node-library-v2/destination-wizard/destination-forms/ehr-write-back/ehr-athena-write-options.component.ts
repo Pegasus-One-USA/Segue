@@ -43,5 +43,5 @@ export class EhrAthenaWriteOptionsComponent {
   readonly departmentId = input.required<FormControl<string | null>>();
   /** The chosen connection's own default department, if it has one. */
   readonly connectionDepartmentId = input<string | null>(null);
-  readonly runMode = input<EhrRunMode>('dryRun');
+  readonly runMode = input<EhrRunMode | null>('dryRun');
 }

@@ -86,8 +86,8 @@ describe('DestinationWizardComponent — narrowed to the upstream source', () =>
 
     expect(wizard.availableGroups()).toEqual(['Condition']);
     expect(wizard.ehrWriteTypeRows()).toEqual([
-      { resourceType: 'Condition', selectable: true, reason: null, note: null },
-      { resourceType: 'Encounter', selectable: false, reason: 'Not accepted by Epic', note: null },
+      { resourceType: 'Condition', selectable: true, reason: null, note: null, kinds: [] },
+      { resourceType: 'Encounter', selectable: false, reason: 'Not accepted by Epic', note: null, kinds: [] },
     ]);
     // Condition's 'commonly used together' Encounter is greyed, so it is not recommended either.
     wizard.selectedResources.set(['Condition']);
@@ -103,8 +103,8 @@ describe('DestinationWizardComponent — narrowed to the upstream source', () =>
     });
 
     expect(wizard.ehrWriteTypeRows()).toEqual([
-      { resourceType: 'Condition', selectable: true, reason: null, note: null },
-      { resourceType: 'Immunization', selectable: false, reason: 'Not read by this destination\'s source', note: null },
+      { resourceType: 'Condition', selectable: true, reason: null, note: null, kinds: [] },
+      { resourceType: 'Immunization', selectable: false, reason: 'Not read by this destination\'s source', note: null, kinds: [] },
     ]);
     // Offered only what is tickable, so the Step 2 callout still flags it.
     expect(wizard.unsupportedSelectedResources()).toEqual(['Immunization']);

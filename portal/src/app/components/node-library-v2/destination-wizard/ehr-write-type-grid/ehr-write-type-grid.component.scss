@@ -25,17 +25,13 @@
 
 .ewtg-card {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  text-align: left;
+  flex-direction: column;
   background: var(--color-surface);
   border: 1.5px solid var(--color-border);
   border-radius: 10px;
-  cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 
-  &:hover:not(:disabled) {
+  &:hover:not(.ewtg-card--locked) {
     border-color: var(--color-primary);
   }
 
@@ -54,10 +50,31 @@
     background: var(--color-warning-soft);
   }
 
-  &:disabled {
-    cursor: not-allowed;
+  &--locked {
     opacity: 0.6;
   }
+}
+
+.ewtg-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.ewtg-kinds {
+  padding: 0 14px 10px 46px;
 }
 
 .ewtg-check {

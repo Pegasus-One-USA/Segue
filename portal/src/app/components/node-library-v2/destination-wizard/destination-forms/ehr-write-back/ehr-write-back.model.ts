@@ -31,11 +31,12 @@ export interface WritableTarget {
   cloneModeEnabled: boolean;
   /** Vendors this connection can stand in for in a test run (a Generic FHIR test server); empty otherwise. */
   testableVendors: string[];
-  /** APIs the destination must enable on top of selecting the type, one entry per variant. */
+  /** Variants a destination can turn on (a kind ticked on Step 2), one entry per variant; getFullConfig saves only
+   *  these. */
   optInApis: OptInApi[];
   /** athenahealth: the connection's default department; this node's own Department id, when set, overrides it. */
   departmentId: string | null;
-  /** Everything the vendor accepts, so the opt-ins a selection still needs can be worked out (missingOptInsFor). */
+  /** Everything the vendor accepts. */
   capabilities: EhrWriteCapability[];
 }
 
@@ -44,15 +45,6 @@ export interface OptInApi {
   label: string;
   /** Needs the target's own ids, so only a CSV / SQL Table source can feed it. */
   tabularOnly: boolean;
-}
-
-/** A selected resource type the writer would skip until an option is turned on under Options. */
-export interface EhrMissingOptIn {
-  resourceType: string;
-  /** API variants any one of which, ticked, lets the type be written. */
-  variants: string[];
-  /** The type is written only on a holder encounter (eCW history). */
-  holderEncounter: boolean;
 }
 
 /** The vendors a FHIR test server can stand in for. */
@@ -92,9 +84,23 @@ export function savedWriteVendorOfMetadata(metadataJson: string | null | undefin
   }
 }
 
-/** The run modes a vendor offers: a FHIR server (or a vendor not known yet) has no test server to stand in for. */
-export function runModesFor(vendor: EhrWriteVendor | null): EhrRunMode[] {
-  return vendor === null || vendor === 'GenericFhir' ? ['live', 'dryRun'] : ['live', 'dryRun', 'test'];
+/**
+ * The run modes a vendor offers: a FHIR server (or a vendor not known yet) has no test server to stand in for. Dry run
+ * is left out when `dryRunOffered` is false (the EhrWriteBack:DryRunEnabled setting is off and the node was not saved
+ * as a dry run).
+ */
+export function runModesFor(vendor: EhrWriteVendor | null, dryRunOffered = true): EhrRunMode[] {
+  const modes: EhrRunMode[] = vendor === null || vendor === 'GenericFhir' ? ['live', 'dryRun'] : ['live', 'dryRun', 'test'];
+  return dryRunOffered ? modes : modes.filter(mode => mode !== 'dryRun');
+}
+
+/**
+ * The run mode a destination starts in, or falls back to when its mode is not offered: Dry run, else Test on a FHIR
+ * server. Never Live: when Live is all that is offered, null leaves Run mode unchosen so the user picks it on purpose.
+ */
+export function defaultRunMode(offered: readonly EhrRunMode[]): EhrRunMode | null {
+  if (offered.includes('dryRun')) return 'dryRun';
+  return offered.includes('test') ? 'test' : null;
 }
 
 /**
@@ -123,9 +129,10 @@ export function runModeFields(
 
 /**
  * The write connections a run mode can use: the vendor's own for Live and Dry run, and FHIR servers that can stand in
- * for it in a test run. With no vendor known yet, every connection is offered.
+ * for it in a test run. With no vendor known yet, every connection is offered. No run mode chosen yet lists the
+ * vendor's own, as Live and Dry run do.
  */
-export function connectionsFor(targets: WritableTarget[], vendor: EhrWriteVendor | null, mode: EhrRunMode): WritableTarget[] {
+export function connectionsFor(targets: WritableTarget[], vendor: EhrWriteVendor | null, mode: EhrRunMode | null): WritableTarget[] {
   if (vendor === null) return targets;
   if (mode === 'test') return targets.filter(t => t.vendor === 'GenericFhir' && t.testableVendors.includes(vendor));
   return targets.filter(t => t.vendor === vendor);

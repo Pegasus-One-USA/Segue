@@ -281,7 +281,7 @@
          fhirForm block above instead of this outlet (see isFhir() guard). ── -->
     @if (isStepActive(3) && isEhrWriteBack() && !chainNodeEntry()) {
       <!-- EHR Write-Back Options: the same form's options half (see activeFormInputs()'s `section`), shown after the
-           resource types so the options a chosen type needs can be named. The heading is here because the outlet
+           resource types and their kinds: only how records are written. The heading is here because the outlet
            below comes before the Step 2 and Step 3 blocks. -->
       <div class="dw-section-head">
         <span class="dw-section-num">3</span>
@@ -350,12 +350,15 @@
         </div>
       }
       @if (isEhrWriteBack() && ehrWriteTypeRows(); as writeRows) {
-        <!-- What the source reads, with the types this EHR cannot take greyed and their reason. -->
+        <!-- What the source reads, with the types this EHR cannot take greyed and their reason, and under each type
+             the EHR writes in more than one way, its kinds of record. -->
         <app-ehr-write-type-grid
           [rows]="writeRows"
           [selected]="selectedResources()"
           [query]="groupSearchQuery()"
-          (toggled)="toggleResource($event)" />
+          [switches]="ehrKindSwitches()"
+          (toggled)="toggleResource($event)"
+          (kindToggled)="onKindToggled($event)" />
       } @else {
       <div class="dw-resources">
         @for (r of filteredGroups(); track r) {
@@ -1208,7 +1211,11 @@
         }
         <div class="dw-review-card">
           <span class="dw-review-key">Resource types</span>
-          <span class="dw-review-val">{{ selectedResources().join(', ') || '—' }}</span>
+          @if (isEhrWriteBack()) {
+            <app-ehr-review-resource-types class="dw-review-val" [lines]="ehrReviewTypeLines()" />
+          } @else {
+            <span class="dw-review-val">{{ selectedResources().join(', ') || '—' }}</span>
+          }
         </div>
         @if (!isFhir() && !isAzureFhir() && !isEhrWriteBack()) {
           <div class="dw-review-card">

@@ -37,8 +37,22 @@ import {
   FhirElement,
 } from '../../../services/mapping-catalog.service';
 import { EhrWriteCapabilitiesService } from '../../../services/ehr-write-capabilities.service';
-import { EhrWriteTypeGridComponent } from './ehr-write-type-grid/ehr-write-type-grid.component';
-import { EhrWriteTarget, classifyEhrWriteTypes, missingOptInsFor } from './ehr-write-type-grid/ehr-write-type-grid.model';
+import { EhrWriteKindToggle, EhrWriteTypeGridComponent } from './ehr-write-type-grid/ehr-write-type-grid.component';
+import { EhrWriteTarget, classifyEhrWriteTypes } from './ehr-write-type-grid/ehr-write-type-grid.model';
+import {
+  EhrReviewTypeLine,
+  EhrWriteKindSwitches,
+  NO_KIND_SWITCHES,
+  ehrReviewTypeLines,
+  hasAlwaysIncludedKind,
+  isKindOn,
+  kindsFor,
+  setKind,
+  switchesFor,
+  typesWithoutKind,
+  withTypeTicked,
+} from './ehr-write-type-grid/ehr-write-kinds.model';
+import { EhrReviewResourceTypesComponent } from './destination-forms/ehr-write-back/ehr-review-resource-types.component';
 import { EhrWriteTargetService } from './ehr-write-type-grid/ehr-write-target.service';
 import {
   EhrWriteVendor,
@@ -544,6 +558,7 @@ interface ResolvedRuleOutputType {
     FieldMappingExportPreviewModalComponent,
     FhirRulesPanelComponent,
     EhrWriteTypeGridComponent,
+    EhrReviewResourceTypesComponent,
   ],
   templateUrl: './destination-wizard.component.html',
   styleUrl: './destination-wizard.component.scss',
@@ -906,16 +921,13 @@ export class DestinationWizardComponent implements OnInit {
       // And which surface WITHIN that type, for the one type serving more than one: DataFabricAzure covers
       // both OneLake Files and Lakehouse Delta, so the type alone cannot say which row was picked.
       fabricLandingMode: this.fabricLandingMode(),
-      // EHR Write-Back only (no other form declares these inputs): the tile's vendor, which half of the form to show
-      // (the options on Step 3, except for a chain node, which shows Step 3's information block instead), and what
-      // the options need to name the opt-ins the chosen resource types still need. selectedResources() keeps its
-      // identity between passes, so the form's signal input is not re-triggered on every change detection.
+      // EHR Write-Back only (no other form declares these inputs): the tile's vendor, and which half of the form to
+      // show (the options on Step 3, except for a chain node, which shows Step 3's information block instead). The
+      // kinds chosen on Step 2 are handed over through setWriteKinds() instead (_pushEhrWriteKinds).
       ...(this.isEhrWriteBack()
         ? {
             ehrVendor: this.ehrVendor(),
             section: this.step() === 3 && !this.chainNodeEntry() ? 'options' : 'connection',
-            selectedResourceTypes: this.selectedResources(),
-            sourceIsTabular: this.sourceIsTabular(),
           }
         : {}),
     };
@@ -1283,8 +1295,41 @@ export class DestinationWizardComponent implements OnInit {
    *  discovery/vendor lists in strictAvailableGroups: what matters is what can be written, not what can be read. */
   readonly ehrWritableResourceTypes = signal<string[] | null>(null);
   /** EHR Write-Back only: what the target EHR accepts and its activation (EhrWriteTargetService). Its opt-ins are
-   *  the ones saved so far; they are chosen under Options (Step 3), after this step. */
+   *  the ones saved so far, which seed ehrKindSwitches when it loads. */
   private readonly ehrWriteTarget = signal<EhrWriteTarget | null>(null);
+  /** EHR Write-Back only: the switches the kinds ticked on Step 2 stand for (dest_enabledVariants,
+   *  dest_createHolderEncounter). A kind ticked under one type is the same switch wherever else it appears. */
+  readonly ehrKindSwitches = signal<EhrWriteKindSwitches>(NO_KIND_SWITCHES);
+  /** The switches as saved: only those a kind of a selected type uses. Null until the target is known. */
+  readonly ehrSavedKinds = computed<EhrWriteKindSwitches | null>(() => {
+    const target = this.ehrWriteTarget();
+    if (!target) return null;
+    return switchesFor(this.selectedResources(), target.capabilities, this.sourceIsTabular(), this.ehrKindSwitches());
+  });
+  /** Selected types with kinds but none ticked (only a destination saved before kinds were chosen on Step 2); Step 2's
+   *  Next waits until each has one, or is unticked. Only types whose card lists the kinds with that note count: a
+   *  greyed card (e.g. no longer read by the source) shows no kinds, so it never holds Next with nothing to say why. */
+  readonly ehrTypesWithoutKind = computed<string[]>(() => {
+    const target = this.ehrWriteTarget();
+    if (!target) return [];
+    return this.ehrTypesWithoutKindIn(this.ehrKindSwitches());
+  });
+  /** typesWithoutKind for these switches, over the selected types whose Step 2 card is tickable and lists kinds. */
+  private ehrTypesWithoutKindIn(switches: EhrWriteKindSwitches): string[] {
+    const target = this.ehrWriteTarget();
+    const rows = this.ehrWriteTypeRows();
+    if (!target || !rows) return [];
+    const withKinds = new Set(rows.filter((r) => r.selectable && r.kinds.length > 0).map((r) => r.resourceType));
+    const selected = this.selectedResources().filter((t) => withKinds.has(t));
+    return typesWithoutKind(selected, target.capabilities, this.sourceIsTabular(), switches);
+  }
+  /** The Review step's resource types, each with the kinds written in plain words. */
+  readonly ehrReviewTypeLines = computed<EhrReviewTypeLine[]>(() => {
+    const target = this.ehrWriteTarget();
+    const selected = this.selectedResources();
+    if (!target) return selected.map((resourceType) => ({ resourceType, kinds: [] }));
+    return ehrReviewTypeLines(selected, target.capabilities, this.sourceIsTabular(), this.ehrKindSwitches());
+  });
   /** EHR Write-Back Step 2 rows: the source's types (or, for a legacy source with no declared list, what the EHR
    *  accepts), each tickable or greyed with the reason, plus any selected type outside them (greyed, so it can be
    *  unticked). Null until the target is known. */
@@ -1299,9 +1344,6 @@ export class DestinationWizardComponent implements OnInit {
       sourceIsTabular: this.sourceIsTabular(),
       selected: this.selectedResources(),
       sourceDeclaresTypes: declared.length > 0,
-      // Options come after Resource types: a type that only needs an option stays selectable, with a note, and
-      // Step 3's Next waits until that option is on.
-      optInsLater: true,
     });
   });
   /** Narrows a candidate list to what the upstream source declares it reads; unchanged for a legacy source. */
@@ -2502,6 +2544,7 @@ export class DestinationWizardComponent implements OnInit {
         this.selectedResources.set([]);
         this.ehrWritableResourceTypes.set(null);
         this.ehrWriteTarget.set(null);
+        this.ehrKindSwitches.set(NO_KIND_SWITCHES);
         this._hasProgressed.set(false);
         // Starting over for the new EHR: its own accepted types are ticked the first time Step 2 opens again.
         this._resourcePreTickDone = false;
@@ -2522,16 +2565,14 @@ export class DestinationWizardComponent implements OnInit {
       let toTick: string[];
       if (this.isEhrWriteBack()) {
         // Wait for the target EHR's rows: until then nothing is known to be writable.
-        // A type that only becomes writable once an option is turned on (an API variant, a holder encounter) is left
-        // for the user to choose: ticking it would hold Options' Next until that option is on.
+        // Only types with a kind that is always included are ticked, with just those kinds: a type written only
+        // through an optional kind (an Epic API the destination must turn on, an eCW history item on a holder
+        // encounter) is left for the user to choose, so nothing optional is ever turned on for them.
         const rows = this.ehrWriteTypeRows();
-        const target = this.ehrWriteTarget();
-        if (!rows || !target) return;
-        const sourceIsTabular = this.sourceIsTabular();
+        if (!rows) return;
         toTick = rows
-          .filter((r) => r.selectable)
-          .map((r) => r.resourceType)
-          .filter((t) => missingOptInsFor([t], target.capabilities, target.optIns, sourceIsTabular).length === 0);
+          .filter((r) => r.selectable && hasAlwaysIncludedKind(r.kinds))
+          .map((r) => r.resourceType);
       } else {
         // Wait for a live probe of the source, which may still narrow what is offered.
         if (this.discoverProbeStatus() === 'probing') return;
@@ -2840,11 +2881,15 @@ export class DestinationWizardComponent implements OnInit {
       const form = this.activeForm();
       return !form || !form.isValid();
     }
-    if (s === 2) return this.selectedResources().length === 0;
-    // EHR Write-Back Options: valid, and no selected type still needing an option the writer would skip it without.
+    // EHR Write-Back: every selected type also has a kind of record ticked (only a reopened destination saved
+    // before kinds were chosen here can lack one; its card says so).
+    if (s === 2) {
+      return this.selectedResources().length === 0 || (this.isEhrWriteBack() && this.ehrTypesWithoutKind().length > 0);
+    }
+    // EHR Write-Back Options: only how records are written, so only the options' own validity.
     if (s === 3 && this.isEhrWriteBack() && !this.chainNodeEntry()) {
       const f = this.activeForm();
-      return !f || !isEhrWriteBackForm(f) || !f.optionsValid() || f.missingOptIns().length > 0;
+      return !f || !isEhrWriteBackForm(f) || !f.optionsValid();
     }
     return false;
   }
@@ -2972,6 +3017,7 @@ export class DestinationWizardComponent implements OnInit {
     // new write-back, an update for a reopened one (the node already has its record). In "existing" mode provisioning
     // is a no-op; changed options then fork a new record at save (hasExistingChanged), exactly like a changed Step 1.
     if (this.step() === 3 && this.isEhrWriteBack() && !this.chainNodeEntry()) {
+      this._pushEhrWriteKinds();
       const metadata = this.activeForm()?.getMetadata();
       if (!metadata) return;
       this.provisionDestinationConnection(metadata, () => {
@@ -2985,6 +3031,8 @@ export class DestinationWizardComponent implements OnInit {
       // whichever group's canvas was open last time — even if the user had drilled in before.
       if (this.step() === 2) {
         this.selectedGroupForMapping.set(null);
+        // EHR Write-Back: the Options step saves the kinds ticked here, so the form holds them before it shows.
+        if (this.isEhrWriteBack()) this._pushEhrWriteKinds();
         // Map fields (3) lists groups in the order they should actually be run — a prerequisite
         // resource (e.g. Patient) always before whatever requires it — not raw selection-click order.
         const sorted = sortByDependencyRank(this.selectedResources());
@@ -4798,9 +4846,63 @@ export class DestinationWizardComponent implements OnInit {
     return [...recommended];
   });
 
-  /** EHR Write-Back: what the Step 2 grid's greyed rows and notes need about the target (EhrWriteTargetService). */
+  /** EHR Write-Back: what the Step 2 grid's greyed rows and notes need about the target (EhrWriteTargetService).
+   *  The kinds' switches start as the fields have them (a reopened node's saved choice, or Step 1's form). */
   private _loadEhrWriteTarget(fields: Record<string, string>, vendor: EhrWriteVendor | null = null): void {
-    this.ehrWriteTargetSvc.load(fields, vendor).subscribe((target) => this.ehrWriteTarget.set(target));
+    this.ehrWriteTargetSvc.load(fields, vendor).subscribe((target) => {
+      this.ehrKindSwitches.set({
+        enabledVariants: [...target.optIns.enabledVariants],
+        createHolderEncounter: target.optIns.createHolderEncounter,
+      });
+      this.ehrWriteTarget.set(target);
+    });
+  }
+
+  /** EHR Write-Back: hands the kinds ticked on Step 2 to the form, which saves them (dest_enabledVariants,
+   *  dest_createHolderEncounter). Nothing before the target is known, so a saved choice is never wiped. */
+  private _pushEhrWriteKinds(): void {
+    const kinds = this.ehrSavedKinds();
+    const form = this.activeForm();
+    if (kinds && isEhrWriteBackForm(form)) form.setWriteKinds(kinds);
+  }
+
+  /**
+   * EHR Write-Back: a kind of record ticked or unticked under a type on Step 2. An always-included kind only ticks its
+   * type (while the type is ticked it is locked on). An optional kind is its switch: ticking it turns the switch on
+   * (and ticks the type); unticking the last kind of a type unticks the type instead, so a switch another ticked type
+   * still uses stays on; otherwise the switch goes off, and any other ticked type left with no kind is unticked too.
+   * A kind filed on a holder encounter turns that encounter on by being ticked: there is nothing else to set later.
+   */
+  onKindToggled(event: EhrWriteKindToggle): void {
+    const target = this.ehrWriteTarget();
+    if (!target) return;
+    const tabular = this.sourceIsTabular();
+    const kinds = kindsFor(event.resourceType, target.capabilities, tabular);
+    const kind = kinds.find((k) => k.id === event.kindId);
+    if (!kind) return;
+    const switches = this.ehrKindSwitches();
+
+    if (!this.isResourceSelected(event.resourceType)) {
+      if (kind.optional) this.ehrKindSwitches.set(setKind(switches, kind, true));
+      this.toggleResource(event.resourceType);
+      return;
+    }
+    if (!kind.optional) return;
+    if (!isKindOn(kind, switches)) {
+      this.ehrKindSwitches.set(setKind(switches, kind, true));
+      this._pushEhrWriteKinds();
+      return;
+    }
+    if (!kinds.some((k) => k !== kind && isKindOn(k, switches))) {
+      this.toggleResource(event.resourceType);
+      return;
+    }
+    const next = setKind(switches, kind, false);
+    this.ehrKindSwitches.set(next);
+    for (const t of this.ehrTypesWithoutKindIn(next)) {
+      this.toggleResource(t);
+    }
+    this._pushEhrWriteKinds();
   }
 
   addRecommendedResource(r: string): void {
@@ -4845,9 +4947,25 @@ export class DestinationWizardComponent implements OnInit {
       this.targetByResource.update(drop);
       this.extraTablesByGroup.update(drop);
       this.payloadFieldsByResource.update(drop);
+      this._syncEhrKindsAfterToggle(r, false);
       return;
     }
     this.selectedResources.update((list) => [...list, r]);
+    this._syncEhrKindsAfterToggle(r, true);
+  }
+
+  /** EHR Write-Back: a type just ticked whose kinds are all optional gets them all (a ticked type always writes
+   *  something); a type just unticked drops the switches no ticked type uses any more, so ticking it again starts
+   *  with its optional kinds off. Select all, Clear all and the recommendations all come through toggleResource. */
+  private _syncEhrKindsAfterToggle(resourceType: string, ticked: boolean): void {
+    const target = this.ehrWriteTarget();
+    if (!this.isEhrWriteBack() || !target) return;
+    const tabular = this.sourceIsTabular();
+    const switches = this.ehrKindSwitches();
+    this.ehrKindSwitches.set(ticked
+      ? withTypeTicked(resourceType, target.capabilities, tabular, switches)
+      : switchesFor(this.selectedResources(), target.capabilities, tabular, switches));
+    this._pushEhrWriteKinds();
   }
 
   // ── drag-to-reorder the Step 3 data-group rows ──────────────────────────────

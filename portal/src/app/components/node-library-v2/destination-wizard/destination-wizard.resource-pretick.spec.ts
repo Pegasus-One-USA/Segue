@@ -8,7 +8,6 @@ import { CanvasNode } from '../../../models/node-v2.model';
 import { EhrWriteCapabilitiesService, EhrWriteCapability } from '../../../services/ehr-write-capabilities.service';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
 import { DestinationConfigurationService } from '../../../destination-connections/services/destination-configuration.service';
-import { missingOptInsFor } from './ehr-write-type-grid/ehr-write-type-grid.model';
 
 const capability = (resourceType: string): EhrWriteCapability => ({
   resourceType,
@@ -21,7 +20,7 @@ const capability = (resourceType: string): EhrWriteCapability => ({
   liveWriteSupported: true,
 });
 
-/** Epic files Observation only through a variant the destination has to turn on under Options. */
+/** A type written only through a kind the destination has to tick (an Epic API variant). */
 const variantOnly = (resourceType: string, variant: string): EhrWriteCapability => ({
   ...capability(resourceType),
   variant,
@@ -109,18 +108,29 @@ describe('DestinationWizardComponent — Step 2 starts ticked', () => {
     expect(wizard.selectedResources()).toEqual(['Condition']);
   });
 
-  it('a new EHR destination leaves unticked a type that needs an option turned on, so Options is not held up', () => {
-    epicCapabilities = [capability('Condition'), variantOnly('Observation', 'vitals')];
-    create('ehrwriteback', ['Condition', 'Observation'], { ehrVendor: 'Epic' });
+  it('a new EHR destination ticks only types with an always-included kind, and turns no optional kind on', () => {
+    epicCapabilities = [
+      capability('Condition'),
+      { ...capability('Observation'), variant: 'vital-signs' },
+      variantOnly('Observation', 'lines-drains-airways'),
+      variantOnly('BodyStructure', 'radiotherapy-volume'),
+    ];
+    create('ehrwriteback', ['Condition', 'Observation', 'BodyStructure'], { ehrVendor: 'Epic' });
     goToStep(2);
     loadEhrTarget();
 
-    // Observation is still offered (with its "Needs ... turned on under Options" note), just not chosen for the user.
-    const observation = wizard.ehrWriteTypeRows()?.find((r) => r.resourceType === 'Observation');
-    expect(observation?.selectable).toBeTrue();
-    expect(wizard.selectedResources()).toEqual(['Condition']);
-    expect(missingOptInsFor(wizard.selectedResources(), epicCapabilities,
-      { enabledVariants: [], createHolderEncounter: false, createPatientIfMissing: false }, false)).toEqual([]);
+    // BodyStructure is still offered with its kind to tick, just not chosen for the user.
+    const bodyStructure = wizard.ehrWriteTypeRows()?.find((r) => r.resourceType === 'BodyStructure');
+    expect(bodyStructure?.selectable).toBeTrue();
+    expect(bodyStructure?.note).toBeNull();
+    expect(wizard.selectedResources()).toEqual(['Condition', 'Observation']);
+    // Observation starts with its always-included kind only.
+    expect(wizard.ehrReviewTypeLines()).toEqual([
+      { resourceType: 'Condition', kinds: [] },
+      { resourceType: 'Observation', kinds: ['Vital signs'] },
+    ]);
+    expect(wizard.ehrSavedKinds()).toEqual({ enabledVariants: [], createHolderEncounter: false });
+    expect(wizard.isNextDisabled()).toBeFalse();
   });
 
   it('a reopened destination keeps exactly its saved selection, even a subset', () => {
