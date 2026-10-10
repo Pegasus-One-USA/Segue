@@ -1,0 +1,180 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-back.model.ts
+  s_d1b985c75f92bc::t_801a4401e314a3 13,88-89,91-93,96-107,120-124,126
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/s3-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_d1b985c75f92bc::t_0edb34deec21cf 86-89,91,96-98,105-106,112,115,117-120,125,1176-1178
+  s_d1b985c75f92bc::t_f18deb7df77d8b 129,276-278,963-968
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.spec.ts
+  s_d1b985c75f92bc::t_6be7d29656d59a 192
+  s_d1b985c75f92bc::t_8f9adf2d692a69 9,68-69,108-109,114-115,118-125,127-132,135-137,139,141-143,145-152,154-155,157-159,161,163-164,167-168,170-171,173,175-177,179-180,182-183,186-190,193-195,198,201-204,206-207,209-217,221-228,230-234,236-241,243-250,253-255,257,260-262,271,273-276,278-279,282-284,286-287,290-292,294-295,297,300-304,308-312,318,322,329,331,335-343,354,360-361,363,368,370-371,373-374,378-383,385-386,389,391,395-396
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.scss
+  s_d1b985c75f92bc::t_c317a2ca64ae77 1278-1282
+  s_d1b985c75f92bc::t_002aa385bcc6a0 1458-1463
+  s_d1b985c75f92bc::t_d0260b21c4bf84 1464
+portal/src/app/services/ehr-live-write-check.service.ts
+  s_d1b985c75f92bc::t_afedce736ac23e 1-59
+portal/src/app/destination-connections/components/generic-fhir-write-connection-form/generic-fhir-write-connection-form.component.ts
+  s_d1b985c75f92bc::t_066a314d0a87ad 38
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/parquet-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/services/ehr-live-write-check.service.spec.ts
+  s_d1b985c75f92bc::t_91e88e129d4ce7 1-54
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-lake-webhook-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,188-190
+  s_d1b985c75f92bc::t_fc8747bf01a361 191-192
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/power-bi-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/destination-form-api.ts
+  s_d1b985c75f92bc::t_132da7807a2397 35-37
+  s_d1b985c75f92bc::t_3ca1062c2f6d9d 2,147-160
+  s_d1b985c75f92bc::t_a514047fb1cc0b 1
+  s_d1b985c75f92bc::t_4bbc9638a0f0f9 3-5,32-34
+  s_d1b985c75f92bc::t_7ceb149a005606 38-40,144-146
+  s_d1b985c75f92bc::t_b51e7d156f1cee 161-163
+  s_bd102cbceb7b4e::t_a7913916671920 6-31,41-143,164-165
+portal/src/app/destination-connections/components/ehr-write-connection-kind/ehr-write-connection-kind.component.spec.ts
+  s_d1b985c75f92bc::t_2e135e0d000737 84
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/azure-fhir-service-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,250-252
+  s_d1b985c75f92bc::t_444b3ddf425321 253-254
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-target.service.ts
+  s_d1b985c75f92bc::t_d00a817c15c906 6,19-20,24
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/my-sql-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,24
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/in-memory-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,20
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/csv-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,69-71
+  s_d1b985c75f92bc::t_dedeb0db8be03e 72-73
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/databricks-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,22
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/azure-sql-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,29
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-dry-run-option.component.ts
+  s_d1b985c75f92bc::t_cf5373a579e45e 1-30
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/simple-stub-form.helper.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 1,36-37
+  s_d1b985c75f92bc::t_9fccb095d74734 38-39
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-back.model.spec.ts
+  s_d1b985c75f92bc::t_849a0937e45d24 54
+  s_d1b985c75f92bc::t_4dd22badf8b23f 3,20,24-26,30-32,35-36,40-41,45,55-58,61-64,122-129
+  s_d1b985c75f92bc::t_58d7ae601d57cd 81
+portal/src/app/components/node-library-v2/node-library-dialog.ehr-tiles.spec.ts
+  s_d1b985c75f92bc::t_39e46dd478ac6a 12,137
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/excel-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/rest-api-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/cosmos-db-fabric-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,159-161
+  s_d1b985c75f92bc::t_ee2e80c3a84303 162-163
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/medplum-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,152-154
+  s_d1b985c75f92bc::t_666c42732eaa5b 155-156
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/sql-server-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,23
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/avro-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/connections/connection-labels.spec.ts
+  s_d1b985c75f92bc::t_58d7ae601d57cd 14
+  s_d1b985c75f92bc::t_273152c1cd94d6 36
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-live-warning.component.ts
+  s_d1b985c75f92bc::t_cf5373a579e45e 1-18
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/data-fabric-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,264-266
+  s_d1b985c75f92bc::t_a5a51433ecd1ba 267-268
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ndjson-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/tableau-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/snowflake-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,22
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/fhir-repository-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,25
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_d1b985c75f92bc::t_a94fcf3b3247ec 31-33,79-80,508-533
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/mongo-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,71-73
+  s_d1b985c75f92bc::t_686e0fbf063acb 74-75
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/protobuf-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-connection-picker.component.spec.ts
+  s_d1b985c75f92bc::t_311e9c5019233f 5,18-26,30,47-48,50-51,54-55,58-71,74-77,80,82-83,86-88,90,95,98,110,115
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d1b985c75f92bc::t_3792e162bb9ffe 977-982,984-1026,1071-1072,2472-2477,2977-2981,3154-3182,3184,6114
+  s_d1b985c75f92bc::t_2172e678587300 4583
+  s_d1b985c75f92bc::t_8f8d21dbe91a54 19,56-57,563-564,983,1027-1042,1044-1050
+  s_d1b985c75f92bc::t_0edb34deec21cf 1043,2608-2609,4600-4603,4606
+  s_d1b985c75f92bc::t_d7778ef20c28ee 2478
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/blob-storage-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,123-125
+  s_d1b985c75f92bc::t_b793723edb551b 126-127
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-review-name.component.ts
+  s_d1b985c75f92bc::t_685889fc53ba13 4-5
+  s_d1b985c75f92bc::t_cf5373a579e45e 1-3,6-25
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.connection-name.spec.ts
+  s_d1b985c75f92bc::t_5945b756debab6 86
+  s_d1b985c75f92bc::t_9c3ca072863447 68
+  s_d1b985c75f92bc::t_46b608a7a284d4 99
+  s_d1b985c75f92bc::t_c153c516a7d123 12
+  s_d1b985c75f92bc::t_5a78e5e1640b2f 1-11,13-67,69-73,75-85,87-98,100-154
+  s_d1b985c75f92bc::t_fbaa70c1048764 74
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/sql-family-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,93-95
+  s_d1b985c75f92bc::t_7e01c14374be62 96-97
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/pdf-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,21
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/api-endpoint-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,303-305
+  s_d1b985c75f92bc::t_885e0fdda37f88 306-307
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/postgre-sql-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,24
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.ehr-writeback.spec.ts
+  s_d1b985c75f92bc::t_6bdfe866727185 430,464
+  s_d1b985c75f92bc::t_ccb67d3f45673c 6,28,35-36,431-436,465,467-468,470-485
+  s_d1b985c75f92bc::t_c8448380211137 540
+  s_d1b985c75f92bc::t_7a8c1600ea6e08 536
+  s_d1b985c75f92bc::t_cf84fb50fe007a 437-438,442,445,447-448,450-451,466,469
+  s_d1b985c75f92bc::t_39e46dd478ac6a 492
+  s_d1b985c75f92bc::t_dfdf80038bce29 486
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back-destination-form.component.ts
+  s_d1b985c75f92bc::t_31607e4c2d8ca2 3,19,25,33,36-41,43-44,46-49,63,75-77,84-88,91-94,137-138,150-151,160,169-181,183,186,189-196,198-199,202-206,212,214,254-255,257-258,260-261,265-266,269,271-272,287-296,298,302-303,306-307,320-321,325,340,342,344-346,348,358,382-384,386,395,399,409,418,480
+  s_d1b985c75f92bc::t_7dc75fccc867c5 145-147,397-398,405,455,466-479
+  s_d1b985c75f92bc::t_841fca8719decf 481
+portal/src/app/destination-connections/components/destination-configuration-kind/destination-configuration-kind.component.spec.ts
+  s_d1b985c75f92bc::t_2e135e0d000737 82
+portal/src/app/connections/ehr-write-vendors.ts
+  s_d1b985c75f92bc::t_066a314d0a87ad 28
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/sftp-destination-form.component.ts
+  s_d1b985c75f92bc::t_a8520da1e99ad9 2,55-57
+  s_d1b985c75f92bc::t_8158eabb3e5487 58-59
+portal/src/app/pages/workflow-list/workflow-list.component.spec.ts
+  s_d1b985c75f92bc::t_0ce3ff6d865b75 1-95
+portal/src/app/components/node-library-v2/destination-wizard/destination-forms/ehr-write-back/ehr-write-connection-picker.component.ts
+  s_d1b985c75f92bc::t_bffd523571cef1 7,13-18,29,34-52,56-59,63,70,75-77,85-90,94,97-101,103,107-108,111-128,130,135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f84029f3cab2404c9aaf9743d04c16f4960690c2",
+  "prompts": {},
+  "sessions": {
+    "s_bd102cbceb7b4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a6a8ea01aba295a68",
+        "model": "unknown"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
