@@ -1,0 +1,88 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_50d034df3438c6::t_2e87610e15e0bc 283-284
+  s_50d034df3438c6::t_8a0466037a14d9 1040-1085,1087-1117
+  s_50d034df3438c6::t_3ac4df157e5831 1086
+  s_50d034df3438c6::t_ce7354143fcd9e 469-473
+  s_50d034df3438c6::t_df7eafa675c1d6 330-335
+  s_50d034df3438c6::t_a3525e453ea1d8 435-444,446-451,1039
+  s_50d034df3438c6::t_f8d93087ac2300 1161-1165
+  s_50d034df3438c6::t_69cbd37c8cf86e 1175
+  s_50d034df3438c6::t_aaa3975630f142 1205-1206,1212-1215
+  s_50d034df3438c6::t_f84536357889ee 1399-1429
+  s_50d034df3438c6::t_16c80109f5d296 1373
+  s_50d034df3438c6::t_37d85686d35081 775
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.scss
+  s_50d034df3438c6::t_03282e2bf5690a 768-773,776-789
+  s_50d034df3438c6::t_90e2f12c451c50 725,733-734
+tests/FHIRBridge.UnitTests/Sources/SourceEndpointProbeSearchParameterTests.cs
+  s_50d034df3438c6::t_cc8a6aa6e07af8 1-39
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_50d034df3438c6::t_523910257db194 1265,1268-1286
+  s_50d034df3438c6::t_dc87518d475d3b 1301
+  s_50d034df3438c6::t_8a656df79ed0a1 1234-1236,1245,1252
+  s_50d034df3438c6::t_b5f1eeb9edc6f5 1238-1239
+  s_50d034df3438c6::t_6a2321c6cbe169 833-835
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_50d034df3438c6::t_eb7a0bce3f5522 2176-2179
+  s_50d034df3438c6::t_9605a30481094a 3984-3987
+  s_50d034df3438c6::t_307f94cdea95ff 2459-2465
+  s_50d034df3438c6::t_5a585034c9b427 138-147
+  s_50d034df3438c6::t_13f0e1ff05de10 2884-2910
+  s_50d034df3438c6::t_792ce1c2fe4c90 4120-4125
+  s_50d034df3438c6::t_64e90840ecf051 4134
+  s_50d034df3438c6::t_6fd8d5b1f1dd28 4019,4021-4028,4043-4044,4052
+  s_50d034df3438c6::t_bdf19a0f784f67 3990-4006
+  s_50d034df3438c6::t_ef1f1f09e0af5d 4154-4157,4159-4166
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCriteriaPrecedenceTests.cs
+  s_50d034df3438c6::t_7cd9d2405bfa10 166-167
+  s_50d034df3438c6::t_8c291adf109d02 89-109,114-116
+  s_50d034df3438c6::t_09e603b22fa3a7 137-141
+  s_50d034df3438c6::t_376ea440cf8fbe 1-88,110-113,117-136,142-165,168-171
+src/FHIRBridge.Application/DTOs/SourceDiscoveryProbeDtos.cs
+  s_50d034df3438c6::t_2b19d612950ce5 20,23
+  s_50d034df3438c6::t_fb30814bbd395a 21-22,28-35
+tests/FHIRBridge.Api.IntegrationTests/Security/SourceDiscoveryProbeAuthorizationTests.cs
+  s_50d034df3438c6::t_48c3df75552e2c 68-69
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_50d034df3438c6::t_b4e339fcfcf821 858-865
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_50d034df3438c6::t_3dbb7c1cd16681 296
+  s_50d034df3438c6::t_c3dbef2dd9b1d1 288-292,294-295
+src/Api/FHIRBridge.Api/Controllers/V1/SourceDiscoveryController.cs
+  s_50d034df3438c6::t_cbd75c05427c71 73,77-79,87-88
+src/FHIRBridge.Infrastructure/Sources/SourceEndpointProbeService.cs
+  s_50d034df3438c6::t_7e22218b2e2650 31,37,43-104
+  s_50d034df3438c6::t_b20e7289812486 2
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SearchCriteriaPostFilterTests.cs
+  s_50d034df3438c6::t_55fdb0560c457c 52
+  s_50d034df3438c6::t_8b053b23eb6c76 1-51,53-86
+src/BuildingBlocks/FHIRBridge.Observability/Logging/LogEvents.cs
+  s_50d034df3438c6::t_b2554cba964534 79
+src/FHIRBridge.Application/Abstractions/Sources/ISourceEndpointProbeService.cs
+  s_50d034df3438c6::t_d82d60efdb3973 16-18,20
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SearchCriteriaPostFilter.cs
+  s_50d034df3438c6::t_292013ed1edd29 95-96
+  s_50d034df3438c6::t_ead75af6172e29 1-94,97-140
+portal/src/app/services/epic-discovery.service.ts
+  s_50d034df3438c6::t_487b41c2c7a8a2 19-21
+  s_50d034df3438c6::t_5e19f2f005f8f3 38
+  s_50d034df3438c6::t_98f9bb621bb3f3 108
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorDestinationRestrictionTests.cs
+  s_50d034df3438c6::t_a06271a4e62b40 238-343
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dd47cbc7d9a90509db0142dd16f79191c4464678",
+  "prompts": {},
+  "sessions": {
+    "s_50d034df3438c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cf823631-fcfb-43ef-bbd6-e9439462a07e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
