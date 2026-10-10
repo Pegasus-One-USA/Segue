@@ -235,4 +235,110 @@ public sealed class SourceNodeExecutorDestinationRestrictionTests
         typesFetched.Should().BeEquivalentTo(["Patient", "Observation", "Condition"]);
         output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().HaveCount(3);
     }
+
+    [Fact]
+    public async Task Destination_selection_wins_over_a_stale_narrower_source_node_resources_snapshot()
+    {
+        // Regression: an athenahealth Backend System source node saved with a hidden "Resources" of just "Patient",
+        // whose destination later selected Patient + Observation. Intersecting the two silently dropped Observation
+        // (never requested, never reported as skipped); the destination's own selection must be what's fetched.
+        var sourceConnectionId = Guid.NewGuid();
+        var source = new FhirSourceConfiguration(
+            RuntimeSourceType.Athenahealth, "Athena Backend", "https://fhir.example.com", null, "client-1", null, null,
+            ["system/Patient.read", "system/Observation.read"],
+            SourceConnectionId: sourceConnectionId);
+
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        resolver
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(source);
+
+        var typesFetched = new List<string>();
+        var client = new Mock<IFhirSourceClient>();
+        client
+            .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .Returns((string type, FhirSourceConfiguration _, CancellationToken _) =>
+            {
+                typesFetched.Add(type);
+                return Task.FromResult<IReadOnlyList<ResourceEnvelope>>([new ResourceEnvelope(type, $"{type}-1", "{}", null, null)]);
+            });
+
+        var clientFactory = new Mock<IFhirSourceClientFactory>();
+        clientFactory.Setup(x => x.Create(It.IsAny<RuntimeSourceType>())).Returns(client.Object);
+
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "stale-source-resources-test", 1);
+        var sourceNode = workflow.AddNode(
+            WorkflowNodeTypes.EpicSource,
+            WorkflowNodeCategory.Source,
+            rank: 0,
+            configurationJson: $$"""{"sourceConnectionId":"{{sourceConnectionId}}","Resources":"Patient"}""");
+        var destinationNode = workflow.AddNode(
+            WorkflowNodeTypes.SqlServerDestination,
+            WorkflowNodeCategory.Destination,
+            rank: 1,
+            configurationJson: """{"dest_resources":"Patient,Observation"}""");
+        workflow.AddEdge(sourceNode.Id, destinationNode.Id);
+        await workflowStore.SaveAsync(workflow, CancellationToken.None);
+
+        var executor = new EpicSourceNodeExecutor(
+            clientFactory.Object, resolver.Object, workflowDefinitionStore: workflowStore);
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        var output = await executor.ExecuteAsync(context, sourceNode, [], CancellationToken.None);
+
+        typesFetched.Should().Contain(["Patient", "Observation"]);
+        output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources
+            .Select(r => r.ResourceType).Should().BeEquivalentTo(["Patient", "Observation"]);
+    }
+
+    [Fact]
+    public async Task Destination_selected_type_without_a_granted_scope_is_reported_as_skipped_not_requested()
+    {
+        // The guard that makes the destination-first rule safe: a type the destination selects but the session holds
+        // no SMART scope for is never sent to the server, and surfaces as a reported skip instead of vanishing.
+        var sourceConnectionId = Guid.NewGuid();
+        var source = new FhirSourceConfiguration(
+            RuntimeSourceType.Epic, "Epic Backend", "https://fhir.example.com", null, "client-1", null, null,
+            ["system/Patient.read"],
+            SourceConnectionId: sourceConnectionId);
+
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        resolver
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(source);
+
+        var client = new Mock<IFhirSourceClient>();
+        client
+            .Setup(x => x.SearchAsync("Patient", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<ResourceEnvelope>)[new ResourceEnvelope("Patient", "p1", "{}", null, null)]);
+
+        var clientFactory = new Mock<IFhirSourceClientFactory>();
+        clientFactory.Setup(x => x.Create(RuntimeSourceType.Epic)).Returns(client.Object);
+
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "unauthorized-destination-type-test", 1);
+        var sourceNode = workflow.AddNode(
+            WorkflowNodeTypes.EpicSource,
+            WorkflowNodeCategory.Source,
+            rank: 0,
+            configurationJson: $$"""{"sourceConnectionId":"{{sourceConnectionId}}","Resources":"Patient"}""");
+        var destinationNode = workflow.AddNode(
+            WorkflowNodeTypes.SqlServerDestination,
+            WorkflowNodeCategory.Destination,
+            rank: 1,
+            configurationJson: """{"dest_resources":"Patient,Observation"}""");
+        workflow.AddEdge(sourceNode.Id, destinationNode.Id);
+        await workflowStore.SaveAsync(workflow, CancellationToken.None);
+
+        var executor = new EpicSourceNodeExecutor(
+            clientFactory.Object, resolver.Object, workflowDefinitionStore: workflowStore);
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        var output = await executor.ExecuteAsync(context, sourceNode, [], CancellationToken.None);
+
+        client.Verify(x => x.SearchAsync("Observation", It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
+        output.Metadata["skippedResourceTypes"].Should().BeOfType<string[]>()
+            .Which.Should().ContainSingle(skip => skip.StartsWith("Observation:"));
+    }
 }

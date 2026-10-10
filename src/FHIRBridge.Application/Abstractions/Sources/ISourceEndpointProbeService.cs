@@ -13,8 +13,9 @@ public interface ISourceEndpointProbeService
     Task<SmartConfigurationDto> ProbeSmartConfigurationAsync(string baseUrl, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Fetches <c>{baseUrl}/metadata</c> (CapabilityStatement) and returns the resource types the endpoint exposes
-    /// with a read/search interaction, sorted. Anonymous — relies on the conformance statement being public.
+    /// Fetches <c>{baseUrl}/metadata</c> (CapabilityStatement) once and returns the resource types the endpoint
+    /// exposes with a read/search interaction, sorted, plus each type's declared search parameter names. Anonymous —
+    /// relies on the conformance statement being public.
     /// </summary>
-    Task<IReadOnlyList<string>> ProbeSupportedResourceTypesAsync(string baseUrl, CancellationToken cancellationToken);
+    Task<SourceEndpointCapabilities> ProbeCapabilitiesAsync(string baseUrl, CancellationToken cancellationToken);
 }

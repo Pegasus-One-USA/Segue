@@ -280,7 +280,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // node's own, per-workflow declaration of what it fetches — two workflows can share one SourceConnection
         // (and so one set of granted scopes) while each still fetching a different, deliberately narrower or wider
         // subset. Takes priority over anything resolved from the connection below, since that's connection-wide and
-        // can't express a per-workflow difference the way this node-level field can.
+        // can't express a per-workflow difference the way this node-level field can — but only when no reachable
+        // destination declares its own selection (see the resolution chain further down).
         var configuredResources = ParseCommaSeparatedResourceTypes(ReadStringConfiguration(node, "Resources"));
 
         // Option A: prefer a real SourceConnection referenced by id (base URL + auth + token resolved live at run time).
@@ -326,9 +327,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
 
         // Per-resource-type criteria authored in the destination wizard's Map-fields step, keyed by workflow +
         // canvas node id (both stamped onto every node's configuration by the API's StampNodeIdentity — the
-        // persisted WorkflowNode.Id is regenerated on every save and so cannot key durable rows). Applied per
-        // request in SearchWithPolicyAsync; a resource type with no row keeps the connection-wide
-        // SearchCriteria fallback that SourceConnectionRuntimeResolver already composed into SearchParameters.
+        // persisted WorkflowNode.Id is regenerated on every save and so cannot key durable rows). Where a search
+        // would otherwise filter by the source's own criteria, a type's row REPLACES it (and the run request's own
+        // Patient criteria outranks both) — see ApplyCriteriaPrecedence; on every other search path it's applied on
+        // top of that path's own scope in SearchWithPolicyAsync. A resource type with no row keeps the
+        // connection-wide SearchCriteria fallback that SourceConnectionRuntimeResolver already composed into
+        // SearchParameters.
         source = await ApplyResourceTypeCriteriaAsync(source, node, cancellationToken);
 
         // See TrustResolverSourceType's own remarks — trust the resolver's real SourceType for a vendor whose
@@ -428,8 +432,23 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // hand-authored node config. If even that is absent, there is no way to know what this node should fetch —
         // silently defaulting to "Patient" here previously meant a misconfigured node would quietly under-fetch
         // instead of failing the run, so this now fails loudly and tells the caller what to configure.
+        //
+        // A reachable destination's own "dest_resources" selection outranks all of the above: the destination wizard's
+        // data-group picker is the one place an admin actually chooses what a workflow moves, and the record of what's
+        // ever written anywhere. The source node's "Resources" field, by contrast, is a snapshot taken whenever the
+        // source form was last saved — and for a Backend System connection it's a hidden control nothing ever
+        // resyncs (EpicSourceConnectionScopeSyncService updates the connection's scopes from dest_resources, but not
+        // this per-node copy). Intersecting with that snapshot let a stale "Patient" silently drop an Observation the
+        // destination had since selected, with no skip ever reported. Using dest_resources directly still never
+        // fetches a type the session isn't authorized for: the granted-scope check in the extraction loop below turns
+        // any such type into a reported skip rather than a request.
         IReadOnlyCollection<string> resourceTypes;
-        if (configuredResources is { Count: > 0 })
+        var destinationResourceTypes = await GetDestinationResourceTypesAsync(node, cancellationToken);
+        if (destinationResourceTypes.Count > 0)
+        {
+            resourceTypes = destinationResourceTypes;
+        }
+        else if (configuredResources is { Count: > 0 })
         {
             resourceTypes = configuredResources;
         }
@@ -447,30 +466,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         }
         else
         {
-            // Last resort before failing outright: a source with no resource-type config of its own (e.g. Generic
-            // FHIR, which has no OAuth scopes to derive from at all) still has a real answer as long as some
-            // reachable destination declares its own "dest_resources" — the same field RestrictToDestinationResourceTypesAsync
-            // below already reads to *narrow* an existing list. Using it to *seed* one too means the source form's
-            // own Resource Type field can be optional rather than mandatory, since the destination wizard's data-group
-            // picker already captures the same choice for any workflow that has a destination at all.
-            var fromDestination = await GetDestinationResourceTypesAsync(node, cancellationToken);
-            resourceTypes = fromDestination.Count > 0
-                ? fromDestination
-                : throw new InvalidOperationException(
-                    $"Source node '{node.Id}' ({node.NodeType}) has no resolvable FHIR resource type: " +
-                    "no 'Resources'/'resourceType' node configuration, no connection-level ResourceTypes, no SMART " +
-                    "scopes to derive one from, and no reachable destination's own resource selection to fall back " +
-                    "to. Configure at least one resource type for this node or its destination.");
+            throw new InvalidOperationException(
+                $"Source node '{node.Id}' ({node.NodeType}) has no resolvable FHIR resource type: no reachable " +
+                "destination's own resource selection, no 'Resources'/'resourceType' node configuration, no " +
+                "connection-level ResourceTypes, and no SMART scopes to derive one from. Configure at least one " +
+                "resource type for this node or its destination.");
         }
-
-        // Narrow to whatever this node's downstream destination(s) actually selected — a destination wizard's own
-        // "dest_resources" picker is the real record of what's ever written anywhere; without this, a source
-        // configured (or scope-derived) for a broader set than any destination consumes silently over-fetches
-        // (and, upstream of here, over-requests OAuth scopes for) resource types nobody ever asked for. Only applies
-        // a constraint when at least one reachable destination exists — a destination-less run (e.g. a caller that
-        // reads this node's raw output directly, with no destination node at all) has nothing to narrow against and
-        // keeps fetching exactly what was resolved above, unchanged.
-        resourceTypes = await RestrictToDestinationResourceTypesAsync(resourceTypes, node, cancellationToken);
 
         // A source configured for bulk export ($export) pulls each resource type via the Bulk Data flow instead of a
         // paged search — same downstream envelope projection, so the rest of the DAG is identical. Every other source
@@ -771,7 +772,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                                 client,
                                 type,
                                 isPatientType || isCompartmentType
-                                    ? source
+                                    ? ApplyCriteriaPrecedence(source, type)
                                     : source with { SearchParameters = null, PatientIds = null, TargetPatientId = null, PatientSearchCriteria = null },
                                 context.WorkflowRunId,
                                 cancellationToken)
@@ -1036,6 +1037,85 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
+    /// Result-shaping parameters the retrieval config's Advanced Search Options compose into SearchParameters
+    /// alongside the source's criteria (see SourceConnectionRuntimeResolver.ComposeSearchParameters). They choose
+    /// how results come back, not which records match, so they survive when a higher-precedence criteria replaces
+    /// the source's own. Matched on the key with any modifier stripped (<c>_include:iterate</c> → <c>_include</c>).
+    /// </summary>
+    private static readonly HashSet<string> ResultShapingParameterKeys =
+        new(StringComparer.OrdinalIgnoreCase) { "_sort", "_include", "_revinclude" };
+
+    /// <summary>
+    /// Picks which ONE criteria a direct search for <paramref name="resourceType"/> filters by, highest first:
+    /// <list type="number">
+    /// <item>API criteria — the run request's own <see cref="FhirSourceConfiguration.PatientSearchCriteria"/>
+    /// (Patient only; the connector appends it to the query itself).</item>
+    /// <item>Resource criteria — this resource type's <c>ResourceTypeCriteria</c> row (the Criteria button on the
+    /// destination wizard's Map-fields step).</item>
+    /// <item>Source criteria — the source node / connection "Search criteria", already in SearchParameters.</item>
+    /// </list>
+    /// The winner replaces the lower tiers outright rather than merging key by key: merging let the source's
+    /// <c>identifier=A</c> silently beat a resource-level <c>identifier=B</c> (the existing key won), and combining
+    /// two different filters is not what either author asked for. Result-shaping parameters (see
+    /// <see cref="ResultShapingParameterKeys"/>) are kept whichever tier wins. With neither API nor resource
+    /// criteria, <paramref name="source"/> is returned untouched — the source criteria applies exactly as before.
+    /// <para>
+    /// Only for the search path whose SearchParameters still IS the source's own criteria (Patient, and
+    /// patient-compartment types fetched without a cohort). Every other path already replaces SearchParameters
+    /// with its own scope (cohort siblings, PractitionerRole, non-compartment types) and keeps applying resource
+    /// criteria on top of that scope in <see cref="SearchWithPolicyAsync"/>, unchanged.
+    /// </para>
+    /// </summary>
+    private FhirSourceConfiguration ApplyCriteriaPrecedence(FhirSourceConfiguration source, string resourceType)
+    {
+        var hasApiCriteria = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(source.PatientSearchCriteria);
+        string? resourceCriteria = null;
+        var hasResourceCriteria = source.SearchCriteriaByResourceType?.TryGetValue(resourceType, out resourceCriteria) == true
+            && !string.IsNullOrWhiteSpace(resourceCriteria);
+
+        if (!hasApiCriteria && !hasResourceCriteria)
+        {
+            return source;
+        }
+
+        var resultShaping = SplitSearchParameters(source.SearchParameters)
+            .Where(segment => ResultShapingParameterKeys.Contains(ParameterBaseKey(segment)))
+            .ToList();
+
+        List<string> winningCriteria = hasApiCriteria ? [] : SplitSearchParameters(resourceCriteria).ToList();
+        var winningKeys = winningCriteria.Select(ParameterKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var searchParameters = string.Join('&', winningCriteria.Concat(
+            resultShaping.Where(segment => !winningKeys.Contains(ParameterKey(segment)))));
+
+        // Values deliberately not logged: criteria routinely carry patient identifiers.
+        _logger.LogDebug(
+            "{ResourceType} search for {SourceName} filters by its {CriteriaTier} criteria; lower-precedence criteria are not applied.",
+            resourceType, source.Name, hasApiCriteria ? "API" : "resource");
+
+        return source with
+        {
+            SearchParameters = searchParameters.Length == 0 ? null : searchParameters,
+            // Already applied above (or deliberately outranked by the API criteria) — cleared on this per-call copy
+            // so SearchWithPolicyAsync doesn't merge it in a second time.
+            SearchCriteriaByResourceType = null,
+        };
+    }
+
+    private static string ParameterKey(string segment)
+    {
+        var equals = segment.IndexOf('=');
+        return equals < 0 ? segment : segment[..equals];
+    }
+
+    private static string ParameterBaseKey(string segment)
+    {
+        var key = ParameterKey(segment);
+        var colon = key.IndexOf(':');
+        return colon < 0 ? key : key[..colon];
+    }
+
+    /// <summary>
     /// Loads this node's <c>ResourceTypeCriteria</c> rows into
     /// <see cref="FhirSourceConfiguration.SearchCriteriaByResourceType"/>. A node with no stamped identity (a
     /// hand-authored config, or the route→graph projection), no configured repository (test constructions), or no
@@ -1077,34 +1157,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 .Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>
-    /// Narrows <paramref name="resourceTypes"/> down to whatever this node's downstream destination node(s) actually
-    /// selected — each destination's own wizard-authored "dest_resources" field, unioned across every destination
-    /// reachable from this node in the workflow graph. Prevents the over-fetch (and, further upstream, over-broad
-    /// OAuth scope requests) that results when a source is configured/scope-derived for a broader resource-type set
-    /// than any destination ever consumes. A run with no destination reachable at all (e.g. a caller that reads this
-    /// node's raw output directly, with nothing downstream to narrow against) returns <paramref name="resourceTypes"/>
-    /// unchanged — this only ever removes types nothing downstream wants, never adds ones the source itself wasn't
-    /// already configured/authorized for.
-    /// </summary>
-    private async Task<IReadOnlyCollection<string>> RestrictToDestinationResourceTypesAsync(
-        IReadOnlyCollection<string> resourceTypes,
-        WorkflowNode node,
-        CancellationToken cancellationToken)
-    {
-        var destinationResourceTypes = await GetDestinationResourceTypesAsync(node, cancellationToken);
-        return destinationResourceTypes.Count == 0
-            ? resourceTypes
-            : resourceTypes.Where(destinationResourceTypes.Contains).ToList();
-    }
-
-    /// <summary>
     /// Every FHIR resource type any destination reachable from this source node has declared via its own
-    /// wizard-authored "dest_resources" field — unioned across all such destinations. Shared by
-    /// <see cref="RestrictToDestinationResourceTypesAsync"/> (uses this to narrow an already-resolved list) and the
-    /// resource-type resolution fallback chain in <see cref="ExecuteAsync"/> (uses this to seed one from scratch
-    /// when the source itself has no configured/connection-level/scope-derived resource types of its own — e.g. a
-    /// Generic FHIR source, which has no OAuth scopes to derive anything from). Returns an empty set (never throws)
-    /// when there's no workflow store, no workflow definition, or no reachable destination at all.
+    /// wizard-authored "dest_resources" field — unioned across all such destinations, in first-seen order. The
+    /// first and highest-priority entry in <see cref="ExecuteAsync"/>'s resource-type resolution chain: when this is
+    /// non-empty it IS the list this node fetches, ahead of the node's own "Resources" snapshot or anything resolved
+    /// from the connection. Returns an empty list (never throws) when there's no workflow store, no workflow
+    /// definition, or no reachable destination with a selection — the caller then falls back to the source side.
     /// <para>
     /// Purely what the wizard's "dest_resources" field lists — no types are added beyond that. A type outside the
     /// Patient compartment (Practitioner, Organization, Location, ...) that isn't checked here is genuinely excluded
@@ -1114,7 +1172,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     /// surfaces this kind of gap before it reaches Aidbox as a raw 422.
     /// </para>
     /// </summary>
-    private async Task<IReadOnlyCollection<string>> GetDestinationResourceTypesAsync(
+    private async Task<IReadOnlyList<string>> GetDestinationResourceTypesAsync(
         WorkflowNode node,
         CancellationToken cancellationToken)
     {
@@ -1144,13 +1202,17 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             }
         }
 
-        var destinationResourceTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var destinationResourceTypes = new List<string>();
         foreach (var destinationNode in definition.Nodes.Where(
             candidate => reachable.Contains(candidate.Id) && candidate.Category == WorkflowNodeCategory.Destination))
         {
             foreach (var type in ParseCommaSeparatedResourceTypes(ReadStringConfiguration(destinationNode, "dest_resources")))
             {
-                destinationResourceTypes.Add(type);
+                if (seen.Add(type))
+                {
+                    destinationResourceTypes.Add(type);
+                }
             }
         }
 
@@ -1308,7 +1370,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 // while a slow-but-progressing extraction runs to completion; total volume stays bounded by
                 // MaxPages/MaxRecordsPerRun.
                 var result = await client.SearchAsync(resourceType, effectiveSource, cancellationToken);
-                return result;
+                return EnforceCriteriaLocally(resourceType, effectiveSource, result);
             }
             catch (Exception ex) when (ex is not FHIRBridge.Runtime.Domain.Exceptions.IResourceExtractionFailure
                 && attempt < maxAttempts && !cancellationToken.IsCancellationRequested)
@@ -1332,6 +1394,37 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 await Task.Delay(delay, cancellationToken);
             }
         }
+    }
+
+    /// <summary>
+    /// Drops records the source returned despite failing a simple code filter in the criteria this search sent —
+    /// see <see cref="SearchCriteriaPostFilter"/>. Covers the criteria in SearchParameters (resource or source
+    /// criteria) and, for Patient, the run request's own criteria, which the connector appends to the query itself.
+    /// A no-op whenever the source applied the filter, as a server supporting the parameter does.
+    /// </summary>
+    private IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> EnforceCriteriaLocally(
+        string resourceType,
+        FhirSourceConfiguration source,
+        IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> records)
+    {
+        var criteria = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(source.PatientSearchCriteria)
+                ? AppendSearchParameter(source.SearchParameters, source.PatientSearchCriteria.Trim().TrimStart('?', '&'))
+                : source.SearchParameters;
+
+        var (kept, enforcedParameters) = SearchCriteriaPostFilter.Apply(records, criteria);
+        var removed = records.Count - kept.Count;
+        if (removed > 0)
+        {
+            // Parameter names only — criteria values can carry patient identifiers.
+            _logger.LogInformation(
+                LogEvents.SearchCriteriaEnforcedLocally,
+                "{SourceName} returned {RemovedCount} of {ReturnedCount} {ResourceType} record(s) not matching " +
+                "[{Parameters}] — it did not apply those search parameters, so they were filtered out after fetching.",
+                source.Name, removed, records.Count, resourceType, string.Join(", ", enforcedParameters));
+        }
+
+        return kept;
     }
 
     // Builds a single $export request covering every resource type at once for an explicitly System/Group-scoped

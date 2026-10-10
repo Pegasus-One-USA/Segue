@@ -135,6 +135,16 @@ import { ISourceConnectionService } from '../../../source-connections/services/i
 // import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
 const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 
+// FHIR result parameters — they shape the response rather than choose which records match, and servers rarely
+// list them as searchParam in their CapabilityStatement, so the Criteria editor never warns about them.
+const CRITERIA_RESULT_PARAMETERS = new Set([
+  '_count', '_sort', '_include', '_revinclude', '_summary', '_elements', '_contained', '_containedtype', '_total', '_format',
+]);
+
+// Mirrors SearchCriteriaPostFilter.EnforceableParameters (Runtime.Infrastructure): code filters the run re-applies to
+// the fetched records when the source ignored them, so the Criteria editor can say they'll still take effect.
+const LOCALLY_ENFORCED_CRITERIA = new Set(['status', 'intent', 'priority', 'gender']);
+
 // ── FHIR-repository (Aidbox) destination ──────────────────────────────────────
 // This wizard's own destination-type union. MappingDestType (field-mapping-model.ts) covers only the
 // destinations that have a field-by-field mapping canvas; 'fhir' and 'azurefhir' deliberately do NOT —
@@ -2163,7 +2173,10 @@ export class DestinationWizardComponent implements OnInit {
       untracked(() => {
         if (!workflowId) return;
         if (this.criteriaLoadedForWorkflowId !== workflowId) {
-          this.criteriaLoadedForWorkflowId = null;
+          // A workflow that only just got its id (buffer non-empty) has nothing stored server-side beyond what
+          // the flush below is about to send, and criteriaByResourceType already holds those values — so treat
+          // it as loaded. Fetching instead could race the flush and overwrite them with a response predating it.
+          this.criteriaLoadedForWorkflowId = Object.keys(this.criteriaBuffer).length > 0 ? workflowId : null;
         }
         this.flushCriteriaBuffer(workflowId);
       });
@@ -2443,6 +2456,13 @@ export class DestinationWizardComponent implements OnInit {
         .resourceTypes(vendor)
         .subscribe((types) => this.vendorResourceTypes.set(types));
     });
+
+    // Stored per-resource-type criteria, fetched as soon as the workflow and its launch source node are known
+    // rather than on the first Criteria click — the Map-fields rows mark a resource that has criteria with a
+    // dot on its Criteria button, which otherwise stayed blank until that resource's editor had been opened.
+    // loadResourceTypeCriteria fetches once per workflow id, so the re-runs this effect gets from canvas node
+    // changes (findLaunchSourceNodeId reads the store) are no-ops after the first load.
+    effect(() => this.loadResourceTypeCriteria());
   }
 
   /** Flushes a queued patchFrom() (see _populateFromNode()/selectExisting()) onto the Step 1 form component.
@@ -2860,8 +2880,34 @@ export class DestinationWizardComponent implements OnInit {
   /** Resource type whose criteria editor is open, or null. */
   readonly criteriaEditorResource = signal<string | null>(null);
   readonly criteriaDraft = signal('');
-  readonly criteriaReplace = signal(false);
   readonly criteriaSaving = signal(false);
+  /** Search parameters the source's CapabilityStatement declares, per resource type — fetched once, the first
+   *  time the Criteria editor opens. Null until then, and whenever the source can't be probed (no saved
+   *  connection yet, /metadata unreachable): the editor then just shows no warnings. */
+  private readonly sourceSearchParameters = signal<Record<string, string[]> | null>(null);
+  private sourceSearchParametersRequestedFor: string | null = null;
+  /** Parameters in the box the source doesn't declare for the open resource type, so it will ignore them —
+   *  each flagged with whether the run still enforces it on the fetched records (see LOCALLY_ENFORCED_CRITERIA).
+   *  Empty when the source declares nothing for the type, since then there's nothing to check against. */
+  readonly criteriaIgnoredParameters = computed(() => {
+    const resourceType = this.criteriaEditorResource();
+    const declared = resourceType ? this.sourceSearchParameters()?.[resourceType] : undefined;
+    if (!declared?.length) return [];
+
+    const supported = new Set(declared.map(name => name.toLowerCase()));
+    const ignored = new Map<string, boolean>();
+    for (const segment of this.criteriaDraft().split('&')) {
+      const parameter = segment.trim().replace(/^\?+/, '');
+      const equals = parameter.indexOf('=');
+      if (equals <= 0) continue;
+      // The declared name is the bare parameter: strip a modifier (status:not) or chain (patient.identifier).
+      const name = parameter.slice(0, equals).split(/[:.]/)[0].trim();
+      const key = name.toLowerCase();
+      if (!name || CRITERIA_RESULT_PARAMETERS.has(key) || supported.has(key) || ignored.has(name)) continue;
+      ignored.set(name, LOCALLY_ENFORCED_CRITERIA.has(key));
+    }
+    return [...ignored].map(([name, enforced]) => ({ name, enforced }));
+  });
   readonly criteriaError = signal<string | null>(null);
   /** Non-null while the "save anyway?" confirm dialog is up — see saveGroupMapping/buildParentReferenceWarnings. */
   readonly pendingSaveWarnings = signal<PendingParentReferenceWarning[] | null>(null);
@@ -3935,36 +3981,51 @@ export class DestinationWizardComponent implements OnInit {
 
   openResourceCriteria(resourceType: string): void {
     this.criteriaError.set(null);
-    this.criteriaReplace.set(false);
-    // Starts empty even when criteria exist: the default action is ADDING to them, and the current value is
-    // shown above the box instead. Prefilling would make "Add" re-send what is already stored.
-    this.criteriaDraft.set('');
+    // Prefilled with what's stored: the box is the whole criteria, edited in place and saved as a replace.
+    // On the first open per workflow the stored rows may still be loading — loadResourceTypeCriteria fills
+    // the box once they arrive, unless the user has started typing by then.
+    this.criteriaDraft.set(this.criteriaFor(resourceType));
     this.criteriaEditorResource.set(resourceType);
     this.loadResourceTypeCriteria();
+    this.loadSourceSearchParameters();
+  }
+
+  /** Fetches, once per source connection, which search parameters the source declares — via the same public
+   *  /metadata probe the source wizard's Discover uses. Best-effort: any failure just leaves warnings off. */
+  private loadSourceSearchParameters(): void {
+    const connectionId = this.sourceConnectionId();
+    if (!connectionId || this.sourceSearchParametersRequestedFor === connectionId) return;
+
+    this.sourceSearchParametersRequestedFor = connectionId;
+    this.sourceConnectionSvc
+      .getById(connectionId)
+      .pipe(
+        switchMap(connection => this.discoverySvc.discover(connection.baseUrl, undefined, connectionId)),
+        catchError(() => of(null)),
+      )
+      .subscribe(result => this.sourceSearchParameters.set(result?.searchParametersByResourceType ?? null));
   }
 
   closeResourceCriteria(): void {
     this.criteriaEditorResource.set(null);
     this.criteriaDraft.set('');
     this.criteriaError.set(null);
-    this.criteriaReplace.set(false);
-  }
-
-  onCriteriaBackdropClick(e: MouseEvent): void {
-    if (e.target === e.currentTarget) this.closeResourceCriteria();
   }
 
   submitResourceCriteria(): void {
     const resourceType = this.criteriaEditorResource();
     if (!resourceType || this.criteriaSaving()) return;
 
-    const criteria = this.criteriaDraft().trim();
-    const replace = this.criteriaReplace();
+    const criteria = this.normalizeCriteria(this.criteriaDraft());
 
-    // An append of nothing is a no-op; a replace with nothing is how the box clears criteria, so only the
-    // append path rejects an empty value (matching ResourceTypeCriteriaService's own validation).
-    if (!criteria && !replace) {
-      this.criteriaError.set('Enter at least one FHIR search parameter, e.g. gender=female.');
+    // An emptied box means "no criteria": delete what's stored rather than storing an empty string. With
+    // nothing stored either, there is nothing to save.
+    if (!criteria) {
+      if (this.criteriaFor(resourceType)) {
+        this.clearResourceCriteria();
+      } else {
+        this.criteriaError.set('Enter at least one FHIR search parameter, e.g. gender=female.');
+      }
       return;
     }
 
@@ -3974,14 +4035,13 @@ export class DestinationWizardComponent implements OnInit {
       return;
     }
 
-    const merged = replace ? criteria : this.mergeCriteria(this.criteriaFor(resourceType), criteria);
     const workflowId = this.currentWorkflowId();
 
     // No workflow id yet (a canvas that has never been saved): keep it locally and let the first save flush
     // it, so criteria can be authored in the same pass as everything else on a brand-new workflow.
     if (!workflowId) {
-      this.criteriaBuffer = { ...this.criteriaBuffer, [resourceType]: merged };
-      this.criteriaByResourceType.update(current => ({ ...current, [resourceType]: merged }));
+      this.criteriaBuffer = { ...this.criteriaBuffer, [resourceType]: criteria };
+      this.criteriaByResourceType.update(current => ({ ...current, [resourceType]: criteria }));
       this.toast.info(`Criteria for ${resourceType} will be saved with the workflow.`);
       this.closeResourceCriteria();
       return;
@@ -3989,7 +4049,7 @@ export class DestinationWizardComponent implements OnInit {
 
     this.criteriaSaving.set(true);
     this.workflowApi
-      .saveResourceTypeCriteria(workflowId, { sourceNodeId, resourceType, criteria, replace })
+      .saveResourceTypeCriteria(workflowId, { sourceNodeId, resourceType, criteria, replace: true })
       .subscribe({
         next: saved => {
           this.criteriaByResourceType.update(current => ({ ...current, [resourceType]: saved.criteria }));
@@ -4057,6 +4117,12 @@ export class DestinationWizardComponent implements OnInit {
         }
         // Anything buffered before the workflow had an id wins - it is newer than what the server holds.
         this.criteriaByResourceType.set({ ...byResourceType, ...this.criteriaBuffer });
+        // The editor opened before these arrived, so its box was prefilled empty — fill it now, unless the
+        // user has already started typing.
+        const openResource = this.criteriaEditorResource();
+        if (openResource && !this.criteriaDraft()) {
+          this.criteriaDraft.set(this.criteriaFor(openResource));
+        }
       },
       // A failed load leaves the editor usable (it just shows no current value) rather than blocking it.
       error: () => { this.criteriaLoadedForWorkflowId = null; },
@@ -4065,7 +4131,7 @@ export class DestinationWizardComponent implements OnInit {
 
   /**
    * Persists criteria authored before the workflow had an id. Called after a save supplies one; each entry
-   * goes up as a replace, since the buffered value is already the fully merged result.
+   * goes up as a replace, since the buffered value is already the complete criteria.
    */
   private flushCriteriaBuffer(workflowId: string): void {
     const buffered = Object.entries(this.criteriaBuffer);
@@ -4085,27 +4151,19 @@ export class DestinationWizardComponent implements OnInit {
   }
 
   /**
-   * Appends additional parameters to existing ones, dropping any whose key is already present. Mirrors the
-   * server-side merge (ResourceTypeCriteria.MergeCriteria) so the dialog previews exactly what will be stored:
-   * a repeated key is not additive filtering, and Epic rejects a duplicated identifier outright.
+   * Trims the box's text into the canonical stored form — no leading '?', no empty or padded '&' segments.
+   * Mirrors the server-side replace (ResourceTypeCriteria.ReplaceCriteria), so the editor holds exactly what
+   * is stored. Deliberately does NOT drop repeated keys: the box is the whole criteria, and a repeated key can
+   * be intentional (e.g. a date range, date=ge2024-01-01&date=le2024-12-31).
    */
-  private mergeCriteria(existing: string, additional: string): string {
-    const merged: string[] = [];
-    const seenKeys = new Set<string>();
-
-    for (const source of [existing, additional]) {
-      for (const segment of source.trim().split('&')) {
-        const parameter = segment.trim().replace(/^[?&]+/, '');
-        if (!parameter) continue;
-        const equals = parameter.indexOf('=');
-        const key = (equals < 0 ? parameter : parameter.slice(0, equals)).toLowerCase();
-        if (seenKeys.has(key)) continue;
-        seenKeys.add(key);
-        merged.push(parameter);
-      }
-    }
-
-    return merged.join('&');
+  private normalizeCriteria(criteria: string): string {
+    return criteria
+      .trim()
+      .replace(/^\?+/, '')
+      .split('&')
+      .map(parameter => parameter.trim())
+      .filter(Boolean)
+      .join('&');
   }
 
   confirmExitMapping(): void {

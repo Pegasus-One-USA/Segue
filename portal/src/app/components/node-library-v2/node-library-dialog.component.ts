@@ -855,7 +855,14 @@ export class NodeLibraryDialogComponent {
 
     const editNode = this.sourceFormEditNode();
     if (editNode) {
-      this.store.updateNode(editNode.id, { fields } as Partial<CanvasNode>);
+      // The form returns a fresh field bag, so carry the backend's identity stamps across: ResourceTypeCriteria
+      // rows are keyed by canvasNodeId, and losing it would make the next save stamp a different key (the
+      // persisted node Guid) and orphan every criteria row already stored for this source.
+      const identity: Record<string, string> = {};
+      for (const key of ['canvasNodeId', 'workflowId']) {
+        if (editNode.fields[key]) identity[key] = editNode.fields[key];
+      }
+      this.store.updateNode(editNode.id, { fields: { ...identity, ...fields } } as Partial<CanvasNode>);
     } else {
       const meta = SOURCES.find(s => s.id === this.openSourceFormType());
       const node: SourceNode = {

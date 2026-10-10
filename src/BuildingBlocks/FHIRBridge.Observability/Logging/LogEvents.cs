@@ -76,6 +76,7 @@ public static class LogEvents
     public static readonly EventId ResourceTypeExtracted = new(4031, nameof(ResourceTypeExtracted));
     public static readonly EventId ResourceTypeSkipped = new(4032, nameof(ResourceTypeSkipped));
     public static readonly EventId ResourceTypeRetried = new(4033, nameof(ResourceTypeRetried));
+    public static readonly EventId SearchCriteriaEnforcedLocally = new(4034, nameof(SearchCriteriaEnforcedLocally));
     public static readonly EventId IncrementalWatermarkApplied = new(4041, nameof(IncrementalWatermarkApplied));
     public static readonly EventId IncrementalWatermarkAdvanced = new(4042, nameof(IncrementalWatermarkAdvanced));
     public static readonly EventId BulkExportSubmitted = new(4051, nameof(BulkExportSubmitted));
