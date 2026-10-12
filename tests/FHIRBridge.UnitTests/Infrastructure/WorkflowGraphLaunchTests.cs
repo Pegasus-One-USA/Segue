@@ -266,6 +266,9 @@ public sealed class WorkflowGraphLaunchTests
         }
 
         public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop) => value;
+
+        // Stands in for a policy that has rules: these tests are about which profile is resolved, not its contents.
+        public Task<bool> HasRulesAsync(Guid profileId, CancellationToken cancellationToken) => Task.FromResult(true);
     }
 
     private sealed class FakeConfigurationRepository : IConfigurationRepository

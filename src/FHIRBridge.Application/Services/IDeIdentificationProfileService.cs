@@ -16,8 +16,9 @@ public interface IDeIdentificationProfileService
         Guid profileId, DeIdentificationPreviewRequest request, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Deletes every rule of the de-identification policy <paramref name="workflowId"/> owns — what the workflow
-    /// builder calls when the workflow's last De-identification step is removed from the canvas.
+    /// Deletes every rule of the de-identification policy <paramref name="workflowId"/> owns — run by the workflow
+    /// save (IWorkflowConfigurationCleanupService) when the saved definition no longer has a De-identification step,
+    /// inside that save's transaction, so it happens only if the save does.
     ///
     /// Scope: only the policy NAMED with this workflow's id (the builder creates exactly one per workflow, and the
     /// name is its only link to the workflow), never a policy the caller names by id. Refused — nothing deleted —

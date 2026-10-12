@@ -230,6 +230,14 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
         return doomed.Count;
     }
 
+    public Task<bool> HasPreMappingRulesAsync(Guid deIdentificationProfileId, CancellationToken cancellationToken) =>
+        // The same predicate as GetPreMappingRulesAsync, minus the resource type.
+        _db.TransformationRules.AnyAsync(x =>
+            x.ExecutionPhase == TransformExecutionPhase.PreMapping &&
+            x.DeIdentificationProfileId == deIdentificationProfileId &&
+            (x.Scope == TransformScope.Global || x.Scope == TransformScope.ResourceType),
+            cancellationToken);
+
     public async Task<int> DeleteDeIdentificationProfileRulesAsync(
         Guid deIdentificationProfileId, CancellationToken cancellationToken)
     {

@@ -212,6 +212,19 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                 });
         }
 
+        // A policy with no rule at all — missing, never filled, or emptied — would let every resource through
+        // unredacted while the run reported success (the warning below was the only trace). That is a
+        // configuration error, not a valid state: fail the node, before anything reaches the destination. A
+        // policy whose rules simply do not cover this run's resource type is different, and still only warns.
+        if (resourceInputs.Length > 0 && _deIdentificationService is not null
+            && !await _deIdentificationService.HasRulesAsync(resolvedProfileId, cancellationToken))
+        {
+            throw new InvalidOperationException(
+                $"De-identification policy {resolvedProfileId} has no rules, so nothing could be de-identified and "
+                + "nothing was written. Add de-identification rules to the workflow, or remove its "
+                + "De-identification step.");
+        }
+
         if (resourceInputs.Length > 0)
         {
             var deIdentifiedResources = new List<ResourceEnvelope>();

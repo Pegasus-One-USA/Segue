@@ -452,6 +452,9 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         }
     }
 
+    public Task<bool> HasRulesAsync(Guid profileId, CancellationToken cancellationToken) =>
+        _ruleRepository.HasPreMappingRulesAsync(profileId, cancellationToken);
+
     public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop)
     {
         // Fails CLOSED: the value reaching here is a deferred column's chain output, built from UNREDACTED source

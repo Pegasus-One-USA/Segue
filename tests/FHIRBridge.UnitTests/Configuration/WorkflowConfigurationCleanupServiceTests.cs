@@ -28,7 +28,7 @@ public sealed class WorkflowConfigurationCleanupServiceTests
 
         // The re-save keeps the source node but drops the SQL destination entirely.
         var result = await fixture.Service.SoftDeleteUnreferencedAsync(
-            WorkflowId, fixture.Previous, [SourceNodeJson], CancellationToken.None);
+            WorkflowId, fixture.Previous, Nodes(SourceNodeJson), CancellationToken.None);
 
         result.MappingProfileIds.Should().BeEquivalentTo([fixture.MappingProfileId]);
         result.TransformationRuleIds.Should().BeEquivalentTo([fixture.WorkflowRuleId]);
@@ -43,7 +43,7 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         var fixture = await FixtureAsync();
 
         await fixture.Service.SoftDeleteUnreferencedAsync(
-            WorkflowId, fixture.Previous, [SourceNodeJson], CancellationToken.None);
+            WorkflowId, fixture.Previous, Nodes(SourceNodeJson), CancellationToken.None);
 
         // Field/ResourceType/DestinationType/Global rules are shared with every other pipeline — a canvas
         // edit must never retire them, however completely this workflow walks away from the destination.
@@ -63,7 +63,7 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         await fixture.Store.SaveAsync(other, CancellationToken.None);
 
         var result = await fixture.Service.SoftDeleteUnreferencedAsync(
-            WorkflowId, fixture.Previous, [SourceNodeJson], CancellationToken.None);
+            WorkflowId, fixture.Previous, Nodes(SourceNodeJson), CancellationToken.None);
 
         result.MappingProfileIds.Should().BeEmpty();
         (await fixture.Repository.GetMappingProfileAsync(fixture.MappingProfileId, CancellationToken.None))
@@ -84,7 +84,7 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         var result = await fixture.Service.SoftDeleteUnreferencedAsync(
             WorkflowId,
             fixture.Previous,
-            [SourceNodeJson, $"{{\"destinationId\":\"{replacement.Id}\"}}"],
+            Nodes(SourceNodeJson, $"{{\"destinationId\":\"{replacement.Id}\"}}"),
             CancellationToken.None);
 
         result.TransformationRuleIds.Should().BeEmpty();
@@ -99,7 +99,7 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         var fixture = await FixtureAsync();
 
         var result = await fixture.Service.SoftDeleteUnreferencedAsync(
-            WorkflowId, fixture.Previous, [SourceNodeJson, fixture.DestinationNodeJson, fixture.MappingNodeJson],
+            WorkflowId, fixture.Previous, Nodes(SourceNodeJson, fixture.DestinationNodeJson, fixture.MappingNodeJson),
             CancellationToken.None);
 
         result.RetiredAnything.Should().BeFalse();
@@ -111,12 +111,16 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         var fixture = await FixtureAsync();
 
         var result = await fixture.Service.SoftDeleteUnreferencedAsync(
-            WorkflowId, previousDefinition: null, [SourceNodeJson], CancellationToken.None);
+            WorkflowId, previousDefinition: null, Nodes(SourceNodeJson), CancellationToken.None);
 
         result.RetiredAnything.Should().BeFalse();
     }
 
     private const string SourceNodeJson = "{\"sourceConnectionId\":\"22222222-2222-2222-2222-222222222222\"}";
+
+    /// <summary>The saved nodes, by configuration — their type plays no part in these tests.</summary>
+    private static SavedWorkflowNode[] Nodes(params string[] configurationJson) =>
+        configurationJson.Select(json => new SavedWorkflowNode("Node", json)).ToArray();
 
     private sealed record Fixture(
         WorkflowConfigurationCleanupService Service,
@@ -236,6 +240,9 @@ public sealed class WorkflowConfigurationCleanupServiceTests
         public Task<int> DeleteWorkflowRulesForDestinationAsync(
             Guid resourcePipelineRouteId, Guid destinationConfigurationId, DestinationType destinationType,
             bool includeUnattributed, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<bool> HasPreMappingRulesAsync(Guid deIdentificationProfileId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<int> DeleteDeIdentificationProfileRulesAsync(Guid deIdentificationProfileId, CancellationToken cancellationToken) =>

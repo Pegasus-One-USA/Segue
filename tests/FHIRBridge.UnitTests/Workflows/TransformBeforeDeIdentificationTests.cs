@@ -67,6 +67,9 @@ public sealed class TransformBeforeDeIdentificationTests
         repository
             .Setup(r => r.GetPreMappingRulesAsync(ProfileId, "Patient", It.IsAny<CancellationToken>()))
             .ReturnsAsync(preMappingRules);
+        repository
+            .Setup(r => r.HasPreMappingRulesAsync(ProfileId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(preMappingRules.Length > 0);
         return new SafeHarborDeIdentificationService(repository.Object);
     }
 
@@ -235,8 +238,11 @@ public sealed class TransformBeforeDeIdentificationTests
     [Fact]
     public async Task Nothing_redacted_means_no_unredacted_copy_and_the_chain_joins_the_real_names()
     {
+        // The policy has a rule, but it matches nothing this resource carries: a valid policy that redacts nothing
+        // here (an EMPTY policy is a configuration error that fails the run — see the fail-closed tests).
         var (deIdentified, record) = await RunAsync(
-            DeIdentificationService(), PatientNameConcat, Column("PatientName", "$.name[*].given"));
+            DeIdentificationService(PreMapping("$.telecom[*].value", MaskConfig)), PatientNameConcat,
+            Column("PatientName", "$.name[*].given"));
 
         DeIdentificationSnapshots.DeferrableOriginalIfCurrent((ResourceEnvelope)((DeIdentifiedBatch)deIdentified.Payload!).Records.Single()).Should().BeNull();
         // Not deferred, so the long-standing contract holds: the array path hands the chain its one joined value.
@@ -808,6 +814,71 @@ public sealed class TransformBeforeDeIdentificationTests
         JsonSerializer.Serialize(record.Values).Should().NotContain("Other").And.NotContain("rson");
     }
 
+    // ── Fail closed: a De-identification node never passes data through on a policy with no rules ──────────────
+
+    [Fact]
+    public async Task A_policy_with_no_rules_fails_the_node_and_nothing_reaches_Mapping()
+    {
+        // The state the old canvas delete could leave behind: the step still saved, its policy emptied. It used to
+        // log a warning, pass every resource through unredacted and report success.
+        var run = () => RunAsync(DeIdentificationService(), PatientNameConcat, Column("PatientName", "$.name[*].given"));
+
+        var failure = (await run.Should().ThrowAsync<InvalidOperationException>()).Which;
+        failure.Message.Should().Contain("has no rules").And.Contain("nothing was written");
+        failure.Message.Should().NotContain("Tester").And.NotContain("Sable");   // names the policy, never the data
+        _mappingOutput.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_policy_that_does_not_exist_fails_the_node_too()
+    {
+        var node = Node(WorkflowNodeTypes.DeIdentification, WorkflowNodeCategory.Compliance,
+            new { profileId = Guid.NewGuid().ToString() });   // no such policy: it has no rules either
+
+        var run = () => new DeIdentificationNodeExecutor(DeIdentificationService(GivenMaskRule))
+            .ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "test"), node, [PatientSource()], CancellationToken.None);
+
+        await run.Should().ThrowAsync<InvalidOperationException>().WithMessage("*has no rules*");
+    }
+
+    [Fact]
+    public async Task A_service_that_cannot_redact_fails_the_node_rather_than_passing_data_through()
+    {
+        var node = Node(WorkflowNodeTypes.DeIdentification, WorkflowNodeCategory.Compliance, new { profileId = ProfileId.ToString() });
+
+        var run = () => new DeIdentificationNodeExecutor(new PassThroughDeIdentificationService())
+            .ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "test"), node, [PatientSource()], CancellationToken.None);
+
+        await run.Should().ThrowAsync<InvalidOperationException>().WithMessage("*has no rules*");
+    }
+
+    [Fact]
+    public async Task A_policy_whose_rules_cover_other_resource_types_still_runs_with_its_warning()
+    {
+        // Rules exist (for Observation, say) but none for Patient: a valid policy, unchanged behaviour.
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository.Setup(r => r.GetPreMappingRulesAsync(ProfileId, It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        repository.Setup(r => r.HasPreMappingRulesAsync(ProfileId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        var node = Node(WorkflowNodeTypes.DeIdentification, WorkflowNodeCategory.Compliance, new { profileId = ProfileId.ToString() });
+
+        var output = await new DeIdentificationNodeExecutor(new SafeHarborDeIdentificationService(repository.Object))
+            .ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "test"), node, [PatientSource()], CancellationToken.None);
+
+        output.Metadata!["redactedResourceCount"].Should().Be(0);
+    }
+
+    [Fact]
+    public async Task A_policy_with_rules_runs_and_redacts_as_before()
+    {
+        var (deIdentified, _) = await RunAsync(DeIdentificationService(GivenMaskRule), PatientNameConcat, Column("PatientName", "$.name[*].given"));
+
+        deIdentified.Metadata!["redactedResourceCount"].Should().Be(1);
+    }
+
+    private static WorkflowNodeOutput PatientSource() => new(
+        Guid.NewGuid(), WorkflowNodeTypes.EpicSource,
+        new ResourceBatch([new ResourceEnvelope("Patient", "p1", PatientJson)]), WorkflowDataContract.ResourceBatch);
+
     /// <summary>Runs Safe Harbor's real redaction for the De-identification node, but throws — quoting the value —
     /// whenever the Mapping node asks it to redact a deferred column.</summary>
     private sealed class ThrowingDeIdentificationService : IDeIdentificationService
@@ -817,6 +888,8 @@ public sealed class TransformBeforeDeIdentificationTests
 
         public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop) =>
             throw new InvalidOperationException($"cannot redact '{value}'");
+
+        public Task<bool> HasRulesAsync(Guid profileId, CancellationToken cancellationToken) => Task.FromResult(true);
     }
 
     /// <summary>A StringNormalization step that throws with its input in the message.</summary>

@@ -16,4 +16,7 @@ public sealed class PassThroughDeIdentificationService : IDeIdentificationServic
     // it cannot honour the hop's rule — so it fails closed: null (the value is dropped, and the Mapping node records
     // that as a failed de-identification), never the unredacted value it was handed.
     public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop) => null;
+
+    // It applies no rules, so it has none to offer: a De-identification node relying on it fails closed.
+    public Task<bool> HasRulesAsync(Guid profileId, CancellationToken cancellationToken) => Task.FromResult(false);
 }

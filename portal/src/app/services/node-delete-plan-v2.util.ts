@@ -73,14 +73,14 @@ export interface NodeDeletePlan {
   /** What happens to step data that does NOT live on the canvas — shown in the confirmation so the user
    *  knows exactly what the delete reaches. Currently only ever about transformation rules. */
   serverSideLeftovers: string[];
-  /** Destinations that STAY on the canvas but lose their Transformation step: the rules that step stood for
-   *  are deleted on the server for each one (see canvas.component's confirmDelete). A destination that is
-   *  itself removed is not listed — deleting a destination already deletes its rules. */
+  /** Destinations that STAY on the canvas but lose their Transformation step. Their saved rules are deleted by
+   *  the workflow save that drops the step (WorkflowConfigurationCleanupService); the canvas only discards the
+   *  user's unsaved drafts for them. A destination that is itself removed is not listed — its own delete covers it. */
   transformationRuleDeletes: { destinationNodeId: string; label: string }[];
   /** True when this delete removes the workflow's LAST De-identification step (directly or through a
    *  Mapping / destination / source delete): the rules of the workflow's own de-identification policy are then
-   *  deleted on the server BEFORE anything leaves the canvas (see canvas.component's confirmDelete). A policy is
-   *  per workflow, not per destination, so while another De-identification step remains its rules are kept. */
+   *  deleted by the next successful workflow save (WorkflowConfigurationCleanupService). A policy is per workflow,
+   *  not per destination, so while another De-identification step remains its rules are kept. */
   deIdentificationRuleDelete: boolean;
 }
 
@@ -286,8 +286,8 @@ export function buildNodeDeletePlanV2(
         const ownerLabel = labelOf(owner);
         transformationRuleDeletes.push({ destinationNodeId: owner.id, label: ownerLabel });
         serverSideLeftovers.push(
-          `All transformation rules on ${ownerLabel} are deleted with this step — including ones already `
-          + 'saved with this workflow. De-identification rules are not affected.',
+          `All transformation rules on ${ownerLabel} are deleted when you save the workflow — including ones `
+          + 'already saved with it. De-identification rules are not affected.',
         );
       }
     }
@@ -319,8 +319,8 @@ export function buildNodeDeletePlanV2(
   const deIdentificationRuleDelete = removesDeIdentificationStep && !deIdentificationStepRemains;
   if (deIdentificationRuleDelete) {
     serverSideLeftovers.push(
-      'All de-identification rules of this workflow are deleted with this step — including ones already saved. '
-      + 'Transformation rules are not affected.',
+      'All de-identification rules of this workflow are deleted when you save the workflow. Until then nothing is '
+      + 'deleted, so leaving without saving keeps them. Transformation rules are not affected.',
     );
   } else if (removesDeIdentificationStep) {
     serverSideLeftovers.push(

@@ -481,7 +481,7 @@ public static class WorkflowEndpoints
             await workflowConfigurationCleanup.SoftDeleteUnreferencedAsync(
                 workflow.Id,
                 existingDefinition,
-                definitionRequest.Nodes.Select(node => node.ConfigurationJson).ToArray(),
+                definitionRequest.Nodes.Select(node => new SavedWorkflowNode(node.NodeType, node.ConfigurationJson)).ToArray(),
                 cancellationToken);
 
             // Everything above (destinations, sources, mappings, the workflow definition itself) is durable only
@@ -1253,7 +1253,7 @@ public static class WorkflowEndpoints
             await workflowConfigurationCleanup.SoftDeleteUnreferencedAsync(
                 workflowId,
                 existing,
-                request.Nodes.Select(node => node.ConfigurationJson).ToArray(),
+                request.Nodes.Select(node => new SavedWorkflowNode(node.NodeType, node.ConfigurationJson)).ToArray(),
                 cancellationToken);
 
             return Results.Ok(workflow);

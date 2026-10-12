@@ -85,13 +85,19 @@ public sealed class DeIdentificationProfileService : IDeIdentificationProfileSer
             return new WorkflowDeIdentificationRuleDeletionResult(0, []);
         }
 
-        var usedElsewhere = await _repository.FindUsesOutsideWorkflowAsync(owned.Id, workflowId, cancellationToken);
-        if (usedElsewhere.Count > 0)
+        var usage = await _repository.FindUsageAsync(owned.Id, workflowId, cancellationToken);
+        if (usage.UsedElsewhere.Count > 0)
         {
-            return new WorkflowDeIdentificationRuleDeletionResult(0, usedElsewhere);
+            return new WorkflowDeIdentificationRuleDeletionResult(0, usage.UsedElsewhere);
         }
 
         var deleted = await _ruleRepository.DeleteDeIdentificationProfileRulesAsync(owned.Id, cancellationToken);
+        // The workflow's own connections stop naming the now-empty policy, so nothing resolves to it afterwards.
+        if (usage.OwnDestinationIds.Count > 0)
+        {
+            await _repository.ClearFromDestinationsAsync(owned.Id, usage.OwnDestinationIds, cancellationToken);
+        }
+
         return new WorkflowDeIdentificationRuleDeletionResult(deleted, []);
     }
 

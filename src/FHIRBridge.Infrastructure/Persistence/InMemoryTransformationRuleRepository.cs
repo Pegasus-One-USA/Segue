@@ -140,6 +140,12 @@ public sealed class InMemoryTransformationRuleRepository : ITransformationRuleRe
                     && x.DestinationConfigurationId == null
                     && x.DestinationType == destinationType)))));
 
+    public Task<bool> HasPreMappingRulesAsync(Guid deIdentificationProfileId, CancellationToken cancellationToken) =>
+        Task.FromResult(Rules.Any(x =>
+            x.ExecutionPhase == TransformExecutionPhase.PreMapping &&
+            x.DeIdentificationProfileId == deIdentificationProfileId &&
+            (x.Scope == TransformScope.Global || x.Scope == TransformScope.ResourceType)));
+
     public Task<int> DeleteDeIdentificationProfileRulesAsync(
         Guid deIdentificationProfileId, CancellationToken cancellationToken) =>
         Task.FromResult(Remove(Rules.Where(x => x.DeIdentificationProfileId == deIdentificationProfileId)));

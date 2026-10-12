@@ -168,8 +168,6 @@ export const DEIDENTIFICATION_ENDPOINTS = {
   list:    `${API_V1_BASE}/deidentification/profiles`,
   create:  `${API_V1_BASE}/deidentification/profiles`,
   preview: (profileId: string) => `${API_V1_BASE}/deidentification/profiles/${profileId}/preview`,
-  /** Deletes the rules of the policy this workflow owns (see DeIdentificationProfilesController.DeleteWorkflowRules). */
-  deleteWorkflowRules: (workflowId: string) => `${API_V1_BASE}/workflows/${workflowId}/de-identification-rules`,
 };
 
 // ─── Mapping Profiles (ConfigurationsController / ConfigurationCatalogController — api/v1/mapping-profiles) ──

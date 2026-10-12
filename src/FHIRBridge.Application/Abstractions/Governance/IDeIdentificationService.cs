@@ -17,6 +17,13 @@ public interface IDeIdentificationService
     /// exception the same way.
     /// </summary>
     object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop);
+
+    /// <summary>
+    /// Whether <paramref name="profileId"/> names a policy with at least one rule — what a De-identification node
+    /// checks before it lets anything through. False for a missing or emptied policy; an implementation that
+    /// cannot redact at all returns false too, so a node relying on it fails rather than passing data through.
+    /// </summary>
+    Task<bool> HasRulesAsync(Guid profileId, CancellationToken cancellationToken);
 }
 
 public sealed record DeIdentificationRequest(
