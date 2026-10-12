@@ -180,9 +180,13 @@
         }
 
         <div class="confirm-actions">
-          <button type="button" class="btn btn-secondary" (click)="cancelDelete()">Cancel</button>
-          <button type="button" class="btn btn-danger" (click)="confirmDelete()">
-            {{ plan.removals.length > 1 ? 'Delete ' + plan.removals.length + ' modules' : 'Delete' }}
+          <button type="button" class="btn btn-secondary" [disabled]="deletingRules()" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="btn btn-danger" [disabled]="deletingRules()" (click)="confirmDelete()">
+            @if (deletingRules()) {
+              Deleting…
+            } @else {
+              {{ plan.removals.length > 1 ? 'Delete ' + plan.removals.length + ' modules' : 'Delete' }}
+            }
           </button>
         </div>
       </div>

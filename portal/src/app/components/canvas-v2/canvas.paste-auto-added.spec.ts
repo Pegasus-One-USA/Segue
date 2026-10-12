@@ -4,6 +4,7 @@ import { PipelineStoreV2 } from '../../services/pipeline-v2.store';
 import { ToastService } from '../../services/toast.service';
 import { PermissionService } from '../../auth/services/permission.service';
 import { TransformationRulesService } from '../node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
+import { DeIdentificationProfileService } from '../../destination-connections/services/deidentification-profile.service';
 import { CanvasNode } from '../../models/node-v2.model';
 
 /** A Transformation step the builder added for rules carries __autoAdded, so the builder may remove it again once its
@@ -15,6 +16,7 @@ describe('Canvas — pasting a builder-added step makes it the user\'s', () => {
         { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['show', 'error', 'success', 'warning']) },
         { provide: PermissionService, useValue: { hasPermission: () => true, hasAny: () => true } },
         { provide: TransformationRulesService, useValue: {} },
+        { provide: DeIdentificationProfileService, useValue: {} },
       ],
     });
     TestBed.overrideComponent(CanvasComponent, { set: { template: '', imports: [] } });

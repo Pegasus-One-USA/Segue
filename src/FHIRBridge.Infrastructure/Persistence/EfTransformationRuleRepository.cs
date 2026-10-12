@@ -230,6 +230,24 @@ public sealed class EfTransformationRuleRepository : ITransformationRuleReposito
         return doomed.Count;
     }
 
+    public async Task<int> DeleteDeIdentificationProfileRulesAsync(
+        Guid deIdentificationProfileId, CancellationToken cancellationToken)
+    {
+        var doomed = await _db.TransformationRules
+            .Where(x => x.DeIdentificationProfileId == deIdentificationProfileId)
+            .ToListAsync(cancellationToken);
+
+        if (doomed.Count == 0)
+        {
+            return 0;
+        }
+
+        // One SaveChanges: every rule goes, or — if it throws — none does.
+        _db.TransformationRules.RemoveRange(doomed);
+        await _db.SaveChangesAsync(cancellationToken);
+        return doomed.Count;
+    }
+
     public Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         _db.TransformationRules.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 

@@ -225,6 +225,20 @@ describe('WorkflowBuilderV2 — chain steps follow their rules', () => {
     expect(chain().slice(-1)).toEqual(['dest']);
   });
 
+  it('does not bring De-identification back once its rules were deleted, even with the policy re-adopted', () => {
+    // After the step's removal deleted the policy's rules, reopening the destination re-adopts the (now empty)
+    // policy by name and stamps it again. With no rule left, the step must stay gone.
+    const destination = seedChain();
+    store.removeNode('deid');
+    store.addEdge({ id: 'relink', from: 'tra', to: 'dest' });
+    deIdRules = of([transformationRule]);
+
+    builder.syncChainNodes(destination);
+
+    expect(store.byId('deid')).toBeUndefined();
+    expect(store.nodes().some(node => (node as { transformId?: string }).transformId === 'deidentification')).toBeFalse();
+  });
+
   it('lays the remaining chain out left-to-right with no gap', () => {
     const destination = seedChain();
     transformationRules = of([]);

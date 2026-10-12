@@ -25,6 +25,12 @@ public sealed class InMemoryDeIdentificationProfileRepository : IDeIdentificatio
         _profiles[profile.Id] = profile;
         return Task.CompletedTask;
     }
+
+    /// <summary>The no-database profile keeps no destination connections or workflow definitions alongside its
+    /// profiles to consult, so nothing outside the workflow is known to use one.</summary>
+    public Task<IReadOnlyList<string>> FindUsesOutsideWorkflowAsync(
+        Guid profileId, Guid workflowId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
 }
 
 public sealed class InMemoryResourceTypeCriteriaRepository : IResourceTypeCriteriaRepository

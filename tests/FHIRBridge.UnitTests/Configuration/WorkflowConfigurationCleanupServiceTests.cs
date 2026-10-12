@@ -238,6 +238,9 @@ public sealed class WorkflowConfigurationCleanupServiceTests
             bool includeUnattributed, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<int> DeleteDeIdentificationProfileRulesAsync(Guid deIdentificationProfileId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<int> DeletePendingWorkflowRulesAsync(
             IReadOnlyCollection<DestinationType> destinationTypes, string? owner, CancellationToken cancellationToken) =>
             throw new NotSupportedException();

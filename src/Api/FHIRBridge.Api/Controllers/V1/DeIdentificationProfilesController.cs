@@ -1,3 +1,4 @@
+using FHIRBridge.Api.Security;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
@@ -50,5 +51,22 @@ public sealed class DeIdentificationProfilesController : ControllerBase
     {
         var result = await _profileService.PreviewAsync(profileId, request, cancellationToken);
         return Ok(result);
+    }
+
+    /// <summary>Deletes every rule of the de-identification policy this workflow owns — called by the workflow
+    /// builder when the workflow's last De-identification step is removed. 200 with the number deleted (0 when
+    /// the workflow has no policy of its own); 409, deleting nothing, when the policy is still used outside this
+    /// workflow. See <see cref="IDeIdentificationProfileService.DeleteWorkflowPolicyRulesAsync"/>.</summary>
+    [HttpDelete("~/api/v1/workflows/{workflowId:guid}/de-identification-rules")]
+    [StandardPermission(
+        PermissionGroupCode.TransformationRules,
+        PermissionActionCode.Delete,
+        description: "Delete a scoped transformation rule.")]
+    [ProducesResponseType(typeof(WorkflowDeIdentificationRuleDeletionResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(WorkflowDeIdentificationRuleDeletionResult), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> DeleteWorkflowRules(Guid workflowId, CancellationToken cancellationToken)
+    {
+        var result = await _profileService.DeleteWorkflowPolicyRulesAsync(workflowId, cancellationToken);
+        return result.UsedElsewhere.Count > 0 ? Conflict(result) : Ok(result);
     }
 }

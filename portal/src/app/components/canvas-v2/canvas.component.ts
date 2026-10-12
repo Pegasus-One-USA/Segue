@@ -17,6 +17,7 @@ import { sourceFormKeyForNode } from '../node-library-v2/source-node-vendor.util
 import { SOURCES } from '../../data/sources-v2.data';
 import { TRANSFORMS } from '../../data/transforms-v2.data';
 import { TransformationRulesService } from '../node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
+import { DeIdentificationProfileService } from '../../destination-connections/services/deidentification-profile.service';
 import { DestinationType } from '../../destination-connections/models/destination-configuration.model';
 
 @Component({
@@ -39,6 +40,7 @@ export class CanvasComponent {
   protected readonly appSvc      = inject(ApplicabilityServiceV2);
   private readonly permissions   = inject(PermissionService);
   private readonly transformationRules = inject(TransformationRulesService);
+  private readonly deIdentificationProfiles = inject(DeIdentificationProfileService);
 
   // ── events upward ─────────────────────────────────────────────────────────
   readonly openWizard          = output<string>();
@@ -170,6 +172,8 @@ export class CanvasComponent {
    *  not just the clicked node's id, because a delete here cascades along the chain and strips the
    *  configuration those steps stored on their destination. The confirmation enumerates all of it. */
   protected readonly pendingDelete = signal<NodeDeletePlan | null>(null);
+  /** True while a confirmed delete waits for the server to delete the workflow's de-identification rules. */
+  protected readonly deletingRules = signal(false);
 
   // Removing a node from the canvas requires BOTH workflow.edit/create (readOnly(), checked first) AND
   // that node's own vendor `.delete` permission (epic.delete, sqlserver.delete, ...) — the same AND
@@ -229,8 +233,42 @@ export class CanvasComponent {
 
   confirmDelete(): void {
     const plan = this.pendingDelete();
-    if (!plan) return;
+    if (!plan || this.deletingRules()) return;
 
+    // The workflow's de-identification rules are deleted on the server FIRST, and the canvas changes only once
+    // that has succeeded. A failure or a refusal leaves the canvas exactly as it was, so a step never vanishes
+    // while the rules it stood for keep redacting every run (and bring it back on the next destination save).
+    // A workflow that was never saved owns no policy (one is named with the workflow id), so nothing to delete.
+    const workflowId = this.workflowId();
+    if (plan.deIdentificationRuleDelete && workflowId) {
+      this.deletingRules.set(true);
+      this.deIdentificationProfiles.deleteWorkflowRules(workflowId).subscribe({
+        next: () => {
+          this.deletingRules.set(false);
+          this.applyDelete(plan);
+        },
+        error: (err: { status?: number; error?: { usedElsewhere?: string[] } }) => {
+          this.deletingRules.set(false);
+          this.pendingDelete.set(null);
+          const usedElsewhere = err?.status === 409 ? err.error?.usedElsewhere ?? [] : [];
+          this.toast.show(
+            'Nothing was deleted',
+            usedElsewhere.length
+              ? `This workflow's de-identification rules are also used by ${usedElsewhere.join(', ')}, so they were `
+                + 'kept and the step was not removed.'
+              : 'The de-identification rules could not be deleted, so the step was not removed. Try again.',
+          );
+        },
+      });
+      return;
+    }
+
+    this.applyDelete(plan);
+  }
+
+  /** The canvas half of a confirmed delete — run directly, or once the server has deleted the de-identification
+   *  rules the delete takes with it (see confirmDelete). */
+  private applyDelete(plan: NodeDeletePlan): void {
     // Strip the removed steps' configuration off the destinations that host it BEFORE the nodes go, so
     // the two can't get out of step if one half throws. A chain node's data lives on its destination
     // (see CHAIN_STEP_OWNED_FIELDS), so skipping this would leave the canvas carrying mappings for a
@@ -247,6 +285,7 @@ export class CanvasComponent {
     // and once removeNode has run they are no longer in the store to look up.
     const removedDestinations = this.destinationsBeingRemoved(plan);
     const orphanedDestinationTypes = this.destinationTypesLosingTheirLastNode(plan);
+    const transformationStepsRemoved = this.transformationStepsBeingRemoved(plan);
 
     for (const removal of plan.removals) this.store.removeNode(removal.id);
 
@@ -297,6 +336,8 @@ export class CanvasComponent {
       }
     }
 
+    this.deleteRulesOfRemovedTransformationSteps(transformationStepsRemoved);
+
     const count = plan.removals.length;
     this.toast.show(
       count === 1 ? 'Module removed' : `${count} modules removed`,
@@ -305,6 +346,69 @@ export class CanvasComponent {
         : `${plan.removals.map(removal => removal.label).join(', ')} deleted.`,
     );
     this.pendingDelete.set(null);
+  }
+
+  /** For each destination that stays but loses its Transformation step (see
+   *  NodeDeletePlan.transformationRuleDeletes): what its rules are recorded against, and whether another
+   *  destination of the same type is left on the canvas to share the rules that record no destination id. */
+  private transformationStepsBeingRemoved(plan: NodeDeletePlan): {
+    label: string;
+    destinationId: string | null;
+    destinationType: DestinationType;
+    otherDestinationsOfThisTypeRemain: boolean;
+  }[] {
+    const removedNodeIds = new Set(plan.removals.map(removal => removal.id));
+    const typeOf = (node: CanvasNode): DestinationType | undefined =>
+      node.kind === 'transform'
+        ? TRANSFORMS.find(t => t.id === (node as TransformNode).transformId)?.destinationType as DestinationType | undefined
+        : undefined;
+
+    return plan.transformationRuleDeletes.flatMap(entry => {
+      const destination = this.store.byId(entry.destinationNodeId);
+      const destinationType = destination ? typeOf(destination) : undefined;
+      if (!destination || !destinationType) return [];
+      return [{
+        label: entry.label,
+        destinationId: (destination.fields ?? {})['destinationId'] || null,
+        destinationType,
+        otherDestinationsOfThisTypeRemain: this.store.nodes().some(node =>
+          node.id !== destination.id && !removedNodeIds.has(node.id) && typeOf(node) === destinationType),
+      }];
+    });
+  }
+
+  /** Deletes the rules a removed Transformation step stood for, on each destination that stays:
+   *  <ul>
+   *  <li>the ones saved with this workflow for that destination (the same call deleting the destination
+   *  makes) — only the workflow's Transformation-tab rules; De-identification rules belong to a profile and
+   *  are never reached;</li>
+   *  <li>this user's unsaved drafts for that destination type — only when no other destination of the type
+   *  is left, since drafts record no node and could belong to it.</li>
+   *  </ul>
+   *  A failure is shown rather than swallowed: the user asked for these rules to go, and if they did not they
+   *  keep running. */
+  private deleteRulesOfRemovedTransformationSteps(steps: ReturnType<CanvasComponent['transformationStepsBeingRemoved']>): void {
+    const workflowId = this.workflowId();
+    const failed = (label: string) => this.toast.show(
+      'Transformation rules not deleted',
+      `The Transformation step was removed, but its rules on ${label} could not be deleted. Delete them from the `
+      + 'destination’s Rules screen, or remove the step again.',
+    );
+
+    for (const step of steps) {
+      if (workflowId && step.destinationId) {
+        this.transformationRules.deleteForDestination({
+          workflowId,
+          destinationConfigurationId: step.destinationId,
+          destinationType: step.destinationType,
+          otherDestinationsOfThisTypeRemain: step.otherDestinationsOfThisTypeRemain,
+        }).subscribe({ error: () => failed(step.label) });
+      }
+
+      if (!step.otherDestinationsOfThisTypeRemain) {
+        this.transformationRules.deletePending([step.destinationType]).subscribe({ error: () => failed(step.label) });
+      }
+    }
   }
 
   /** The destinations this delete removes, as (configuration id, type) pairs — the identity their rules
@@ -343,6 +447,8 @@ export class CanvasComponent {
   }
 
   cancelDelete(): void {
+    // Not while the server is deleting rules: the outcome decides whether the canvas changes.
+    if (this.deletingRules()) return;
     this.pendingDelete.set(null);
   }
 

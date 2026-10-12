@@ -140,6 +140,10 @@ public sealed class InMemoryTransformationRuleRepository : ITransformationRuleRe
                     && x.DestinationConfigurationId == null
                     && x.DestinationType == destinationType)))));
 
+    public Task<int> DeleteDeIdentificationProfileRulesAsync(
+        Guid deIdentificationProfileId, CancellationToken cancellationToken) =>
+        Task.FromResult(Remove(Rules.Where(x => x.DeIdentificationProfileId == deIdentificationProfileId)));
+
     public Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(_rules.GetValueOrDefault(id));
 
