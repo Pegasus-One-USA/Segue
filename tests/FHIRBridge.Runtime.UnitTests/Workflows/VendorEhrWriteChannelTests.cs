@@ -53,6 +53,11 @@ public sealed class VendorEhrWriteChannelTests
     [InlineData("201 Created", "Condition/c-9/_history/1", EhrCreateKind.Created, "c-9", null)]
     [InlineData("202", null, EhrCreateKind.Rejected, null, "202")]
     [InlineData("1", null, EhrCreateKind.Unknown, null, null)]
+    // PR #244 review, round 3: eCW's own error codes with text are errors, not HTTP successes.
+    [InlineData("202 Patient already exists", "Patient/123", EhrCreateKind.Rejected, null, "202")]
+    [InlineData("201 multiple patients found", "Patient/456", EhrCreateKind.Rejected, null, "201")]
+    [InlineData("202 Accepted", "Patient/789", EhrCreateKind.Rejected, null, "202")]
+    [InlineData("200 ok", "Condition/c-1", EhrCreateKind.Created, "c-1", null)]
     public void Ecw_reads_its_transaction_response(string status, string? location, EhrCreateKind kind, string? id, string? code)
     {
         var response = new JsonObject
@@ -67,6 +72,22 @@ public sealed class VendorEhrWriteChannelTests
         outcome.Kind.Should().Be(kind);
         outcome.ResourceId.Should().Be(id);
         outcome.Issues.Select(i => i.VendorCode).FirstOrDefault().Should().Be(code);
+    }
+
+    [Theory]
+    [InlineData("""{"resourceType":5}""")]
+    [InlineData("""{"resourceType":{"x":1}}""")]
+    [InlineData("""{"id":"1"}""")]
+    public async Task Ecw_refuses_a_resource_without_a_string_resource_type_before_sending(string resource)
+    {
+        var client = new Mock<IFhirWriteClient>();
+        var channel = new EcwEhrWriteChannel(Fhir(client, "https://fhir.ecw.example/fhir/r4", SourceSystemType.Healow));
+
+        var outcome = await channel.CreateAsync("Condition", resource, CancellationToken.None);
+
+        outcome.Kind.Should().Be(EhrCreateKind.Rejected);
+        outcome.Issues.Single().VendorCode.Should().Be("not-a-fhir-resource");
+        client.VerifyNoOtherCalls();
     }
 
     [Fact]

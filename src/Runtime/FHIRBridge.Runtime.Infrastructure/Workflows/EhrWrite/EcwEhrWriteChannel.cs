@@ -91,7 +91,11 @@ public sealed class EcwEhrWriteChannel : IEhrWriteChannel
     internal static string BuildTransaction(string resourceJson)
     {
         var resource = JsonNode.Parse(resourceJson) as JsonObject ?? throw new JsonException("Not a JSON object.");
-        var type = resource["resourceType"]?.GetValue<string>() ?? throw new JsonException("No resourceType.");
+        // TryGetValue, not GetValue: a resourceType that is not a string is a malformed resource (refused, nothing
+        // sent), not an exception the writer would have to record as an unknown outcome.
+        var type = resource["resourceType"] is JsonValue value && value.TryGetValue<string>(out var text) && text.Length > 0
+            ? text
+            : throw new JsonException("No resourceType.");
         var bundle = new JsonObject
         {
             ["resourceType"] = "Bundle",
@@ -165,14 +169,24 @@ public sealed class EcwEhrWriteChannel : IEhrWriteChannel
             : null;
 
     /// <summary>eCW's success code is "1". Its error codes overlap HTTP's (201 "multiple patients found", 202 "patient
-    /// already exists"), so a bare 2xx number is an eCW error; only an HTTP-style status with its reason phrase
-    /// ("201 Created") counts as success.</summary>
+    /// already exists") and may carry their own text, so a 2xx number counts as success only with HTTP's own reason
+    /// phrase for it ("201 Created", "200 OK"): "202", "202 Patient already exists" or "201 multiple patients found"
+    /// are eCW errors.</summary>
     private static bool IsSuccessStatus(string status)
     {
         var parts = status.Trim().Split(' ', 2);
         return parts[0] == "1"
-            || (parts.Length == 2 && parts[0].Length == 3 && parts[0][0] == '2' && int.TryParse(parts[0], out _));
+            || (parts.Length == 2 && HttpSuccessStatuses.TryGetValue(parts[0], out var phrase)
+                && string.Equals(parts[1].Trim(), phrase, StringComparison.OrdinalIgnoreCase));
     }
+
+    // The statuses a FHIR transaction-response gives a successful POST entry. 202 is deliberately absent: eCW uses it
+    // for "patient already exists".
+    private static readonly IReadOnlyDictionary<string, string> HttpSuccessStatuses = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["200"] = "OK",
+        ["201"] = "Created",
+    };
 
     private static string FirstToken(string status) => status.Trim().Split(' ', 2)[0];
 
