@@ -125,7 +125,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             workflowRun.HoldLease(_activeRuns.InstanceId, DateTimeOffset.UtcNow + WorkflowRunLease.Duration);
         }
 
-        await PersistRunStartedAsync(workflowRun, cancellationToken);
+        // Only a lease the database holds is one another instance can see lapse, so only then is this run fenced.
+        var leasePersisted = await PersistRunStartedAsync(workflowRun, cancellationToken);
         await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Running", DateTimeOffset.UtcNow, null, cancellationToken);
 
         await _auditRecorder.RecordAsync(new(
@@ -142,7 +143,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
         return await RunNodesAsync(
             workflowDefinition, effectiveDefinition, workflowRun, context, orderedNodes,
-            outputsByNodeId, skippedResourceTypesAcrossRun, cancellationToken);
+            outputsByNodeId, skippedResourceTypesAcrossRun, cancellationToken,
+            confirmedLeaseExpiresAt: leasePersisted ? workflowRun.LeaseExpiresAt : null);
     }
 
     /// <summary>Resumes a run that <see cref="RunNodesAsync"/> paused at <paramref name="nodeId"/> (a source node
@@ -282,10 +284,15 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IReadOnlyCollection<WorkflowNode> nodesToRun,
         Dictionary<Guid, WorkflowNodeOutput> outputsByNodeId,
         List<string> skippedResourceTypesAcrossRun,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DateTimeOffset? confirmedLeaseExpiresAt = null)
     {
         // Held for as long as this process executes the run, whichever entry point started it.
         using var held = _activeRuns?.Hold(workflowRun.Id);
+        if (confirmedLeaseExpiresAt is { } leaseExpiresAt)
+        {
+            _activeRuns?.Confirm([workflowRun.Id], leaseExpiresAt);
+        }
 
         // Names the central error capture attaches to anything that fails beneath this run (workflow, then per node).
         var totalSteps = nodesToRun.Count;
@@ -308,6 +315,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             foreach (var node in nodesToRun)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                // Before each node, not only on the heartbeat: a process that could not renew its lease stops before
+                // another instance may close the run, rather than racing it (see IActiveWorkflowRuns).
+                if (_activeRuns is not null && !_activeRuns.HoldsLease(workflowRun.Id, DateTimeOffset.UtcNow))
+                {
+                    throw new WorkflowRunLeaseLostException(workflowRun.Id);
+                }
+
                 stepNumber++;
 
                 var incomingOutputs = GetIncomingOutputs(effectiveDefinition, node, outputsByNodeId);
@@ -823,11 +838,11 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     /// keeps this one write fully isolated, so its DbContext is created, used, and disposed before node execution
     /// ever starts.
     /// </remarks>
-    private async Task PersistRunStartedAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
+    private async Task<bool> PersistRunStartedAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
     {
         if (_runStore is null)
         {
-            return;
+            return false;
         }
 
         try
@@ -839,11 +854,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 if (scopedRunStore is not null)
                 {
                     await scopedRunStore.SaveAsync(workflowRun, cancellationToken);
-                    return;
+                    return true;
                 }
             }
 
             await _runStore.SaveAsync(workflowRun, cancellationToken);
+            return true;
         }
         catch (Exception persistException)
         {
@@ -851,6 +867,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             // PersistRunAsync call at the end of the run is the only other place this history is captured.
             _logger.LogError(persistException,
                 "Failed to persist the initial 'Running' placeholder for workflow run {WorkflowRunId}.", workflowRun.Id);
+            return false;
         }
     }
 

@@ -32,10 +32,11 @@ public interface IWorkflowRunStore
 
     /// <summary>
     /// Renews the lease of each <see cref="WorkflowRunStatus.Running"/> run in <paramref name="runIds"/> (the runs this
-    /// process is executing) and returns those a user has asked to cancel from another instance. A targeted update:
-    /// it never rewrites the run row the executing process saves when the run ends.
+    /// process is executing) and reports, of those runs, which were renewed, which a user asked to cancel from another
+    /// instance, and which another instance already closed. A targeted update: it never rewrites the run row the
+    /// executing process saves when the run ends.
     /// </summary>
-    Task<IReadOnlyCollection<Guid>> RenewLeasesAsync(
+    Task<WorkflowLeaseRenewal> RenewLeasesAsync(
         IReadOnlyCollection<Guid> runIds,
         string owner,
         DateTimeOffset expiresAt,
@@ -57,6 +58,16 @@ public interface IWorkflowRunStore
     /// executing it to act on. Returns false when the run is not Running. A targeted update, like
     /// <see cref="RenewLeasesAsync"/>.</summary>
     Task<bool> RequestCancellationAsync(Guid workflowRunId, DateTimeOffset requestedAt, CancellationToken cancellationToken);
+
+    /// <summary>Cancels the run with <paramref name="reason"/> only if it is still <see cref="WorkflowRunStatus.Running"/>
+    /// and its lease lapsed (by the same rule as <see cref="FailExpiredRunsAsync"/>), checked in the same statement that
+    /// writes it: a run another instance renewed or finished meanwhile is left alone, and false is returned.</summary>
+    Task<bool> CancelAbandonedAsync(
+        Guid workflowRunId,
+        DateTimeOffset now,
+        DateTimeOffset legacyStartedBefore,
+        string reason,
+        CancellationToken cancellationToken);
 
     Task<WorkflowRun?> FindValidatedAsync(
         Guid workflowDefinitionId,

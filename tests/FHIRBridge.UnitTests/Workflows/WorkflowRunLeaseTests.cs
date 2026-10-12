@@ -5,6 +5,7 @@ using FHIRBridge.Runtime.Domain.Workflows;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace FHIRBridge.UnitTests.Workflows;
 
@@ -120,6 +121,101 @@ public sealed class WorkflowRunLeaseTests
         await store.SaveAsync(run, CancellationToken.None);
 
         (await store.RequestCancellationAsync(run.Id, Now, CancellationToken.None)).Should().BeFalse();
+    }
+
+    // ---- PR #244 review, round 2: the process running a run stops before its lease can lapse -----------------------
+
+    [Fact]
+    public void A_run_is_fenced_a_margin_before_its_confirmed_lease_lapses_and_at_once_when_revoked()
+    {
+        var active = new ActiveWorkflowRuns();
+        var id = Guid.NewGuid();
+        using var held = active.Hold(id);
+
+        active.HoldsLease(id, Now).Should().BeTrue(because: "a run never confirmed has no lease anyone could see lapse");
+
+        active.Confirm([id], Now + WorkflowRunLease.Duration);
+        active.HoldsLease(id, Now + WorkflowRunLease.Duration - WorkflowRunLease.FenceMargin - TimeSpan.FromSeconds(1)).Should().BeTrue();
+        active.HoldsLease(id, Now + WorkflowRunLease.Duration - WorkflowRunLease.FenceMargin).Should().BeFalse(
+            because: "the process stops before another instance may close the run");
+
+        active.Confirm([id], Now + TimeSpan.FromMinutes(5));
+        active.HoldsLease(id, Now + TimeSpan.FromMinutes(3)).Should().BeTrue();
+
+        active.Revoke(id);
+        active.HoldsLease(id, Now).Should().BeFalse();
+        active.HoldsLease(Guid.NewGuid(), Now).Should().BeTrue(because: "a run not held here is not this process's to fence");
+    }
+
+    [Fact]
+    public async Task A_heartbeat_confirms_renewed_leases_and_stops_a_run_another_instance_closed()
+    {
+        var store = new InMemoryWorkflowRunStore();
+        var tracker = new InMemoryWorkflowRunTracker();
+        var active = new ActiveWorkflowRuns();
+        var services = new ServiceCollection().AddSingleton<IWorkflowRunStore>(store).BuildServiceProvider();
+        var lease = new WorkflowRunLeaseService(
+            services.GetRequiredService<IServiceScopeFactory>(), active, tracker, NullLogger<WorkflowRunLeaseService>.Instance, new FixedTime(Now));
+
+        var live = Run(Now.AddMinutes(-1), Now.AddSeconds(10));
+        var closed = Run(Now.AddMinutes(-5), Now.AddMinutes(-3));
+        closed.Fail(WorkflowRunLease.InterruptedReason, Now.AddMinutes(-2));
+        foreach (var run in new[] { live, closed })
+        {
+            await store.SaveAsync(run, CancellationToken.None);
+        }
+
+        using var closedCancellation = new CancellationTokenSource();
+        tracker.MarkRunning(closed.Id, closedCancellation);
+        using var heldLive = active.Hold(live.Id);
+        using var heldClosed = active.Hold(closed.Id);
+        active.Confirm([live.Id, closed.Id], Now.AddSeconds(10));
+
+        await lease.TickAsync(CancellationToken.None);
+
+        active.HoldsLease(live.Id, Now + WorkflowRunLease.Duration - WorkflowRunLease.FenceMargin - TimeSpan.FromSeconds(1))
+            .Should().BeTrue(because: "the renewal was confirmed");
+        active.HoldsLease(closed.Id, Now).Should().BeFalse();
+        closedCancellation.IsCancellationRequested.Should().BeTrue();
+        closed.Status.Should().Be(WorkflowRunStatus.Failed, because: "the outcome recorded elsewhere stands");
+    }
+
+    [Fact]
+    public async Task When_the_heartbeat_cannot_renew_the_run_is_fenced_before_its_lease_lapses()
+    {
+        var store = new Mock<IWorkflowRunStore>();
+        store.Setup(s => s.RenewLeasesAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TimeoutException());
+        var active = new ActiveWorkflowRuns();
+        var services = new ServiceCollection().AddSingleton(store.Object).BuildServiceProvider();
+        var lease = new WorkflowRunLeaseService(
+            services.GetRequiredService<IServiceScopeFactory>(), active, new InMemoryWorkflowRunTracker(),
+            NullLogger<WorkflowRunLeaseService>.Instance, new FixedTime(Now));
+        var id = Guid.NewGuid();
+        using var held = active.Hold(id);
+        active.Confirm([id], Now + WorkflowRunLease.Duration);
+
+        await lease.TickAsync(CancellationToken.None);
+
+        active.HoldsLease(id, Now + TimeSpan.FromSeconds(60)).Should().BeTrue();
+        active.HoldsLease(id, Now + WorkflowRunLease.Duration - WorkflowRunLease.FenceMargin).Should().BeFalse(
+            because: "nothing confirmed a renewal, so the process stops before others may close the run");
+    }
+
+    [Fact]
+    public async Task Only_an_abandoned_run_is_cancelled_outright()
+    {
+        var store = new InMemoryWorkflowRunStore();
+        var live = Run(Now.AddHours(-1), Now.AddMinutes(1));
+        var dead = Run(Now.AddHours(-1), Now.AddMinutes(-1));
+        await store.SaveAsync(live, CancellationToken.None);
+        await store.SaveAsync(dead, CancellationToken.None);
+
+        (await store.CancelAbandonedAsync(live.Id, Now, Now - WorkflowRunLease.LegacyGrace, "x", CancellationToken.None)).Should().BeFalse();
+        (await store.CancelAbandonedAsync(dead.Id, Now, Now - WorkflowRunLease.LegacyGrace, "x", CancellationToken.None)).Should().BeTrue();
+
+        live.Status.Should().Be(WorkflowRunStatus.Running);
+        dead.Status.Should().Be(WorkflowRunStatus.Cancelled);
     }
 
     private sealed class FixedTime : TimeProvider

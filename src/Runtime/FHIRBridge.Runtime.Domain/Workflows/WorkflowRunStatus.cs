@@ -34,3 +34,12 @@ public enum WorkflowRunStatus
     /// <see cref="Cancelled"/>, which is a run that started and was deliberately stopped.</summary>
     Expired
 }
+
+public static class WorkflowRunStatuses
+{
+    /// <summary>A run in one of these states is finished on record; nothing may change it. Validated is deliberately
+    /// not terminal: it is the placeholder /run replaces when it continues the attempt.</summary>
+    public static bool IsTerminal(WorkflowRunStatus status) => status is
+        WorkflowRunStatus.Succeeded or WorkflowRunStatus.Failed or WorkflowRunStatus.Cancelled
+        or WorkflowRunStatus.PartialSuccess or WorkflowRunStatus.ValidationFailed or WorkflowRunStatus.Expired;
+}

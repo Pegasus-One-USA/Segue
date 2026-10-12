@@ -37,26 +37,56 @@ public sealed class InMemoryWorkflowRunStore : IWorkflowRunStore
         return Task.FromResult(stale.Count);
     }
 
-    public Task<IReadOnlyCollection<Guid>> RenewLeasesAsync(
+    public Task<WorkflowLeaseRenewal> RenewLeasesAsync(
         IReadOnlyCollection<Guid> runIds,
         string owner,
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken)
     {
+        var renewed = new List<Guid>();
         var cancelRequested = new List<Guid>();
+        var closed = new List<Guid>();
         foreach (var id in runIds)
         {
-            if (_runs.TryGetValue(id, out var run) && run.Status == WorkflowRunStatus.Running)
+            if (!_runs.TryGetValue(id, out var run))
+            {
+                continue;
+            }
+
+            if (run.Status == WorkflowRunStatus.Running)
             {
                 run.HoldLease(owner, expiresAt);
+                renewed.Add(id);
                 if (run.CancellationRequestedAt is not null)
                 {
                     cancelRequested.Add(id);
                 }
             }
+            else if (WorkflowRunStatuses.IsTerminal(run.Status))
+            {
+                closed.Add(id);
+            }
         }
 
-        return Task.FromResult<IReadOnlyCollection<Guid>>(cancelRequested);
+        return Task.FromResult(new WorkflowLeaseRenewal(renewed, cancelRequested, closed));
+    }
+
+    public Task<bool> CancelAbandonedAsync(
+        Guid workflowRunId,
+        DateTimeOffset now,
+        DateTimeOffset legacyStartedBefore,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        if (!_runs.TryGetValue(workflowRunId, out var run)
+            || run.Status != WorkflowRunStatus.Running
+            || !run.IsLeaseExpired(now, now - legacyStartedBefore))
+        {
+            return Task.FromResult(false);
+        }
+
+        run.Cancel(reason, now);
+        return Task.FromResult(true);
     }
 
     public Task<int> FailExpiredRunsAsync(

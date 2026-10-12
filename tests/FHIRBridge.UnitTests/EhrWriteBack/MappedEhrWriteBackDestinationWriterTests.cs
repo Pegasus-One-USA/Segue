@@ -120,6 +120,31 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
         allergy.Reasons.Should().NotContainKey("live-write-not-supported");
     }
 
+    // PR #244 review, round 2: once this process cannot vouch for the run's lease, another instance may close the run
+    // and the user run it again, so no create may leave from here.
+    [Fact]
+    public async Task A_run_whose_lease_this_process_lost_sends_no_create()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = new FakeEhrWriteChannel(dryRun: false);
+        var runId = Guid.NewGuid();
+        var active = new FHIRBridge.Runtime.Application.Workflows.ActiveWorkflowRuns();
+        using var held = active.Hold(runId);
+        active.Revoke(runId);
+        var writer = new MappedEhrWriteBackDestinationWriter(
+            new EhrWriteProfileRegistry([new EpicAllergyIntoleranceWriteProfile(), new EpicPatientWriteProfile()]),
+            ledger,
+            new FixedCloneModePolicy(false),
+            NullLogger<MappedEhrWriteBackDestinationWriter>.Instance,
+            activeRuns: active);
+
+        var act = () => writer.WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(Allergy)], Context(channel) with { PipelineRunId = runId }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<FHIRBridge.Runtime.Application.Workflows.WorkflowRunLeaseLostException>();
+        channel.Creates.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Dry_run_sends_nothing_even_for_a_live_capable_type()
     {

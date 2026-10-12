@@ -1,6 +1,9 @@
-﻿using FHIRBridge.Runtime.Application.Workflows.Storage;
+﻿using System.Linq.Expressions;
+using System.Reflection;
+using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 
 namespace FHIRBridge.Infrastructure.Persistence.Workflows;
 
@@ -38,9 +41,21 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
         // throws InvalidOperationException ("already being tracked") because the key is already attached, which
         // aborted this method before the terminal row (or the SignalR notify that follows it) was ever written,
         // leaving the run stuck on "Running" forever.
+        //
+        // Status is a concurrency token (see WorkflowRunEntityTypeConfiguration): this UPDATE, and the placeholder
+        // DELETE below, apply only while the row still has the status this process last saw. A row another instance
+        // closed meanwhile (failed as interrupted, cancelled as abandoned) is never overwritten with this outcome.
         if (_dbContext.ChangeTracker.Entries<WorkflowRun>().Any(entry => entry.Entity.Id == workflowRun.Id))
         {
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw await AlreadyClosedAsync(workflowRun.Id, cancellationToken);
+            }
+
             return;
         }
 
@@ -50,10 +65,16 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
 
         if (existing is not null)
         {
-            if (IsTerminal(existing.Status))
+            if (WorkflowRunStatuses.IsTerminal(existing.Status))
             {
                 // Already-persisted terminal row (e.g. a retried write) — preserve the original idempotent-insert
-                // guarantee for a run that's actually finished.
+                // guarantee for a run that's actually finished. A different outcome than the one recorded means
+                // someone else closed the run: said so, rather than dropped silently.
+                if (existing.Status != workflowRun.Status)
+                {
+                    throw new WorkflowRunAlreadyClosedException(workflowRun.Id, existing.Status.ToString());
+                }
+
                 return;
             }
 
@@ -66,11 +87,40 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
             // WorkflowRunEntityTypeConfiguration) takes the placeholder's WorkflowNodeRuns rows with it — none exist
             // yet at the point an AwaitingBulkExport/Running placeholder was written, so nothing to lose.
             _dbContext.WorkflowRuns.Remove(existing);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Closed (or otherwise changed) between the read above and this DELETE.
+                _dbContext.Entry(existing).State = EntityState.Detached;
+                throw await AlreadyClosedAsync(workflowRun.Id, cancellationToken);
+            }
         }
 
         await _dbContext.WorkflowRuns.AddAsync(workflowRun, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Leaves the run untracked (this context must not retry the refused write) and names the status that
+    /// stands.</summary>
+    private async Task<WorkflowRunAlreadyClosedException> AlreadyClosedAsync(Guid workflowRunId, CancellationToken cancellationToken)
+    {
+        foreach (var entry in _dbContext.ChangeTracker.Entries()
+                     .Where(e => e.Entity is WorkflowRun run && run.Id == workflowRunId
+                         || e.Entity is WorkflowNodeRun nodeRun && nodeRun.WorkflowRunId == workflowRunId)
+                     .ToList())
+        {
+            entry.State = EntityState.Detached;
+        }
+
+        var recorded = await _dbContext.WorkflowRuns
+            .AsNoTracking()
+            .Where(run => run.Id == workflowRunId)
+            .Select(run => (WorkflowRunStatus?)run.Status)
+            .FirstOrDefaultAsync(cancellationToken);
+        return new WorkflowRunAlreadyClosedException(workflowRunId, recorded?.ToString() ?? "deleted");
     }
 
     public async Task<WorkflowRun?> GetAsync(Guid workflowRunId, CancellationToken cancellationToken)
@@ -105,7 +155,7 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
         return stale.Count;
     }
 
-    public async Task<IReadOnlyCollection<Guid>> RenewLeasesAsync(
+    public async Task<WorkflowLeaseRenewal> RenewLeasesAsync(
         IReadOnlyCollection<Guid> runIds,
         string owner,
         DateTimeOffset expiresAt,
@@ -113,7 +163,7 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
     {
         if (runIds.Count == 0)
         {
-            return [];
+            return WorkflowLeaseRenewal.None;
         }
 
         var ids = runIds.ToArray();
@@ -125,11 +175,18 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
                 set => set.SetProperty(run => run.LeaseOwner, owner).SetProperty(run => run.LeaseExpiresAt, expiresAt),
                 cancellationToken);
 
-        return await _dbContext.WorkflowRuns
+        // Read after the update: a Running row here carries the lease just written. A row with no record yet (its
+        // Running placeholder could not be saved) is in none of the lists.
+        var rows = await _dbContext.WorkflowRuns
             .AsNoTracking()
-            .Where(run => ids.Contains(run.Id) && run.Status == WorkflowRunStatus.Running && run.CancellationRequestedAt != null)
-            .Select(run => run.Id)
-            .ToArrayAsync(cancellationToken);
+            .Where(run => ids.Contains(run.Id))
+            .Select(run => new { run.Id, run.Status, run.CancellationRequestedAt })
+            .ToListAsync(cancellationToken);
+        var running = rows.Where(r => r.Status == WorkflowRunStatus.Running).ToList();
+        return new WorkflowLeaseRenewal(
+            running.Select(r => r.Id).ToArray(),
+            running.Where(r => r.CancellationRequestedAt != null).Select(r => r.Id).ToArray(),
+            rows.Where(r => WorkflowRunStatuses.IsTerminal(r.Status)).Select(r => r.Id).ToArray());
     }
 
     public async Task<int> FailExpiredRunsAsync(
@@ -138,20 +195,91 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
         string reason,
         CancellationToken cancellationToken)
     {
-        // One conditional UPDATE, not load-then-save: a run that finishes (or renews its lease) between a read and a
-        // save would otherwise be overwritten from Succeeded to Failed "Interrupted", telling the user to re-run
-        // writes that already reached the EHR. The WHERE re-checks Running and the lapsed lease in the same
-        // statement. The columns set are exactly those WorkflowRun.Fail sets.
-        return await _dbContext.WorkflowRuns
-            .Where(run => run.Status == WorkflowRunStatus.Running
-                && (run.LeaseExpiresAt != null ? run.LeaseExpiresAt < now : run.StartedAt < legacyStartedBefore))
-            .ExecuteUpdateAsync(
-                set => set
-                    .SetProperty(run => run.ErrorMessage, reason)
-                    .SetProperty(run => run.CompletedAt, now)
-                    .SetProperty(run => run.Status, WorkflowRunStatus.Failed),
-                cancellationToken);
+        // WorkflowRun.Fail decides what a failed run records; the write is conditional (see SaveIfAsync), so a run
+        // that finished or renewed its lease after it was read here is not overwritten with "Interrupted".
+        var candidates = await _dbContext.WorkflowRuns.Where(Abandoned(now, legacyStartedBefore)).ToListAsync(cancellationToken);
+        var failed = 0;
+        foreach (var run in candidates)
+        {
+            run.Fail(reason, now);
+            failed += await SaveIfAsync(run, Abandoned(now, legacyStartedBefore), cancellationToken) ? 1 : 0;
+        }
+
+        return failed;
     }
+
+    public async Task<bool> CancelAbandonedAsync(
+        Guid workflowRunId,
+        DateTimeOffset now,
+        DateTimeOffset legacyStartedBefore,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var run = await _dbContext.WorkflowRuns
+            .Where(Abandoned(now, legacyStartedBefore))
+            .FirstOrDefaultAsync(r => r.Id == workflowRunId, cancellationToken);
+        if (run is null)
+        {
+            return false;
+        }
+
+        run.Cancel(reason, now);
+        return await SaveIfAsync(run, Abandoned(now, legacyStartedBefore), cancellationToken);
+    }
+
+    /// <summary>Running, and nothing is vouching for it: its lease lapsed, or, from before leases, it is old. The SQL
+    /// form of <see cref="WorkflowRun.IsLeaseExpired"/>.</summary>
+    private static Expression<Func<WorkflowRun, bool>> Abandoned(DateTimeOffset now, DateTimeOffset legacyStartedBefore) =>
+        run => run.Status == WorkflowRunStatus.Running
+            && (run.LeaseExpiresAt != null ? run.LeaseExpiresAt < now : run.StartedAt < legacyStartedBefore);
+
+    /// <summary>
+    /// Writes the columns a domain method just changed on the tracked <paramref name="run"/> in one UPDATE whose WHERE
+    /// is the run's id and <paramref name="stillHolds"/>, so the condition the change was decided on is checked in the
+    /// statement that writes it. The column list comes from EF's change tracking, never a list kept here: whatever
+    /// the domain method sets is written. Returns whether the row was updated; the run is left untracked either way.
+    /// </summary>
+    private async Task<bool> SaveIfAsync(WorkflowRun run, Expression<Func<WorkflowRun, bool>> stillHolds, CancellationToken cancellationToken)
+    {
+        var entry = _dbContext.Entry(run);
+        entry.DetectChanges();
+        var modified = entry.Properties.Where(p => p.IsModified).ToList();
+        if (modified.Count == 0)
+        {
+            entry.State = EntityState.Detached;
+            return false;
+        }
+
+        var setters = Expression.Parameter(typeof(SetPropertyCalls<WorkflowRun>), "set");
+        Expression body = setters;
+        foreach (var property in modified)
+        {
+            var type = property.Metadata.ClrType;
+            var row = Expression.Parameter(typeof(WorkflowRun), "row");
+            var column = Expression.Lambda(
+                typeof(Func<,>).MakeGenericType(typeof(WorkflowRun), type),
+                Expression.Property(row, property.Metadata.PropertyInfo!),
+                row);
+            body = Expression.Call(body, SetPropertyToValue.MakeGenericMethod(type), column, Expression.Constant(property.CurrentValue, type));
+        }
+
+        entry.State = EntityState.Detached;
+
+        var id = run.Id;
+        var updated = await _dbContext.WorkflowRuns
+            .Where(r => r.Id == id)
+            .Where(stillHolds)
+            .ExecuteUpdateAsync(
+                Expression.Lambda<Func<SetPropertyCalls<WorkflowRun>, SetPropertyCalls<WorkflowRun>>>(body, setters),
+                cancellationToken);
+        return updated > 0;
+    }
+
+    // SetPropertyCalls<T>.SetProperty<TProperty>(Func<T, TProperty> property, TProperty value).
+    private static readonly MethodInfo SetPropertyToValue = typeof(SetPropertyCalls<WorkflowRun>)
+        .GetMethods()
+        .Single(m => m.Name == nameof(SetPropertyCalls<WorkflowRun>.SetProperty)
+            && m.GetParameters() is [_, { ParameterType.IsGenericParameter: true }]);
 
     public async Task<bool> RequestCancellationAsync(Guid workflowRunId, DateTimeOffset requestedAt, CancellationToken cancellationToken) =>
         await _dbContext.WorkflowRuns
@@ -222,11 +350,4 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
         return Enum.GetValues<WorkflowRunStatus>()
             .ToDictionary(status => status, status => counts.FirstOrDefault(c => c.Key == status)?.Count ?? 0);
     }
-
-    /// <summary>Pending/Running/AwaitingBulkExport are all still in-flight — a placeholder row in any of these is
-    /// safe to replace wholesale. Only Succeeded/Failed/Cancelled/PartialSuccess are actually finished.</summary>
-    private static bool IsTerminal(WorkflowRunStatus status) => status is
-        WorkflowRunStatus.Succeeded or WorkflowRunStatus.Failed or WorkflowRunStatus.Cancelled
-        or WorkflowRunStatus.PartialSuccess or WorkflowRunStatus.ValidationFailed or WorkflowRunStatus.Expired;
-    // Validated is deliberately NOT terminal: it is the placeholder /run replaces when it continues the attempt.
 }

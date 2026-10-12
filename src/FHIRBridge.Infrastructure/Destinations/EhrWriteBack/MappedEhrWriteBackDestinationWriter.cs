@@ -53,19 +53,22 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
     private readonly IEhrCloneModePolicy _cloneModePolicy;
     private readonly ILogger<MappedEhrWriteBackDestinationWriter> _logger;
     private readonly IEhrTargetPatientMatcher? _patientMatcher;
+    private readonly FHIRBridge.Runtime.Application.Workflows.IActiveWorkflowRuns? _activeRuns;
 
     public MappedEhrWriteBackDestinationWriter(
         EhrWriteProfileRegistry profiles,
         IEhrWriteLedgerRepository ledger,
         IEhrCloneModePolicy cloneModePolicy,
         ILogger<MappedEhrWriteBackDestinationWriter> logger,
-        IEhrTargetPatientMatcher? patientMatcher = null)
+        IEhrTargetPatientMatcher? patientMatcher = null,
+        FHIRBridge.Runtime.Application.Workflows.IActiveWorkflowRuns? activeRuns = null)
     {
         _profiles = profiles;
         _ledger = ledger;
         _cloneModePolicy = cloneModePolicy;
         _logger = logger;
         _patientMatcher = patientMatcher;
+        _activeRuns = activeRuns;
     }
 
     public async Task<DestinationWriteResult> WriteAsync(
@@ -425,6 +428,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
     {
         if (!run.HolderEncounters.TryGetValue(targetPatientId, out var encounterId))
         {
+            EnsureLeaseHeld(run);
             try
             {
                 var outcome = await run.Channel.CreateHolderEncounterAsync(targetPatientId, cancellationToken);
@@ -655,6 +659,20 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         return existing.ContentHash == contentHash ? "already-written" : "changed-after-write";
     }
 
+    /// <summary>
+    /// Called before every create, before anything is claimed or sent: once this process cannot vouch for the run's
+    /// lease, another instance may close it as interrupted and the user may run it again, so no further create may
+    /// leave from here (see <see cref="FHIRBridge.Runtime.Application.Workflows.IActiveWorkflowRuns"/>).
+    /// </summary>
+    private void EnsureLeaseHeld(RunState run)
+    {
+        var workflowRunId = run.Context.PipelineRunId;
+        if (_activeRuns is not null && workflowRunId != Guid.Empty && !_activeRuns.HoldsLease(workflowRunId, DateTimeOffset.UtcNow))
+        {
+            throw new FHIRBridge.Runtime.Application.Workflows.WorkflowRunLeaseLostException(workflowRunId);
+        }
+    }
+
     /// <summary>Sends one create and settles its ledger row. Returns the EHR's id when the record was created.</summary>
     private async Task<string?> SendAsync(
         RunState run,
@@ -670,6 +688,8 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
     {
         var channel = run.Channel;
         var label = recordIndex is { } index ? $"{resourceType} #{index + 1}" : $"{resourceType} (for a record)";
+        EnsureLeaseHeld(run);
+
         var now = DateTime.UtcNow;
         var entry = existing;
         if (entry is null)

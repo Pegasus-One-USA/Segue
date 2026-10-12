@@ -10,7 +10,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Workflows;
 /// Keeps workflow-run status true when several API and Worker instances share one database.
 /// <list type="number">
 /// <item><b>Heartbeat.</b> Every <see cref="WorkflowRunLease.HeartbeatInterval"/> this process renews the lease of each
-/// run it is executing (<see cref="IActiveWorkflowRuns"/>).</item>
+/// run it is executing (<see cref="IActiveWorkflowRuns"/>) and confirms the new expiry there. A run whose lease could
+/// not be renewed is fenced by <see cref="IActiveWorkflowRuns.HoldsLease"/> before it lapses, and a run another
+/// instance already closed is stopped at once.</item>
 /// <item><b>Cancel from another instance.</b> A run whose row says a user asked to cancel it is stopped here, through
 /// <see cref="IWorkflowRunTracker"/>, between nodes, as a Cancel made on this instance would be.</item>
 /// <item><b>Interrupted runs.</b> A Running run whose lease lapsed has no process left to finish it (restart, shutdown,
@@ -66,13 +68,26 @@ public sealed class WorkflowRunLeaseService : BackgroundService
             var held = _activeRuns.Snapshot();
             if (held.Count > 0)
             {
-                var cancelRequested = await runStore.RenewLeasesAsync(held, _activeRuns.InstanceId, now + WorkflowRunLease.Duration, cancellationToken);
-                foreach (var runId in cancelRequested)
+                // The expiry is computed from the time before the write, so the confirmed lease is never later than
+                // the one the database holds.
+                var expiresAt = now + WorkflowRunLease.Duration;
+                var renewal = await runStore.RenewLeasesAsync(held, _activeRuns.InstanceId, expiresAt, cancellationToken);
+                _activeRuns.Confirm(renewal.Renewed, expiresAt);
+                foreach (var runId in renewal.CancellationRequested)
                 {
                     if (_tracker.RequestCancellation(runId))
                     {
                         _logger.LogInformation("Workflow run {WorkflowRunId} cancelled at the request of another instance.", runId);
                     }
+                }
+
+                // Closed elsewhere while this process still runs it (its lease lapsed there): stop before it does more.
+                foreach (var runId in renewal.Closed)
+                {
+                    _activeRuns.Revoke(runId);
+                    _tracker.RequestCancellation(runId);
+                    _logger.LogWarning(
+                        "Workflow run {WorkflowRunId} was closed by another instance while running here; stopping it.", runId);
                 }
             }
 

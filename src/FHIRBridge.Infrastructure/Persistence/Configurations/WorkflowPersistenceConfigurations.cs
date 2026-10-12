@@ -138,7 +138,11 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.WorkflowDefinitionVersion).IsRequired();
         builder.Property(x => x.StartedAt).IsRequired();
         builder.Property(x => x.CompletedAt);
-        builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired();
+        // A concurrency token: a save of the run applies only while the row still has the status its saver read, so
+        // a run another instance closed (failed as interrupted, cancelled as abandoned) is never overwritten with a
+        // late outcome. Lease renewals and cancel requests are targeted updates that leave Status alone, so they never
+        // conflict with the executing process's own saves. No schema change.
+        builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(50).IsRequired().IsConcurrencyToken();
         builder.Property(x => x.ErrorMessage);
         builder.Property(x => x.ErrorReferenceId).HasMaxLength(50);
         // 200, not Epic's own 32 hex chars: this column is vendor-agnostic (see BulkRequestIds.FromStatusUrl) and
