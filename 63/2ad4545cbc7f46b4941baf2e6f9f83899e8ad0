@@ -1,0 +1,19 @@
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowRunStore.cs
+  s_0121045dc9abeb::t_75fa4f194440b0 141-145,148-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "632ad4545cbc7f46b4941baf2e6f9f83899e8ad0",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
