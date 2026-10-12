@@ -1366,6 +1366,31 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
             .Should().Contain($"\"reference\":\"Medication/{medicationId}\"").And.NotContain(EpicMedicationId);
     }
 
+    // Round 2, item 9: the not-written set and the references checked against it are both keyed by the id a resource
+    // is written under (TryParseReference maps a reference through DestinationId), so a rejected resource whose source
+    // id is invalid still blocks the records that reference it.
+    [Fact]
+    public async Task A_record_referencing_a_rejected_resource_with_an_invalid_id_is_not_sent()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.RequestUri!.AbsolutePath.StartsWith("/Medication/", StringComparison.Ordinal)
+            ? new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+            {
+                Content = new StringContent("""{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"invalid"}]}"""),
+            }
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination("""{"dest_fhirAuthType":"none"}""");
+        var medication = Record($$"""{"resourceType":"Medication","id":"{{EpicMedicationId}}"}""", sourceResourceId: EpicMedicationId, resourceType: "Medication");
+        var other = Record("""{"resourceType":"Patient","id":"p1"}""", sourceResourceId: "p1");
+
+        var result = await writer.WriteAsync(
+            destination, Mapping(), [MedicationRequestFor(EpicMedicationId), medication, other], Context(), CancellationToken.None);
+
+        result.WrittenResourceIds.Should().Equal("p1");
+        result.RecordErrors.Should().Contain(e => e.StartsWith("MedicationRequest/mr-1:") && e.Contains("not written to the destination in this run"));
+        handler.Requests.Should().NotContain(r => r.Request.RequestUri!.AbsolutePath.StartsWith("/MedicationRequest/", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task An_absolute_reference_to_another_server_is_left_as_it_is()
     {
