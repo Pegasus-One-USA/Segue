@@ -1,0 +1,80 @@
+portal/src/app/components/canvas-v2/canvas.component.ts
+  s_0302d221bf5ca2::t_08b331b4aa8030 20,43,450-451
+  s_0302d221bf5ca2::t_33f2c7aa0a6503 175-176,236,238-271
+  s_0302d221bf5ca2::t_107a4ae5ae12e9 288,339-340,351-412
+  s_0302d221bf5ca2::t_8c4b7e21ca78ea 413
+portal/src/app/components/canvas-v2/canvas.delete-transformation-rules.spec.ts
+  s_0302d221bf5ca2::t_ce7ff031d8b113 8,38
+  s_0302d221bf5ca2::t_ac8f31c758db9b 110-111,113
+  s_0302d221bf5ca2::t_9be5e05e18acc6 1-7,9-37,39-109,112,114-127
+src/FHIRBridge.Application/Abstractions/Persistence/IDeIdentificationProfileRepository.cs
+  s_0302d221bf5ca2::t_558afdb75988a9 12-17
+portal/src/app/services/node-delete-plan-v2.util.spec.ts
+  s_0302d221bf5ca2::t_9aa57f961cee9b 174-175,177-179,182
+  s_0302d221bf5ca2::t_d703a43da017c9 108-110,112-131,161-163
+  s_0302d221bf5ca2::t_ce7ff031d8b113 132-160
+portal/src/app/destination-connections/services/deidentification-profile.service.ts
+  s_0302d221bf5ca2::t_33f2c7aa0a6503 14-19,23-24,38-43
+  s_0302d221bf5ca2::t_994716586c857b 44-45
+src/FHIRBridge.Infrastructure/Persistence/InMemoryNoDatabaseRepositories.cs
+  s_0302d221bf5ca2::t_558afdb75988a9 28-33
+portal/src/app/services/node-delete-plan-v2.util.ts
+  s_0302d221bf5ca2::t_33f2c7aa0a6503 80-84,316-328,357
+  s_0302d221bf5ca2::t_0a5616f4d51ee7 26-27,73-74,76-79,264,276-278,280-292,356
+  s_0302d221bf5ca2::t_dade92cd27bdee 329-330
+tests/FHIRBridge.UnitTests/Configuration/WorkflowConfigurationCleanupServiceTests.cs
+  s_0302d221bf5ca2::t_7ea1f3b0579a80 241-242
+  s_0302d221bf5ca2::t_a846dda450e6c7 240
+src/FHIRBridge.Application/Services/IDeIdentificationProfileService.cs
+  s_0302d221bf5ca2::t_558afdb75988a9 17-28
+portal/src/app/components/canvas-v2/canvas.paste-auto-added.spec.ts
+  s_0302d221bf5ca2::t_9aa57f961cee9b 7,19
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.chain-step-sync.spec.ts
+  s_0302d221bf5ca2::t_ce7ff031d8b113 228-241
+src/Api/FHIRBridge.Api/Controllers/V1/DeIdentificationProfilesController.cs
+  s_0302d221bf5ca2::t_558afdb75988a9 1,55-70
+  s_0302d221bf5ca2::t_648b4131962c3c 71
+src/FHIRBridge.Application/Abstractions/Persistence/ITransformationRuleRepository.cs
+  s_0302d221bf5ca2::t_558afdb75988a9 133-136
+src/FHIRBridge.Infrastructure/Persistence/InMemoryTransformationRuleRepository.cs
+  s_0302d221bf5ca2::t_558afdb75988a9 143-146
+portal/src/app/core/api-endpoints.ts
+  s_0302d221bf5ca2::t_33f2c7aa0a6503 171-172
+tests/FHIRBridge.UnitTests/Governance/WorkflowDeIdentificationRuleDeletionTests.cs
+  s_0302d221bf5ca2::t_09a5406c1a17d9 1-7,9-29,33-36,52-67,69-80,82-109,111-127,129-201,203-207
+  s_0302d221bf5ca2::t_af04f6ccce1f5e 30-32
+  s_0302d221bf5ca2::t_6c36b14a263d94 8
+  s_0302d221bf5ca2::t_d829c943d881ba 37-51,68,81,110,128,202
+tests/FHIRBridge.Api.IntegrationTests/Tests/WorkflowDeIdentificationRuleDeletionTests.cs
+  s_0302d221bf5ca2::t_b3a650e685d5b3 1-45
+src/FHIRBridge.Infrastructure/Persistence/EfDeIdentificationProfileRepository.cs
+  s_0302d221bf5ca2::t_558afdb75988a9 27-49
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_0302d221bf5ca2::t_558afdb75988a9 233-250
+portal/src/app/components/canvas-v2/canvas.delete-deidentification-rules.spec.ts
+  s_0302d221bf5ca2::t_c567de69f909a2 1-29,31-151
+  s_0302d221bf5ca2::t_b51d779a571b46 30
+portal/src/app/components/canvas-v2/canvas.component.html
+  s_0302d221bf5ca2::t_33f2c7aa0a6503 183-189
+src/FHIRBridge.Application/DTOs/DeIdentificationProfileDtos.cs
+  s_0302d221bf5ca2::t_02960d60b1f630 13-16
+src/FHIRBridge.Application/Services/DeIdentificationProfileService.cs
+  s_0302d221bf5ca2::t_558afdb75988a9 15,19-20,24,74-95
+  s_0302d221bf5ca2::t_cae65443a9f3bc 96-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "02f94f592614a7fe82df70a9850b5140d53190dc",
+  "prompts": {},
+  "sessions": {
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
