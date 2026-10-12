@@ -1,0 +1,20 @@
+docs/user-guide/ehr-write-back.md
+  s_d1b985c75f92bc::t_f7ce7948a4cd09 250-252
+  s_d1b985c75f92bc::t_4506781a42da4b 229-233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1ca9dcf88829372fe5ebe4055dc90c2c72681e49",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
