@@ -1,0 +1,29 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.Write.cs
+  s_0121045dc9abeb::t_6a693986b6d526 163-165
+  s_0121045dc9abeb::t_a5d26092de178e 139-143
+tests/FHIRBridge.Runtime.UnitTests/Workflows/VendorEhrWriteChannelTests.cs
+  s_0121045dc9abeb::t_7ea72cdc5c43d6 262-284
+tests/FHIRBridge.Runtime.UnitTests/Connectors/FhirWriteClientTests.cs
+  s_0121045dc9abeb::t_914d0947682dab 286-307
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/EhrWrite/AthenaOneEhrWriteChannel.cs
+  s_0121045dc9abeb::t_7abf71c5ef1521 151
+  s_0121045dc9abeb::t_963b70bbb06300 171
+  s_0121045dc9abeb::t_c4c19b180b862a 458-461
+  s_0121045dc9abeb::t_b9fa4d2d86d629 462
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "781cca0642cdf74bfe05eb80a4b81f3470465c44",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
