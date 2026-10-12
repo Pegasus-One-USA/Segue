@@ -138,23 +138,19 @@ public sealed class SqlWorkflowRunStore : IWorkflowRunStore
         string reason,
         CancellationToken cancellationToken)
     {
-        // Tracked, through Fail(), for the same reason as ExpireStaleValidatedAsync: one place owns the terminal rule.
-        var expired = await _dbContext.WorkflowRuns
+        // One conditional UPDATE, not load-then-save: a run that finishes (or renews its lease) between a read and a
+        // save would otherwise be overwritten from Succeeded to Failed "Interrupted", telling the user to re-run
+        // writes that already reached the EHR. The WHERE re-checks Running and the lapsed lease in the same
+        // statement. The columns set are exactly those WorkflowRun.Fail sets.
+        return await _dbContext.WorkflowRuns
             .Where(run => run.Status == WorkflowRunStatus.Running
                 && (run.LeaseExpiresAt != null ? run.LeaseExpiresAt < now : run.StartedAt < legacyStartedBefore))
-            .ToListAsync(cancellationToken);
-        if (expired.Count == 0)
-        {
-            return 0;
-        }
-
-        foreach (var run in expired)
-        {
-            run.Fail(reason, now);
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        return expired.Count;
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(run => run.ErrorMessage, reason)
+                    .SetProperty(run => run.CompletedAt, now)
+                    .SetProperty(run => run.Status, WorkflowRunStatus.Failed),
+                cancellationToken);
     }
 
     public async Task<bool> RequestCancellationAsync(Guid workflowRunId, DateTimeOffset requestedAt, CancellationToken cancellationToken) =>
