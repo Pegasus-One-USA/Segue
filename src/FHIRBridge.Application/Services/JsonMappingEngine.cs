@@ -652,11 +652,12 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
     }
 
     /// <summary>
-    /// The items of the arrays-of-plain-values a field's path stops on, as transform-chain parts — each item
-    /// carrying its array's index path plus its own position, so <see cref="SelectInstance"/> and
-    /// <see cref="TakeFirstInstance"/> narrow them exactly as they narrow "...[*]" matches. Takes the matches the
-    /// column's own value was resolved from, so the path is never walked twice. Null when the path matched no
-    /// such array (an object, a scalar, or an array holding objects), leaving the parts as they were.
+    /// The items of the arrays-of-plain-values a field's path stops on, as transform-chain parts: the array(s) are
+    /// narrowed by <see cref="SelectInstance"/> and <see cref="TakeFirstInstance"/> exactly as the column's own
+    /// value is, and only then expanded — so the items always belong to the instance the column holds, and an empty
+    /// selected array yields no items rather than another instance's. Takes the matches the column's own value was
+    /// resolved from, so the path is never walked twice. Null when the path matched no such array (an object, a
+    /// scalar, or an array holding objects), leaving the parts as they were.
     /// </summary>
     private static List<object?>? TryReadPrimitiveArrayItems(
         IReadOnlyList<(JsonElement Element, IReadOnlyList<int> Indices)> matches, MappingFieldDto field,
@@ -668,25 +669,29 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             return null;
         }
 
-        // Conversion errors were already reported for the column's own value; these are the same source values.
-        var discardedErrors = new List<string>();
-        var items = matches
-            .SelectMany(m => m.Element.EnumerateArray().Select((item, position) => (
-                Value: ConvertElement(
-                    item, field.ValueType, field.Format, field.TargetField, discardedErrors,
-                    field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform),
-                Indices: (IReadOnlyList<int>)[.. m.Indices, position])))
-            .ToList();
-
+        // The instance is chosen among the ARRAYS — exactly as the column's own value chooses it among the same
+        // matches — and only then split into items. Choosing among the items instead would skip an empty array
+        // (it has no items to choose), so with name[0].given = [] the column would hold name[0]'s (empty) given
+        // while the items came from name[1]: another person's name.
+        var arrays = matches.Select(m => (Value: (object?)m.Element, m.Indices)).ToList();
         if (instanceIndex is int selected)
         {
-            items = SelectInstance(items, selected);
+            arrays = SelectInstance(arrays, selected);
         }
 
-        var values = items.Select(i => i.Value).ToList();
-        return policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
-            ? TakeFirstInstance(items, values).ToList()
-            : values;
+        var selectedArrays = policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+            ? TakeFirstInstance(arrays, arrays.Select(array => array.Value).ToList())
+            : arrays.Select(array => array.Value).ToList();
+
+        // Conversion errors were already reported for the column's own value; these are the same source values.
+        var discardedErrors = new List<string>();
+        return selectedArrays
+            .Cast<JsonElement>()
+            .SelectMany(array => array.EnumerateArray())
+            .Select(item => ConvertElement(
+                item, field.ValueType, field.Format, field.TargetField, discardedErrors,
+                field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform))
+            .ToList();
     }
 
     /// <summary>True when the field's Format carries the "index=N" marker the "Nth instance" instance

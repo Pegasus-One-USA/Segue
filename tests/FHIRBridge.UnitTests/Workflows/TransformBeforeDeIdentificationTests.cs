@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Governance;
+using FHIRBridge.Application.Abstractions.Mapping;
 using FHIRBridge.Application.Abstractions.Messaging;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.DTOs;
@@ -59,6 +60,10 @@ public sealed class TransformBeforeDeIdentificationTests
     private static SafeHarborDeIdentificationService DeIdentificationService(params TransformationRule[] preMappingRules)
     {
         var repository = new Mock<ITransformationRuleRepository>();
+        // No rules for any other resource type (a reference's target type is looked up when rewriting references).
+        repository
+            .Setup(r => r.GetPreMappingRulesAsync(ProfileId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
         repository
             .Setup(r => r.GetPreMappingRulesAsync(ProfileId, "Patient", It.IsAny<CancellationToken>()))
             .ReturnsAsync(preMappingRules);
@@ -81,6 +86,25 @@ public sealed class TransformBeforeDeIdentificationTests
     /// <summary>When set, applied to each envelope between the De-identification and Mapping nodes.</summary>
     private Func<ResourceEnvelope, ResourceEnvelope>? _between;
 
+    /// <summary>When set, the de-identification service the MAPPING node is given (the De-identification node keeps
+    /// the one RunAsync is called with) — stands in for a host that registers a different one.</summary>
+    private IDeIdentificationService? _mappingDeIdentification;
+
+    /// <summary>When set, the mapping engine the Mapping node uses instead of the real one.</summary>
+    private IJsonMappingEngine? _mappingEngine;
+
+    /// <summary>Transform nodes registered in place of the standard ones of the same type.</summary>
+    private ITransformNode[] _nodeOverrides = [];
+
+    /// <summary>Every log line the Mapping node wrote during the last RunAsync, formatted.</summary>
+    private readonly List<string> _logs = [];
+
+    /// <summary>The Mapping node's output (its metadata carries the run-level omissions) from the last RunAsync.</summary>
+    private WorkflowNodeOutput? _mappingOutput;
+
+    /// <summary>The Patient resource RunAsync sends through the pipeline.</summary>
+    private string _patientJson = PatientJson;
+
     private async Task<(WorkflowNodeOutput DeIdentified, MappedDestinationRecord Record)> RunAsync(
         SafeHarborDeIdentificationService deIdentification,
         IReadOnlyDictionary<string, IReadOnlyList<TransformationRule>> chains,
@@ -89,7 +113,7 @@ public sealed class TransformBeforeDeIdentificationTests
         var context = new WorkflowExecutionContext(Guid.NewGuid(), "test");
         var source = new WorkflowNodeOutput(
             Guid.NewGuid(), WorkflowNodeTypes.EpicSource,
-            new ResourceBatch([new ResourceEnvelope("Patient", "p1", PatientJson)]), WorkflowDataContract.ResourceBatch);
+            new ResourceBatch([new ResourceEnvelope("Patient", "p1", _patientJson)]), WorkflowDataContract.ResourceBatch);
 
         var deIdentified = await new DeIdentificationNodeExecutor(deIdentification).ExecuteAsync(
             context,
@@ -109,16 +133,19 @@ public sealed class TransformBeforeDeIdentificationTests
             .ReturnsAsync((DestinationType _, string _, string field, Guid? _, Guid? _, string? _, string? _, CancellationToken _, bool _, bool _, string? _)
                 => chains.GetValueOrDefault(field) ?? []);
 
+        ITransformNode[] standardNodes =
+        [
+            new ConcatenationTemplatingNode(), new HashingMaskingNode(), new StringNormalizationNode(),
+            new DefaultNullHandlingNode(), new ArrayListOperationsNode(),
+        ];
         var mapping = new MappingNodeExecutor(
-            new JsonMappingEngine(), mappingMaterializer: null, configurationRepository: configuration.Object,
+            _mappingEngine ?? new JsonMappingEngine(), mappingMaterializer: null, configurationRepository: configuration.Object,
             ruleResolver: resolver.Object,
             transformNodeRegistry: new TransformNodeRegistry(
-            [
-                new ConcatenationTemplatingNode(), new HashingMaskingNode(), new StringNormalizationNode(),
-                new DefaultNullHandlingNode(), new ArrayListOperationsNode(),
-            ]),
+                standardNodes.Where(node => _nodeOverrides.All(o => o.NodeType != node.NodeType)).Concat(_nodeOverrides)),
             lineageCaptureDispatcher: new CollectingLineageDispatcher(_lineage),
-            deIdentificationService: deIdentification);
+            loggerFactory: new CapturingLoggerFactory(_logs),
+            deIdentificationService: _mappingDeIdentification ?? deIdentification);
         var mappingNode = Node(WorkflowNodeTypes.Mapping, WorkflowNodeCategory.Transform, new Dictionary<string, object>
         {
             ["resourceType"] = "Patient",
@@ -136,6 +163,7 @@ public sealed class TransformBeforeDeIdentificationTests
                     .Select(record => (object)_between((ResourceEnvelope)record)).ToArray()),
                 deIdentified.Contract, deIdentified.Metadata);
         var output = await mapping.ExecuteAsync(context, mappingNode, [mappingInput], CancellationToken.None);
+        _mappingOutput = output;
         return (deIdentified, (MappedDestinationRecord)((MappedRecordBatch)output.Payload!).Records.Single());
     }
 
@@ -435,6 +463,388 @@ public sealed class TransformBeforeDeIdentificationTests
         service.DeIdentifyValue(new List<string?> { null, null }, hop).Should().BeNull();
     }
 
+    // ── Fifth review ──────────────────────────────────────────────────────────────────────────────────────
+
+    private const string FullPatient = """
+        {"resourceType":"Patient","id":"p1",
+         "name":[{"family":"Sable","given":["DB","Tester"]}],
+         "address":[{"line":["1 Main St"],"city":"Springfield","postalCode":"62704"}],
+         "contact":[{"name":{"family":"Kinsman","given":["Annabel"]}}],
+         "managingOrganization":{"reference":"Organization/org-77","display":"Lakeside Clinic"}}
+        """;
+
+    private static Task<DeIdentificationResult> DeIdentifyFullPatientAsync(params TransformationRule[] rules) =>
+        DeIdentificationService(rules).DeIdentifyAsync(
+            new DeIdentificationRequest("Patient", "p1", FullPatient, [], ProfileId), CancellationToken.None);
+
+    private const string HashConfig = """{"mode":"hash"}""";
+    private const string RedactConfig = """{"mode":"redact"}""";
+
+    // #1 — restoring an element never brings back data a rule at, above or beneath it redacted.
+
+    [Theory]
+    [InlineData("$.name", "$.name[*].family")]
+    [InlineData("Patient.name", "name.family")]
+    [InlineData("name[0]", "$.name[0].family")]
+    public async Task A_deferrable_rule_on_name_never_restores_a_hashed_family(string ancestor, string descendant)
+    {
+        // Both orders: Hash first (it fires, so "name" is not restorable) and Redact first (the Hash never fires —
+        // the name is already gone — yet the original subtree still holds the family).
+        foreach (var rules in new[]
+        {
+            new[] { PreMapping(descendant, HashConfig), PreMapping(ancestor, RedactConfig) },
+            new[] { PreMapping(ancestor, RedactConfig), PreMapping(descendant, HashConfig) },
+        })
+        {
+            var result = await DeIdentifyFullPatientAsync(rules);
+
+            (result.DeferrableOriginalJson ?? string.Empty).Should().NotContain("Sable");
+            result.Json.Should().NotContain("Sable");
+        }
+    }
+
+    [Fact]
+    public async Task A_deferrable_rule_on_address_never_restores_a_generalized_postal_code()
+    {
+        foreach (var rules in new[]
+        {
+            new[] { PreMapping("$.address[*].postalCode", """{"mode":"generalizeZip3"}"""), PreMapping("$.address", RedactConfig) },
+            new[] { PreMapping("$.address", RedactConfig), PreMapping("$.address[*].postalCode", """{"mode":"generalizeZip3"}""") },
+        })
+        {
+            var result = await DeIdentifyFullPatientAsync(rules);
+
+            (result.DeferrableOriginalJson ?? string.Empty).Should().NotContain("62704");
+        }
+    }
+
+    [Fact]
+    public async Task A_deferrable_rule_never_restores_a_reference_the_profile_rewrites()
+    {
+        // The profile hashes Organization ids, so every "Organization/…" reference is rewritten. Redact on the whole
+        // managingOrganization must not bring the original reference back inside the restored object.
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository.Setup(r => r.GetPreMappingRulesAsync(ProfileId, "Patient", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([PreMapping("$.managingOrganization", RedactConfig)]);
+        repository.Setup(r => r.GetPreMappingRulesAsync(ProfileId, "Organization", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TransformationRule(
+                TransformScope.ResourceType, TransformNodeType.HashingMasking, HashConfig, resourceType: "Organization",
+                sourceField: "$.id", executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId)]);
+
+        var result = await new SafeHarborDeIdentificationService(repository.Object).DeIdentifyAsync(
+            new DeIdentificationRequest("Patient", "p1", FullPatient, [], ProfileId), CancellationToken.None);
+
+        result.DeferrableOriginalJson.Should().NotBeNull().And.NotContain("org-77");
+    }
+
+    [Fact]
+    public async Task A_rewritten_reference_beside_a_deferrable_sibling_stays_rewritten()
+    {
+        // display (Mask) and reference (rewritten) are siblings: display is restorable, the reference is not.
+        var repository = new Mock<ITransformationRuleRepository>();
+        repository.Setup(r => r.GetPreMappingRulesAsync(ProfileId, "Patient", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([PreMapping("$.managingOrganization.display", MaskConfig)]);
+        repository.Setup(r => r.GetPreMappingRulesAsync(ProfileId, "Organization", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new TransformationRule(
+                TransformScope.ResourceType, TransformNodeType.HashingMasking, HashConfig, resourceType: "Organization",
+                sourceField: "$.id", executionPhase: TransformExecutionPhase.PreMapping, deIdentificationProfileId: ProfileId)]);
+
+        var result = await new SafeHarborDeIdentificationService(repository.Object).DeIdentifyAsync(
+            new DeIdentificationRequest("Patient", "p1", FullPatient, [], ProfileId), CancellationToken.None);
+
+        result.DeferrableOriginalJson.Should().Contain("Lakeside Clinic").And.NotContain("org-77");
+    }
+
+    [Fact]
+    public async Task Only_the_safe_sibling_is_restored_in_nested_arrays()
+    {
+        // contact[*].name.given is masked (restorable); contact[*].name.family is hashed (never restored).
+        var result = await DeIdentifyFullPatientAsync(
+            PreMapping("$.contact[*].name.given", MaskConfig), PreMapping("$.contact[*].name.family", HashConfig));
+
+        result.DeferrableOriginalJson.Should().Contain("Annabel").And.NotContain("Kinsman");
+    }
+
+    [Fact]
+    public async Task An_ancestor_Remove_is_never_undone_for_a_descendant_column()
+    {
+        // Mask on given fires first, then Remove deletes the whole name. given overlaps that Remove, so it is not
+        // restored and the column is not deferred: it stays removed, exactly as redaction-first writes it.
+        var (deIdentified, record) = await RunAsync(
+            DeIdentificationService(GivenMaskRule, PreMapping("$.name", """{"mode":"remove"}""")),
+            PatientNameConcat, Column("PatientName", "$.name[*].given"));
+
+        DeIdentificationSnapshots.DeferrableOriginalIfCurrent(
+            (ResourceEnvelope)((DeIdentifiedBatch)deIdentified.Payload!).Records.Single()).Should().BeNull();
+        record.Values.GetValueOrDefault("PatientName").Should().BeNull();
+        JsonSerializer.Serialize(record.Values).Should().NotContain("Tester");
+    }
+
+    [Fact]
+    public async Task A_safe_sibling_column_is_still_deferred_and_its_hashed_sibling_never_reaches_it()
+    {
+        var (_, record) = await RunAsync(
+            DeIdentificationService(GivenMaskRule, PreMapping("$.name[*].family", HashConfig)),
+            PatientNameConcat, Column("PatientName", "$.name[*].given"), Column("Family", "$.name[*].family"));
+
+        record.Values["PatientName"].Should().Be("*****ster");                       // deferred, as before
+        ((string)record.Values["Family"]!).Should().StartWith("anon-");              // hashed, redaction-first
+        JsonSerializer.Serialize(record.Values).Should().NotContain("Sable").And.NotContain("Tester");
+    }
+
+    [Theory]
+    [InlineData("name.given", new[] { "name.given" }, true)]
+    [InlineData("name.given", new[] { "name.given", "name" }, false)]          // ancestor overlaps
+    [InlineData("name", new[] { "name", "name.family" }, false)]               // descendant overlaps
+    [InlineData("name.given", new[] { "name.given", "name.family" }, true)]    // sibling only
+    [InlineData("name.given", new[] { "name.family" }, false)]                 // nothing at the element itself
+    public void CanRestore_follows_ancestor_and_descendant_overlap(string element, string[] maskedPaths, bool expected)
+    {
+        var hops = maskedPaths
+            .Select(path => new DeIdentificationFieldHop(path, DeIdentificationStrategyNames.Mask, MaskConfig, null, null, true, null))
+            .ToArray();
+
+        DeIdentificationDeferral.CanRestore(element, hops, "Patient").Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Hash")]
+    [InlineData("GeneralizeZip3")]
+    [InlineData("Hash:Reference")]
+    public void CanRestore_refuses_any_non_deferrable_hop_on_the_same_element(string strategy)
+    {
+        DeIdentificationFieldHop[] hops =
+        [
+            new("$.name[*].given", DeIdentificationStrategyNames.Mask, MaskConfig, null, null, true, null),
+            new("Patient.name.given", strategy, "{}", null, null, true, null),
+        ];
+
+        DeIdentificationDeferral.CanRestore("$.name[*].given[*]", hops, "Patient").Should().BeFalse();
+    }
+
+    // #2 — a de-identification service that cannot redact never hands the value back.
+
+    [Fact]
+    public void The_pass_through_service_fails_closed()
+    {
+        new PassThroughDeIdentificationService()
+            .DeIdentifyValue("DB Tester", new DeIdentificationFieldHop("$.name[*].given[*]", "Mask", MaskConfig, null, null, true, null))
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_pass_through_service_registered_for_Mapping_drops_the_value_and_the_run_reports_it()
+    {
+        // De-identification ran with Safe Harbor (so the column is deferred), but the Mapping node was handed the
+        // pass-through service: it cannot redact, so nothing unredacted may be written.
+        _mappingDeIdentification = new PassThroughDeIdentificationService();
+
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), PatientNameConcat, Column("PatientName", "$.name[*].given"));
+
+        record.Values.GetValueOrDefault("PatientName").Should().BeNull();
+        JsonSerializer.Serialize(record.Values).Should().NotContain("Tester");
+        var redaction = _lineage.Single(hop => hop.DestinationField == "PatientName" && hop.NodeType == "DeIdentification:Mask");
+        redaction.Success.Should().BeFalse();
+        ((string[])_mappingOutput!.Metadata!["skippedResourceTypes"]!).Should().ContainSingle()
+            .Which.Should().Contain("Patient: 1 column value(s) were left empty");
+    }
+
+    // #3 — failures around a deferred column never let the unredacted value out.
+
+    [Fact]
+    public async Task A_redaction_that_throws_drops_the_value_records_it_and_never_leaks_its_message()
+    {
+        _mappingDeIdentification = new ThrowingDeIdentificationService();
+
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), PatientNameConcat, Column("PatientName", "$.name[*].given"));
+
+        record.Values.GetValueOrDefault("PatientName").Should().BeNull();
+        var redaction = _lineage.Single(hop => hop.DestinationField == "PatientName" && hop.NodeType == "DeIdentification:Mask");
+        redaction.Success.Should().BeFalse();
+        redaction.ErrorMessage.Should().Contain("withheld").And.NotContain("Tester");
+        ((string[])_mappingOutput!.Metadata!["skippedResourceTypes"]!).Should().ContainSingle();
+        _logs.Should().Contain(line => line.Contains(nameof(InvalidOperationException)));
+        _logs.Should().NotContain(line => line.Contains("Tester"));
+    }
+
+    [Fact]
+    public async Task A_deferred_step_that_throws_with_PassThrough_still_ends_redacted()
+    {
+        // The step throws with the unredacted value in its message. PassThrough keeps the value it was handed —
+        // the unredacted names — so the redaction after the chain is what makes it safe; the message never escapes.
+        _nodeOverrides = [new ThrowingStringNormalizationNode()];
+        var chain = new Dictionary<string, IReadOnlyList<TransformationRule>>
+        {
+            ["PatientName"] =
+            [
+                new TransformationRule(TransformScope.Field, TransformNodeType.StringNormalization, """{"trim":"true"}""",
+                    resourceType: "Patient", destinationField: "PatientName", order: 0, errorPolicy: TransformErrorPolicy.PassThrough),
+                new TransformationRule(TransformScope.Field, TransformNodeType.ConcatenationTemplating,
+                    """{"mode":"concat","separator":"","template":"{0} {1}"}""", resourceType: "Patient", destinationField: "PatientName", order: 1),
+            ],
+        };
+
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), chain, Column("PatientName", "$.name[*].given"));
+
+        record.Values["PatientName"].Should().Be("*****ster");
+        var failed = _lineage.Single(hop => hop.DestinationField == "PatientName" && hop.NodeType == "StringNormalization");
+        failed.Success.Should().BeFalse();
+        failed.ErrorMessage.Should().NotContain("Tester");
+        _lineage.Single(hop => hop.NodeType == "DeIdentification:Mask").Success.Should().BeTrue();
+        _logs.Should().NotContain(line => line.Contains("Tester"));
+    }
+
+    [Fact]
+    public async Task A_deferred_step_that_throws_with_Fail_policy_writes_nothing_unredacted()
+    {
+        _nodeOverrides = [new ThrowingStringNormalizationNode()];
+        var chain = new Dictionary<string, IReadOnlyList<TransformationRule>>
+        {
+            ["PatientName"] =
+            [
+                new TransformationRule(TransformScope.Field, TransformNodeType.StringNormalization, """{"trim":"true"}""",
+                    resourceType: "Patient", destinationField: "PatientName", order: 0, errorPolicy: TransformErrorPolicy.Fail),
+                new TransformationRule(TransformScope.Field, TransformNodeType.ConcatenationTemplating,
+                    """{"mode":"concat","separator":"","template":"{0} {1}"}""", resourceType: "Patient", destinationField: "PatientName", order: 1),
+            ],
+        };
+
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), chain, Column("PatientName", "$.name[*].given"));
+
+        JsonSerializer.Serialize(record.Values).Should().NotContain("Tester");
+        _logs.Should().NotContain(line => line.Contains("Tester"));
+    }
+
+    [Fact]
+    public void A_hop_with_malformed_config_fails_closed()
+    {
+        DeIdentificationService()
+            .DeIdentifyValue("DB Tester", new DeIdentificationFieldHop("$.name[*].given[*]", "Mask", "not json", null, null, true, null))
+            .Should().BeNull();
+    }
+
+    // #5 — deferred chains keep their value types.
+
+    [Theory]
+    [InlineData("last", "**ster")]                 // a string: redacted
+    [InlineData("first", "DB")]                    // a string within keepLength: left as the mask leaves it
+    [InlineData("dedupe", "DB, **ster")]           // a list of strings: each redacted, then written as one value
+    public async Task An_ArrayList_step_that_yields_text_is_deferred_and_redacted(string operation, string expected)
+    {
+        var chain = Chain("PatientName", (TransformNodeType.ArrayListOperations, $$"""{"operation":"{{operation}}"}"""));
+
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), chain, Column("PatientName", "$.name[*].given"));
+
+        record.Values["PatientName"].Should().Be(expected);
+        _lineage.Where(hop => hop.DestinationField == "PatientName").Should().OnlyContain(hop => hop.Success);
+    }
+
+    // #12 — a missing snapshot is visible, never a silent change.
+
+    [Fact]
+    public async Task A_missing_snapshot_falls_back_to_redaction_first_and_lineage_says_why()
+    {
+        _between = envelope => envelope with { };   // a new envelope instance: the snapshot is not carried over
+
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), PatientNameConcat, Column("PatientName", "$.name[*].given"));
+
+        record.Values["PatientName"].Should().Be(PreContractConcat("DB, **ster"));
+        var fallback = _lineage.Single(hop => hop.NodeType == "DeIdentification:DeferralFallback");
+        fallback.Success.Should().BeFalse();
+        fallback.ErrorMessage.Should().Contain("not available");
+    }
+
+    // #16 — one deferred column that cannot be read does not take the others with it.
+
+    [Fact]
+    public async Task One_unreadable_deferred_column_falls_back_alone()
+    {
+        _mappingEngine = new FailingColumnEngine("Broken");
+
+        var (_, record) = await RunAsync(
+            DeIdentificationService(GivenMaskRule),
+            new Dictionary<string, IReadOnlyList<TransformationRule>> { ["PatientName"] = [ConcatRule], ["Broken"] = [ConcatRule] },
+            Column("PatientName", "$.name[*].given"), Column("Broken", "$.name[*].given"));
+
+        record.Values["PatientName"].Should().Be("*****ster");                       // still deferred
+        record.Values["Broken"].Should().Be(PreContractConcat("DB, **ster"));         // redaction-first
+        _lineage.Where(hop => hop.NodeType == "DeIdentification:DeferralFallback")
+            .Should().ContainSingle().Which.DestinationField.Should().Be("Broken");
+    }
+
+    [Fact]
+    public async Task Several_unreadable_columns_each_fall_back_and_readable_ones_still_defer()
+    {
+        _mappingEngine = new FailingColumnEngine("BrokenA", "BrokenB");
+        var chains = new Dictionary<string, IReadOnlyList<TransformationRule>>
+        {
+            ["PatientName"] = [ConcatRule], ["AlsoName"] = [ConcatRule], ["BrokenA"] = [ConcatRule], ["BrokenB"] = [ConcatRule],
+        };
+
+        var (_, record) = await RunAsync(
+            DeIdentificationService(GivenMaskRule), chains,
+            Column("PatientName", "$.name[*].given"), Column("AlsoName", "$.name[*].given"),
+            Column("BrokenA", "$.name[*].given"), Column("BrokenB", "$.name[*].given"));
+
+        record.Values["PatientName"].Should().Be("*****ster");
+        record.Values["AlsoName"].Should().Be("*****ster");
+        _lineage.Where(hop => hop.NodeType == "DeIdentification:DeferralFallback").Select(hop => hop.DestinationField)
+            .Should().BeEquivalentTo(["BrokenA", "BrokenB"]);
+        JsonSerializer.Serialize(record.Values).Should().NotContain("Tester");
+    }
+
+    // #10 — the deferred items always belong to the instance the column holds.
+
+    [Fact]
+    public async Task An_empty_first_name_never_borrows_the_given_names_of_another_name()
+    {
+        _patientJson = """
+            {"resourceType":"Patient","id":"p1","name":[{"given":[]},{"given":["Other","Person"]}]}
+            """;
+
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), PatientNameConcat, Column("PatientName", "$.name[*].given"));
+
+        // First instance = the first name, whose given is empty: nothing of the second name may appear.
+        JsonSerializer.Serialize(record.Values).Should().NotContain("Other").And.NotContain("rson");
+    }
+
+    /// <summary>Runs Safe Harbor's real redaction for the De-identification node, but throws — quoting the value —
+    /// whenever the Mapping node asks it to redact a deferred column.</summary>
+    private sealed class ThrowingDeIdentificationService : IDeIdentificationService
+    {
+        public Task<DeIdentificationResult> DeIdentifyAsync(DeIdentificationRequest request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop) =>
+            throw new InvalidOperationException($"cannot redact '{value}'");
+    }
+
+    /// <summary>A StringNormalization step that throws with its input in the message.</summary>
+    private sealed class ThrowingStringNormalizationNode : ITransformNode
+    {
+        public TransformNodeType NodeType => TransformNodeType.StringNormalization;
+        public bool AcceptsCollections => false;
+        public bool AcceptsStructuredValue => false;
+
+        public TransformResult Execute(object? value, IReadOnlyDictionary<string, string> config, string? secret) =>
+            throw new FormatException($"bad input '{value}'");
+    }
+
+    /// <summary>The real engine, except that reading any of the given columns from a pre-de-identification
+    /// snapshot (the payload still holds "Tester") throws.</summary>
+    private sealed class FailingColumnEngine : IJsonMappingEngine
+    {
+        private readonly JsonMappingEngine _inner = new();
+        private readonly string[] _failing;
+
+        public FailingColumnEngine(params string[] failing) => _failing = failing;
+
+        public MappingTestResultDto Map(string sourceJson, IReadOnlyCollection<MappingFieldDto> fields, IReadOnlyDictionary<string, object?>? systemValues = null) =>
+            sourceJson.Contains("Tester") && fields.Any(field => _failing.Contains(field.TargetField))
+                ? throw new InvalidOperationException("cannot read " + sourceJson)
+                : _inner.Map(sourceJson, fields, systemValues);
+    }
+
     /// <summary>What a NON-deferred column's Concatenation ("{0} {1}") writes for an array path — its long-standing
     /// contract: the one ", "-joined value fills {0}. Computed by the real node, not hardcoded.</summary>
     private static object? PreContractConcat(string joined) =>
@@ -526,17 +936,18 @@ public sealed class TransformBeforeDeIdentificationTests
     }
 
     [Fact]
-    public async Task A_deferred_value_the_redaction_cannot_handle_is_dropped_and_lineage_says_so()
+    public async Task An_ArrayList_count_is_not_deferred_so_it_stays_a_real_number()
     {
-        // ArrayList "count" turns the names into a number, which a mask cannot redact: fail closed, and show it.
-        var chain = Chain("PatientName", (TransformNodeType.ArrayListOperations, """{"operation":"count"}"""));
+        // "count" yields a number no redaction applies to. Deferring it would have to drop it (it used to be written
+        // as NULL); it keeps redaction-first instead, where counting the redacted items gives the same number.
+        var chain = Chain("NameCount", (TransformNodeType.ArrayListOperations, """{"operation":"count"}"""));
 
-        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), chain, Column("PatientName", "$.name[*].given"));
+        var (_, record) = await RunAsync(DeIdentificationService(GivenMaskRule), chain, Column("NameCount", "$.name[*].given[*]"));
 
-        record.Values["PatientName"].Should().BeNull();
-        var redaction = _lineage.Single(hop => hop.DestinationField == "PatientName" && hop.NodeType == "DeIdentification:Mask");
-        redaction.Success.Should().BeFalse();
-        redaction.ErrorMessage.Should().Contain("dropped");
+        record.Values["NameCount"].Should().Be(2);
+        _lineage.Where(hop => hop.DestinationField == "NameCount").Should().OnlyContain(hop => hop.Success);
+        _lineage.Should().Contain(hop => hop.DestinationField == "NameCount" && hop.NodeType == "DeIdentification:Mask");
+        _mappingOutput!.Metadata!["skippedResourceTypes"].Should().BeNull();
     }
 
     // ── Third review ──────────────────────────────────────────────────────────────────────────────────────
@@ -627,6 +1038,45 @@ public sealed class TransformBeforeDeIdentificationTests
             .And.BeEquivalentTo(new[] { "Mask", "Redact", "Remove" });
     }
 
+    /// <summary>Collects every formatted log line (with the exception message, if any) the Mapping node writes.</summary>
+    private sealed class CapturingLoggerFactory : Microsoft.Extensions.Logging.ILoggerFactory
+    {
+        private readonly List<string> _lines;
+
+        public CapturingLoggerFactory(List<string> lines) => _lines = lines;
+
+        public Microsoft.Extensions.Logging.ILogger CreateLogger(string categoryName) => new Logger(_lines);
+
+        public void AddProvider(Microsoft.Extensions.Logging.ILoggerProvider provider)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger : Microsoft.Extensions.Logging.ILogger
+        {
+            private readonly List<string> _lines;
+
+            public Logger(List<string> lines) => _lines = lines;
+
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state,
+                Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                lock (_lines)
+                {
+                    _lines.Add(formatter(state, exception) + (exception is null ? string.Empty : " | " + exception.Message));
+                }
+            }
+        }
+    }
+
     private sealed class CollectingLineageDispatcher : ILineageCaptureDispatcher
     {
         private readonly List<LineageHopEntryDto> _hops;
@@ -702,8 +1152,8 @@ public sealed class JsonMappingEngineArrayItemPartsTests
     [Fact]
     public void A_single_item_array_records_its_one_item()
     {
-        // The empty "given" of the third name is not an instance, so index=2 is the "Solo" name.
-        var result = Map("PatientName", "$.name[*].given", ArrayPolicy.FirstItem, ["name"], format: "index=2");
+        // index=3 is the fourth name, ["Solo"] (index=2 is the third name, whose given is empty).
+        var result = Map("PatientName", "$.name[*].given", ArrayPolicy.FirstItem, ["name"], format: "index=3");
 
         result.PrimitiveArrayItems!["PatientName"].Should().Equal("Solo");
     }
@@ -716,6 +1166,58 @@ public sealed class JsonMappingEngineArrayItemPartsTests
         result.PrimitiveArrayItems!["ContactName"].Should().HaveCount(3);
         result.PrimitiveArrayItems!["ContactName"][0].Should().Be("Ann");
         result.PrimitiveArrayItems!["ContactName"][2].Should().Be("Lee");
+    }
+
+    private static MappingTestResultDto MapNames(string namesJson, ArrayPolicy policy = ArrayPolicy.FirstItem, string? format = null) =>
+        new JsonMappingEngine().Map($$"""{"resourceType":"Patient","name":{{namesJson}}}""",
+        [
+            new MappingFieldDto("PatientName", "$.name[*].given", MappingValueType.String, false, null, format, "Patient",
+                "dbo.Patient", ArrayPolicy: policy, ArrayAncestors: ["name"]),
+        ]);
+
+    private static IReadOnlyList<object?> ItemsOf(MappingTestResultDto result) =>
+        result.PrimitiveArrayItems?.GetValueOrDefault("PatientName") ?? [];
+
+    [Fact]
+    public void An_empty_first_instance_yields_no_items_not_the_second_instances()
+    {
+        var result = MapNames("""[{"given":[]},{"given":["Tester"]}]""");
+
+        ItemsOf(result).Should().BeEmpty();
+        result.PrimitiveArrayItems.Should().ContainKey("PatientName");   // read, and empty — not "unavailable"
+    }
+
+    [Fact]
+    public void Two_populated_instances_yield_the_first_instances_items()
+    {
+        ItemsOf(MapNames("""[{"given":["DB"]},{"given":["Tester"]}]""")).Should().Equal("DB");
+    }
+
+    [Fact]
+    public void Two_empty_instances_yield_no_items()
+    {
+        ItemsOf(MapNames("""[{"given":[]},{"given":[]}]""")).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_missing_array_is_not_an_instance_so_the_populated_one_is_used_by_the_column_and_its_items_alike()
+    {
+        var result = MapNames("""[{"family":"Sable"},{"given":["Tester"]}]""");
+
+        ItemsOf(result).Should().Equal("Tester");
+        result.Values["PatientName"].Should().Be("Tester");   // the column's own value comes from the same instance
+    }
+
+    [Fact]
+    public void A_single_parent_with_several_values_yields_them_all()
+    {
+        ItemsOf(MapNames("""[{"given":["DB","Tester","Jr"]}]""")).Should().Equal("DB", "Tester", "Jr");
+    }
+
+    [Fact]
+    public void Nth_instance_selects_the_empty_array_itself_rather_than_skipping_it()
+    {
+        ItemsOf(MapNames("""[{"given":["DB"]},{"given":[]},{"given":["Tester"]}]""", format: "index=1")).Should().BeEmpty();
     }
 
     [Fact]

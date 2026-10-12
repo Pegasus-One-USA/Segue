@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -57,8 +58,6 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         }
 
         var hops = new List<DeIdentificationFieldHop>();
-        // Each applied rule's path, and whether every rule on that path was deferrable — see DeferrableOriginalJson.
-        var appliedPaths = new Dictionary<string, (string[] Segments, bool AllDeferrable)>(StringComparer.Ordinal);
         var rules = await _ruleRepository.GetPreMappingRulesAsync(profileId, request.ResourceType, cancellationToken);
         foreach (var rule in rules)
         {
@@ -80,12 +79,6 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
             ApplyPath(resource, pathSegments, 0, strategy, rule.ConfigJson);
             var afterValue = TryReadValueAt(resource, pathSegments, 0);
 
-            var pathKey = string.Join('.', pathSegments);
-            var deferrable = DeIdentificationStrategyNames.DeferrableAfterTransformations.Contains(strategy.ToString());
-            appliedPaths[pathKey] = appliedPaths.TryGetValue(pathKey, out var seen)
-                ? (pathSegments, seen.AllDeferrable && deferrable)
-                : (pathSegments, deferrable);
-
             hops.Add(new DeIdentificationFieldHop(
                 rule.SourceField,
                 strategy.ToString(),
@@ -102,43 +95,93 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         hops.AddRange(await RewriteReferencesAsync(resource, profileId, string.Empty, cancellationToken));
 
         return new DeIdentificationResult(
-            resource.ToJsonString(), hops, BuildDeferrableOriginal(resource, request.RawJson, appliedPaths.Values));
+            resource.ToJsonString(),
+            hops,
+            await BuildDeferrableOriginalAsync(
+                resource, request.RawJson, hops, rules, request.ResourceType, profileId, cancellationToken));
     }
 
     /// <summary>
-    /// The redacted resource with ONLY the paths every applied rule treated with a deferrable strategy (Mask, Redact,
-    /// Remove) put back to their original values — the least unredacted data a Mapping node needs to run a column's
-    /// Transformations first and apply that rule afterwards. A path any other rule touched (Hash, Generalize) stays
-    /// redacted: no column can defer it, so its original is never kept. Null when nothing deferrable was applied.
+    /// The redacted resource with ONLY the elements <see cref="DeIdentificationDeferral.CanRestore"/> allows put
+    /// back to their original values — the least unredacted data a Mapping node needs to run a column's
+    /// Transformations first and apply that rule afterwards. Null when nothing is restorable.
+    ///
+    /// Two guards keep a restored subtree from bringing back anything a rule redacted:
+    /// <list type="number">
+    /// <item>An element any other APPLIED redaction touched — at it, above it or beneath it (a Hash, a Generalize, a
+    /// rewritten reference, a Remove of an ancestor) — is never restored (CanRestore).</item>
+    /// <item>A rule can also be configured beneath a restored element yet never have fired, because an earlier
+    /// rule had already removed that element's ancestor (Redact "address" before GeneralizeZip3
+    /// "address.postalCode"). It left no hop to see, but the original subtree still holds what it covers — so every
+    /// rule configured beneath a restored element is applied to it again, in configured order, and every reference
+    /// inside it is rewritten, exactly as the redacted resource would have had them.</item>
+    /// </list>
     /// </summary>
-    private static string? BuildDeferrableOriginal(
-        JsonObject redacted, string rawJson, IEnumerable<(string[] Segments, bool AllDeferrable)> appliedPaths)
+    private async Task<string?> BuildDeferrableOriginalAsync(
+        JsonObject redacted,
+        string rawJson,
+        IReadOnlyCollection<DeIdentificationFieldHop> hops,
+        IReadOnlyCollection<TransformationRule> rules,
+        string resourceType,
+        Guid profileId,
+        CancellationToken cancellationToken)
     {
-        var restorable = appliedPaths.Where(path => path.AllDeferrable).Select(path => path.Segments).ToArray();
+        var restorable = hops
+            .Where(hop => DeIdentificationDeferral.CanRestore(hop.SourceField, hops, resourceType))
+            .Select(hop => ParseSourceFieldPath(hop.SourceField, resourceType))
+            .DistinctBy(segments => string.Join('.', segments), StringComparer.Ordinal)
+            .ToArray();
         if (restorable.Length == 0 || JsonNode.Parse(rawJson) is not JsonObject original)
         {
             return null;
         }
 
         var copy = (JsonObject)redacted.DeepClone();
+        var restoredNodes = new List<JsonNode>();
         foreach (var segments in restorable)
         {
-            RestorePath(copy, original, segments, 0);
+            RestorePath(copy, original, segments, 0, restoredNodes);
+        }
+
+        foreach (var rule in rules)
+        {
+            if (string.IsNullOrWhiteSpace(rule.SourceField) || !TryReadStrategy(rule.ConfigJson, out var strategy))
+            {
+                continue;
+            }
+
+            var ruleSegments = ParseSourceFieldPath(rule.SourceField, resourceType);
+            if (restorable.Any(segments => IsStrictlyBeneath(ruleSegments, segments)))
+            {
+                ApplyPath(copy, ruleSegments, 0, strategy, rule.ConfigJson);
+            }
+        }
+
+        foreach (var node in restoredNodes)
+        {
+            await RewriteReferencesAsync(node, profileId, string.Empty, cancellationToken);
         }
 
         return copy.ToJsonString();
     }
 
+    /// <summary>True when <paramref name="path"/> lies strictly beneath <paramref name="ancestor"/>.</summary>
+    private static bool IsStrictlyBeneath(IReadOnlyList<string> path, IReadOnlyList<string> ancestor) =>
+        path.Count > ancestor.Count
+        && ancestor.Select((segment, i) => string.Equals(segment, path[i], StringComparison.Ordinal)).All(same => same);
+
     /// <summary>Copies the value at <paramref name="path"/> from <paramref name="original"/> into
-    /// <paramref name="target"/>, walking arrays element by element exactly as ApplyPath does.</summary>
-    private static void RestorePath(JsonNode? target, JsonNode? original, IReadOnlyList<string> path, int index)
+    /// <paramref name="target"/>, walking arrays element by element exactly as ApplyPath does, and collects each
+    /// value it put back in <paramref name="restoredNodes"/>.</summary>
+    private static void RestorePath(
+        JsonNode? target, JsonNode? original, IReadOnlyList<string> path, int index, List<JsonNode> restoredNodes)
     {
         switch (target, original)
         {
             case (JsonArray targetArray, JsonArray originalArray):
                 for (var i = 0; i < Math.Min(targetArray.Count, originalArray.Count); i++)
                 {
-                    RestorePath(targetArray[i], originalArray[i], path, index);
+                    RestorePath(targetArray[i], originalArray[i], path, index, restoredNodes);
                 }
 
                 break;
@@ -146,7 +189,12 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
             case (JsonObject targetObject, JsonObject originalObject) when index == path.Count - 1:
                 if (originalObject.TryGetPropertyValue(path[index], out var value))
                 {
-                    targetObject[path[index]] = value?.DeepClone();
+                    var restored = value?.DeepClone();
+                    targetObject[path[index]] = restored;
+                    if (restored is not null)
+                    {
+                        restoredNodes.Add(restored);
+                    }
                 }
 
                 break;
@@ -155,7 +203,7 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
                 if (targetObject.TryGetPropertyValue(path[index], out var targetChild)
                     && originalObject.TryGetPropertyValue(path[index], out var originalChild))
                 {
-                    RestorePath(targetChild, originalChild, path, index + 1);
+                    RestorePath(targetChild, originalChild, path, index + 1, restoredNodes);
                 }
 
                 break;

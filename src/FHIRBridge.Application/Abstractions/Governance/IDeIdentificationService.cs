@@ -11,7 +11,10 @@ public interface IDeIdentificationService
     /// that has already been mapped and transformed — used when a mapped column's own Transformations must run
     /// before its De-identification rule. Same strategy definitions as <see cref="DeIdentifyAsync"/>: a string is
     /// redacted and a plain list of strings is redacted item by item. Fails CLOSED, because the value was built from
-    /// unredacted source data: an unreadable strategy, or any other value shape, yields null — never the value.
+    /// unredacted source data: an unreadable strategy, any other value shape, or an implementation that does not
+    /// redact at all yields null — never the value. Every implementation must honour this; the caller treats a null
+    /// for a value it handed in as a dropped value and records it as a failed de-identification, and treats an
+    /// exception the same way.
     /// </summary>
     object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop);
 }
