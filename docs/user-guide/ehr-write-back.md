@@ -226,6 +226,11 @@ Click **Next**.
    Lines, drains and airways").
 3. For a live run, a red line reads "Live: records will be written into Epic. This cannot be undone."
 4. Click **✓ Add to Workflow**, then click **Save** at the top of the workflow builder.
+5. If this save makes the workflow write live into an EHR for the first time (a new live destination, a destination
+   switched from a test server or dry run to live, or a different live connection), Segue asks "Write into Epic on
+   every run?": "This workflow will write records into Epic every time it runs, including scheduled and triggered
+   runs. This cannot be undone." Click **Save** to go ahead or **Cancel** to save nothing. Saving again without such
+   a change does not ask. When a workflow writes into several EHRs, all are named ("Epic and athenahealth").
 
 ## 4. A database destination (SQL Server, MongoDB and others)
 
@@ -242,7 +247,9 @@ Click **Next**.
 
 ## 5. Run the workflow and read the report
 
-1. Go to **Workflows**. In the row's **⋮** menu click **Run** (the workflow must be Ready). If the workflow writes
+1. Go to **Workflows**. A workflow that writes live into an EHR shows a red **Writes to Epic** badge (or the EHRs it
+   writes to) under its name; test-run and dry-run workflows have none. In the row's **⋮** menu click **Run** (the
+   workflow must be Ready). If the workflow writes
    live into an EHR, Segue first asks "Write into Epic now?" (records written cannot be undone). Click **Run** to go
    ahead. It asks until a run of the workflow succeeds; after you edit and save the workflow, it asks again.
 2. When it has finished, open **Execution History** and click the run.
