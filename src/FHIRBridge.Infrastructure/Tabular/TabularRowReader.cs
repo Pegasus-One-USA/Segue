@@ -1,6 +1,9 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Application.Abstractions.Tabular;
@@ -64,6 +67,11 @@ public sealed class TabularRowReader : ITabularRowReader
                     OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'ALTER') = 1
                     OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'EXECUTE') = 1
                     OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CONTROL') = 1
+                    OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'BACKUP DATABASE') = 1
+                    OR HAS_PERMS_BY_NAME(NULL, NULL, 'CONTROL SERVER') = 1
+                    OR HAS_PERMS_BY_NAME(NULL, NULL, 'ALTER ANY CONNECTION') = 1
+                    OR HAS_PERMS_BY_NAME(NULL, NULL, 'SHUTDOWN') = 1
+                    OR HAS_PERMS_BY_NAME(NULL, NULL, 'ALTER SETTINGS') = 1
                 THEN 1 ELSE 0 END
                 """,
             DescribeAsync: DescribeSqlServerAsync,
@@ -189,17 +197,21 @@ public sealed class TabularRowReader : ITabularRowReader
         TabularSqlGuard.RequireTabularConnectionSecret(query.ConnectionSecret, query.Engine, _vaults);
         var connectionString = await _secrets.GetSecretAsync(query.ConnectionSecret, cancellationToken);
         await using var connection = await engine.OpenAsync(connectionString, cancellationToken);
-        if (engine.VerifyReadOnlySql is { } verify)
+        var verifiedKey = VerifiedLoginKey(query.Engine, connectionString);
+        if (engine.VerifyReadOnlySql is { } verify && !IsRecentlyVerified(verifiedKey))
         {
             await using var check = connection.CreateCommand();
             check.CommandText = verify;
             check.CommandTimeout = CommandTimeoutSeconds;
             if (Convert.ToInt32(await check.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) != 0)
             {
+                VerifiedLogins.TryRemove(verifiedKey, out _);
                 throw new BusinessRuleException(
                     "This database login can change data. Use a read-only login (for SQL Server, a user with db_datareader " +
                     "only; for PostgreSQL and MySQL, a login granted SELECT only).");
             }
+
+            VerifiedLogins[verifiedKey] = DateTimeOffset.UtcNow + VerifiedLoginLifetime;
         }
 
         DbTransaction? transaction = null;
@@ -248,6 +260,20 @@ public sealed class TabularRowReader : ITabularRowReader
             }
         }
     }
+
+    // The read-only login check depends only on the login, and on PostgreSQL it walks the catalog, so a node with
+    // several entries (or a run, then its preview) need not repeat it on every call. A pass is remembered briefly,
+    // keyed by a hash of the connection string itself: a changed login or password is checked again at once. A
+    // refusal is never remembered.
+    private static readonly TimeSpan VerifiedLoginLifetime = TimeSpan.FromMinutes(5);
+
+    private static readonly ConcurrentDictionary<string, DateTimeOffset> VerifiedLogins = new(StringComparer.Ordinal);
+
+    private static string VerifiedLoginKey(string engine, string connectionString) =>
+        $"{engine}:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(connectionString)))}";
+
+    private static bool IsRecentlyVerified(string key) =>
+        VerifiedLogins.TryGetValue(key, out var until) && DateTimeOffset.UtcNow < until;
 
     private static async Task<TabularRows> ReadRowsAsync(
         DbConnection connection, DbTransaction? transaction, string sql, int maxRows, CancellationToken cancellationToken)

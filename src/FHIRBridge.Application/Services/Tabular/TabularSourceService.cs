@@ -64,10 +64,12 @@ public sealed class TabularSourceService : ITabularSourceService
         ITenantSecretVaultResolver vaultResolver,
         ICurrentUserService currentUser,
         ILogger<TabularSourceService> logger,
-        ITabularSqlConnectionRepository? connections = null)
+        ITabularSqlConnectionRepository connections)
     {
+        // Required: without it a saved connection would write its secret and record nothing, leaving every later
+        // update, test or delete of it a NotFound and the secret orphaned.
         _files = files;
-        _connections = connections ?? new NoSavedConnections();
+        _connections = connections;
         _reader = reader;
         _encryptor = encryptor;
         _secretWriter = secretWriter;
@@ -258,23 +260,6 @@ public sealed class TabularSourceService : ITabularSourceService
 
     private static TabularSqlConnectionDto ToDto(TabularSqlConnection c) =>
         new(c.Engine, c.KeyVaultName, c.SecretName, c.Id, c.Name, c.CreatedBy, c.UpdatedOnUtc);
-
-    /// <summary>Hosts that have not registered the repository (older test wiring) save the secret only.</summary>
-    private sealed class NoSavedConnections : ITabularSqlConnectionRepository
-    {
-        public Task AddAsync(TabularSqlConnection connection, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task<TabularSqlConnection?> GetAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<TabularSqlConnection?>(null);
-
-        public Task<TabularSqlConnection?> FindByNameAsync(string name, CancellationToken cancellationToken) => Task.FromResult<TabularSqlConnection?>(null);
-
-        public Task<IReadOnlyList<TabularSqlConnection>> ListAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<TabularSqlConnection>>([]);
-
-        public Task UpdateAsync(TabularSqlConnection connection, CancellationToken cancellationToken) => Task.CompletedTask;
-
-        public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(false);
-    }
 
     public async Task<TabularPreviewDto> PreviewAsync(TabularPreviewRequest request, CancellationToken cancellationToken)
     {

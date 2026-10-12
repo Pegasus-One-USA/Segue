@@ -246,7 +246,7 @@ public sealed class TabularSourceTests
         var user = new Mock<ICurrentUserService>();
         user.SetupGet(u => u.CurrentUser).Returns(new CurrentUserInfo("ext", "uploader@example.com", "U", [], true));
         var reader = new TabularRowReader(files, encryptor, new Mock<ISecretProvider>().Object, vaults.Object);
-        var service = new TabularSourceService(files, reader, encryptor, secrets.Object, vaults.Object, user.Object, NullLogger<TabularSourceService>.Instance);
+        var service = new TabularSourceService(files, reader, encryptor, secrets.Object, vaults.Object, user.Object, NullLogger<TabularSourceService>.Instance, new InMemoryTabularSqlConnectionRepository());
         return (service, files, secrets);
     }
 

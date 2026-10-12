@@ -41,9 +41,11 @@ public static partial class TabularSqlGuard
             throw new BusinessRuleException("Enter a single SELECT statement, without ';' between statements.");
         }
 
-        if (ForbiddenKeyword().Match(check) is { Success: true } forbidden)
+        RequireNoForbiddenKeyword(check, ForbiddenKeyword());
+        if (engine == "sqlserver")
         {
-            throw new BusinessRuleException($"The query may only read data; '{forbidden.Value.ToUpperInvariant()}' is not allowed.");
+            // SQL Server runs several statements in one batch with no ';' between them.
+            RequireNoForbiddenKeyword(check, SqlServerStatement());
         }
 
         // Every ';' outside literals and comments is now a closing one (the check above refused any other).
@@ -108,7 +110,7 @@ public static partial class TabularSqlGuard
                     throw new BusinessRuleException("The query may not contain /*! ... */ comments; MySQL runs their text.");
                 }
 
-                i = SkipBlockComment(query, i, nested: postgres);
+                i = SkipBlockComment(query, i, nested: postgres || sqlServer);
                 output.Append(' ');
                 continue;
             }
@@ -154,6 +156,38 @@ public static partial class TabularSqlGuard
         }
 
         return output.ToString();
+    }
+
+    /// <summary>Refuses the first match of <paramref name="keywords"/> in the sanitised query, except a call to a name
+    /// that is also a read-only function (<see cref="ReadOnlyFunctions"/>: MySQL's TRUNCATE(x, d) and INSERT(str, ...)).
+    /// A column or table named like a keyword can be quoted: quoted identifiers are not checked.</summary>
+    private static void RequireNoForbiddenKeyword(string check, Regex keywords)
+    {
+        foreach (Match match in keywords.Matches(check))
+        {
+            if (ReadOnlyFunctions.Contains(match.Value) && IsCall(check, match.Index + match.Length))
+            {
+                continue;
+            }
+
+            throw new BusinessRuleException(
+                $"The query may only read data; '{match.Value.ToUpperInvariant()}' is not allowed. " +
+                "If it is the name of a column or table, put it in quotes.");
+        }
+    }
+
+    // Never the statement forms: TRUNCATE TABLE and INSERT INTO / INSERT t are not followed by '('.
+    private static readonly HashSet<string> ReadOnlyFunctions = new(StringComparer.OrdinalIgnoreCase) { "truncate", "insert" };
+
+    private static bool IsCall(string text, int afterName)
+    {
+        var i = afterName;
+        while (i < text.Length && char.IsWhiteSpace(text[i]))
+        {
+            i++;
+        }
+
+        return i < text.Length && text[i] == '(';
     }
 
     /// <summary>PostgreSQL's E'...' string: an E (or e) that stands alone as a token right before the quote.</summary>
@@ -265,6 +299,12 @@ public static partial class TabularSqlGuard
     // anything a keyword list misses.
     [GeneratedRegex(@"\b(insert|update|delete|merge|drop|alter|create|truncate|exec|execute|grant|revoke|into|call|copy|vacuum|attach|pragma|rename|openquery|openrowset|opendatasource|dblink\w*)\b", RegexOptions.IgnoreCase)]
     private static partial Regex ForbiddenKeyword();
+
+    // SQL Server statements that change the server or the session and need no ';' before them (SELECT 1 BACKUP DATABASE
+    // ... is one batch). USE is not here: it only changes which database the rest, still checked, reads, which the
+    // login's own rights bound; and 'use' is a common column name (ContactPoint.use).
+    [GeneratedRegex(@"\b(backup|restore|dbcc|kill|shutdown|waitfor|reconfigure|checkpoint|deny|revert|setuser|writetext|updatetext)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex SqlServerStatement();
 
     // PostgreSQL's tag rule: empty, or an identifier that does not start with a digit ($1 is a parameter).
     [GeneratedRegex(@"\$(?:[\p{L}_][\p{L}\p{Nd}_]*)?\$")]

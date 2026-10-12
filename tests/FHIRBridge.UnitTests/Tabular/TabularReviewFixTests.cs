@@ -61,6 +61,12 @@ public sealed class TabularReviewFixTests
     [InlineData("postgresql", "select 1 /* outer /* inner */ still a comment */ from t")]
     [InlineData("mysql", "select /*+ MAX_EXECUTION_TIME(1000) */ a from t")]
     [InlineData("sqlserver", "select a -- a note\r\nfrom t")]
+    // Round 3: a read-only function sharing a statement keyword's name, and a keyword-named column in quotes.
+    [InlineData("mysql", "select truncate(amount, 2) as amount, insert(code, 1, 0, 'x') as code from t")]
+    [InlineData("mysql", "select truncate (amount, 2) from t")]
+    [InlineData("postgresql", "select \"call\", \"copy\" from t")]
+    [InlineData("sqlserver", "select [use], [call] from t")]
+    [InlineData("sqlserver", "select 1 /* outer /* inner */ still a comment */ from t")]
     public void A_read_runs_exactly_as_written(string engine, string query)
     {
         TabularSqlGuard.ValidateQuery(query, engine).Should().Be(query);
@@ -100,6 +106,19 @@ public sealed class TabularReviewFixTests
     [InlineData("sqlserver", "select 1 -- x\r; drop table t", "*carriage return*")]
     [InlineData("mysql", "select 1 -- x\r' \n; drop table t; -- '", "*carriage return*")]
     [InlineData("mysql", "select 1 # x\r; drop table t", "*carriage return*")]
+    // Round 3: SQL Server runs a second statement with no ';' before it.
+    [InlineData("sqlserver", "select 1 backup database x to disk = 'c:\\x.bak'", "*'BACKUP' is not allowed*")]
+    [InlineData("sqlserver", "select 1 dbcc checkdb", "*'DBCC' is not allowed*")]
+    [InlineData("sqlserver", "select 1 kill 53", "*'KILL' is not allowed*")]
+    [InlineData("sqlserver", "select 1 shutdown", "*'SHUTDOWN' is not allowed*")]
+    [InlineData("sqlserver", "select 1 waitfor delay '00:10:00'", "*'WAITFOR' is not allowed*")]
+    [InlineData("sqlserver", "select 1 restore database x from disk = 'y'", "*'RESTORE' is not allowed*")]
+    // SQL Server nests block comments too, so this comment ends at the second */.
+    [InlineData("sqlserver", "select 1 /* /* */ ' */ delete from t -- '", "*'DELETE' is not allowed*")]
+    // A function call is allowed only for read-only function names; EXEC stays refused with or without '('.
+    [InlineData("sqlserver", "select 1 exec('drop table t')", "*'EXEC' is not allowed*")]
+    [InlineData("mysql", "select 1 from t where 1 = 0 union select * from t into outfile '/tmp/x'", "*'INTO' is not allowed*")]
+    [InlineData("postgresql", "select call from t", "*put it in quotes*")]
     public void A_query_that_could_change_data_is_refused(string engine, string query, string message)
     {
         var act = () => TabularSqlGuard.ValidateQuery(query, engine);
