@@ -60,6 +60,7 @@ public sealed class TabularReviewFixTests
     [InlineData("postgresql", "select $q1$it's$q1$ as note, a$b as name from t")]
     [InlineData("postgresql", "select 1 /* outer /* inner */ still a comment */ from t")]
     [InlineData("mysql", "select /*+ MAX_EXECUTION_TIME(1000) */ a from t")]
+    [InlineData("sqlserver", "select a -- a note\r\nfrom t")]
     public void A_read_runs_exactly_as_written(string engine, string query)
     {
         TabularSqlGuard.ValidateQuery(query, engine).Should().Be(query);
@@ -93,6 +94,12 @@ public sealed class TabularReviewFixTests
     [InlineData("postgresql", "select $a1$ ' $a1$; drop table t; --'", "*single SELECT*")]
     // PostgreSQL nests block comments, so the comment below ends at the second */.
     [InlineData("postgresql", "select 1 /* /* */ ' */ ; drop table t; -- '", "*single SELECT*")]
+    // Round 2: PostgreSQL and SQL Server end a line comment at a lone '\r', MySQL does not; either reading could hide
+    // the ';' from the other, so a lone '\r' inside a line comment is refused on every engine.
+    [InlineData("postgresql", "select 1 -- x\r; drop table t", "*carriage return*")]
+    [InlineData("sqlserver", "select 1 -- x\r; drop table t", "*carriage return*")]
+    [InlineData("mysql", "select 1 -- x\r' \n; drop table t; -- '", "*carriage return*")]
+    [InlineData("mysql", "select 1 # x\r; drop table t", "*carriage return*")]
     public void A_query_that_could_change_data_is_refused(string engine, string query, string message)
     {
         var act = () => TabularSqlGuard.ValidateQuery(query, engine);

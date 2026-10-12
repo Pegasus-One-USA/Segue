@@ -94,7 +94,7 @@ public static partial class TabularSqlGuard
                 && (!mysql || i + 2 >= query.Length || char.IsWhiteSpace(query[i + 2]));
             if (lineComment || (mysql && c == '#'))
             {
-                i = SkipTo(query, i, "\n");
+                i = SkipToLineEnd(query, i);
                 output.Append(' ');
                 continue;
             }
@@ -201,10 +201,22 @@ public static partial class TabularSqlGuard
         throw new BusinessRuleException("The query has a comment that is never closed.");
     }
 
-    private static int SkipTo(string text, int start, string terminator)
+    /// <summary>Index of the '\n' that ends a line comment. Engines disagree on a lone '\r' (PostgreSQL and SQL Server
+    /// end the comment there, MySQL does not), and either reading could hide code from this check under the other, so
+    /// a line comment holding one is refused. A '\r\n' line break is fine.</summary>
+    private static int SkipToLineEnd(string text, int start)
     {
-        var end = text.IndexOf(terminator, start, StringComparison.Ordinal);
-        return end < 0 ? text.Length : end;
+        var end = text.IndexOf('\n', start);
+        end = end < 0 ? text.Length : end;
+        for (var i = start; i < end; i++)
+        {
+            if (text[i] == '\r' && i + 1 != end)
+            {
+                throw new BusinessRuleException("A comment in the query contains a carriage return without a line break.");
+            }
+        }
+
+        return end;
     }
 
     /// <summary>Index just past the quoted run that opens at <paramref name="start"/>. A doubled closing quote is an
