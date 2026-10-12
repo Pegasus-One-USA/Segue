@@ -20,7 +20,8 @@ namespace FHIRBridge.Infrastructure.Tabular;
 public static partial class TabularSqlGuard
 {
     /// <summary>Validates <paramref name="query"/> for <paramref name="engine"/> and returns the text to execute: the
-    /// query as written, trimmed.</summary>
+    /// query as written, trimmed, without the ';' that closes it. A comment after that ';' stays, and callers wrap the
+    /// text on its own lines, so the comment cannot swallow what follows.</summary>
     public static string ValidateQuery(string? query, string engine)
     {
         if (string.IsNullOrWhiteSpace(query))
@@ -28,7 +29,8 @@ public static partial class TabularSqlGuard
             throw new BusinessRuleException("Enter the SELECT query that returns the rows.");
         }
 
-        var check = Sanitise(query, engine).Trim().TrimEnd(';').Trim();
+        var terminators = new List<int>();
+        var check = Sanitise(query, engine, terminators).Trim().TrimEnd(';').Trim();
         if (!StartsWithSelect().IsMatch(check))
         {
             throw new BusinessRuleException("Only a SELECT query (optionally starting with WITH) can read rows.");
@@ -44,7 +46,14 @@ public static partial class TabularSqlGuard
             throw new BusinessRuleException($"The query may only read data; '{forbidden.Value.ToUpperInvariant()}' is not allowed.");
         }
 
-        return query.Trim();
+        // Every ';' outside literals and comments is now a closing one (the check above refused any other).
+        var executable = new StringBuilder(query);
+        for (var t = terminators.Count - 1; t >= 0; t--)
+        {
+            executable.Remove(terminators[t], 1);
+        }
+
+        return executable.ToString().Trim();
     }
 
     /// <summary>
@@ -66,8 +75,9 @@ public static partial class TabularSqlGuard
     }
 
     /// <summary>The query with comments removed (a space each) and every string literal and quoted identifier
-    /// emptied, read the way <paramref name="engine"/> reads it.</summary>
-    internal static string Sanitise(string query, string engine)
+    /// emptied, read the way <paramref name="engine"/> reads it. <paramref name="statementEnds"/>, when given,
+    /// receives the index in <paramref name="query"/> of every ';' that is code.</summary>
+    internal static string Sanitise(string query, string engine, List<int>? statementEnds = null)
     {
         var mysql = engine == "mysql";
         var postgres = engine == "postgresql";
@@ -91,13 +101,14 @@ public static partial class TabularSqlGuard
 
             if (c == '/' && next == '*')
             {
-                var end = query.IndexOf("*/", i + 2, StringComparison.Ordinal);
-                if (end < 0)
+                // MySQL runs the text of /*! ... */ (and MariaDB of /*M! ... */) as code, so it is not a comment
+                // this check may strip.
+                if (mysql && IsExecutableComment(query, i))
                 {
-                    throw new BusinessRuleException("The query has a comment that is never closed.");
+                    throw new BusinessRuleException("The query may not contain /*! ... */ comments; MySQL runs their text.");
                 }
 
-                i = end + 2;
+                i = SkipBlockComment(query, i, nested: postgres);
                 output.Append(' ');
                 continue;
             }
@@ -118,7 +129,9 @@ public static partial class TabularSqlGuard
                 continue;
             }
 
-            if (postgres && c == '$' && DollarTag().Match(query, i) is { Success: true } tag && tag.Index == i)
+            // A '$' straight after an identifier character is part of that identifier (a$x$), not a dollar quote.
+            if (postgres && c == '$' && !(i > 0 && IsIdentifierChar(query[i - 1]))
+                && DollarTag().Match(query, i) is { Success: true } tag && tag.Index == i)
             {
                 var end = query.IndexOf(tag.Value, i + tag.Length, StringComparison.Ordinal);
                 if (end < 0)
@@ -129,6 +142,11 @@ public static partial class TabularSqlGuard
                 i = end + tag.Length;
                 output.Append("''");
                 continue;
+            }
+
+            if (c == ';')
+            {
+                statementEnds?.Add(i);
             }
 
             output.Append(c);
@@ -142,7 +160,46 @@ public static partial class TabularSqlGuard
     private static bool IsEscapeStringPrefix(string text, int quoteIndex) =>
         quoteIndex > 0
         && text[quoteIndex - 1] is 'E' or 'e'
-        && (quoteIndex == 1 || !(char.IsLetterOrDigit(text[quoteIndex - 2]) || text[quoteIndex - 2] is '_' or '$'));
+        && (quoteIndex == 1 || !IsIdentifierChar(text[quoteIndex - 2]));
+
+    private static bool IsIdentifierChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '$';
+
+    /// <summary>MySQL's /*! ... */ and MariaDB's /*M! ... */, whose text the server executes.</summary>
+    private static bool IsExecutableComment(string text, int start) =>
+        (start + 2 < text.Length && text[start + 2] == '!')
+        || (start + 3 < text.Length && text[start + 2] is 'M' or 'm' && text[start + 3] == '!');
+
+    /// <summary>Index just past the block comment that opens at <paramref name="start"/>. PostgreSQL nests block
+    /// comments, so with <paramref name="nested"/> each inner /* needs its own */.</summary>
+    private static int SkipBlockComment(string text, int start, bool nested)
+    {
+        var depth = 1;
+        var i = start + 2;
+        while (i + 1 < text.Length)
+        {
+            if (text[i] == '*' && text[i + 1] == '/')
+            {
+                i += 2;
+                if (--depth == 0)
+                {
+                    return i;
+                }
+
+                continue;
+            }
+
+            if (nested && text[i] == '/' && text[i + 1] == '*')
+            {
+                depth++;
+                i += 2;
+                continue;
+            }
+
+            i++;
+        }
+
+        throw new BusinessRuleException("The query has a comment that is never closed.");
+    }
 
     private static int SkipTo(string text, int start, string terminator)
     {
@@ -197,7 +254,8 @@ public static partial class TabularSqlGuard
     [GeneratedRegex(@"\b(insert|update|delete|merge|drop|alter|create|truncate|exec|execute|grant|revoke|into|call|copy|vacuum|attach|pragma|rename|openquery|openrowset|opendatasource|dblink\w*)\b", RegexOptions.IgnoreCase)]
     private static partial Regex ForbiddenKeyword();
 
-    [GeneratedRegex(@"\$[A-Za-z_]*\$")]
+    // PostgreSQL's tag rule: empty, or an identifier that does not start with a digit ($1 is a parameter).
+    [GeneratedRegex(@"\$(?:[\p{L}_][\p{L}\p{Nd}_]*)?\$")]
     private static partial Regex DollarTag();
 
     [GeneratedRegex(@"^tabular-sql-(?<engine>sqlserver|postgresql|mysql)-[0-9a-f]{32}$")]

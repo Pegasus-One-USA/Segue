@@ -57,9 +57,23 @@ public sealed class TabularReviewFixTests
     [InlineData("postgresql", "select $$drop table t$$ as note, \"update\" from t")]
     [InlineData("mysql", "select 1--1 as n, `insert` from t")]
     [InlineData("sqlserver", "select a from t -- a trailing note")]
+    [InlineData("postgresql", "select $q1$it's$q1$ as note, a$b as name from t")]
+    [InlineData("postgresql", "select 1 /* outer /* inner */ still a comment */ from t")]
+    [InlineData("mysql", "select /*+ MAX_EXECUTION_TIME(1000) */ a from t")]
     public void A_read_runs_exactly_as_written(string engine, string query)
     {
         TabularSqlGuard.ValidateQuery(query, engine).Should().Be(query);
+    }
+
+    // PR #244 review: the check wrapper puts the query inside a subquery, where a closing ';' is a syntax error, and a
+    // comment after it would have kept the ';' at the end of the text.
+    [Theory]
+    [InlineData("postgresql", "select a from t; -- note", "select a from t -- note")]
+    [InlineData("mysql", "select a from t;", "select a from t")]
+    [InlineData("sqlserver", "select ';' as s from t ;; ", "select ';' as s from t")]
+    public void The_closing_semicolon_is_dropped_and_nothing_else(string engine, string query, string expected)
+    {
+        TabularSqlGuard.ValidateQuery(query, engine).Should().Be(expected);
     }
 
     [Theory]
@@ -69,6 +83,16 @@ public sealed class TabularReviewFixTests
     [InlineData("mysql", "select 'a\\''; delete from t -- '", "*single SELECT*")]
     [InlineData("postgresql", "select E'a\\''; delete from t -- '", "*single SELECT*")]
     [InlineData("sqlserver", "select 1 /* never closed", "*never closed*")]
+    // PR #244 review: MySQL runs the text of /*! ... */ (MariaDB of /*M! ... */), so it is code, not a comment.
+    [InlineData("mysql", "select * from t /*!INTO OUTFILE '/tmp/x'*/", "*MySQL runs their text*")]
+    [InlineData("mysql", "select * from t /*!50000 , sleep(1) */", "*MySQL runs their text*")]
+    [InlineData("mysql", "select * from t /*M! into outfile '/tmp/x' */", "*MySQL runs their text*")]
+    // A '$' after an identifier character is part of the name (a$x$), not a dollar quote.
+    [InlineData("postgresql", "select 1 as a$x$ ; drop table t; select 1 as b$x$", "*single SELECT*")]
+    // Dollar-quote tags may contain digits.
+    [InlineData("postgresql", "select $a1$ ' $a1$; drop table t; --'", "*single SELECT*")]
+    // PostgreSQL nests block comments, so the comment below ends at the second */.
+    [InlineData("postgresql", "select 1 /* /* */ ' */ ; drop table t; -- '", "*single SELECT*")]
     public void A_query_that_could_change_data_is_refused(string engine, string query, string message)
     {
         var act = () => TabularSqlGuard.ValidateQuery(query, engine);

@@ -266,7 +266,7 @@ public sealed class TabularRowReader : ITabularRowReader
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"SELECT * FROM (\n{sql.TrimEnd().TrimEnd(';')}\n) AS fhirbridge_check LIMIT 0";
+        command.CommandText = $"SELECT * FROM (\n{sql}\n) AS fhirbridge_check LIMIT 0";
         command.CommandTimeout = CommandTimeoutSeconds;
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
         return Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
