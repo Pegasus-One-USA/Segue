@@ -1,0 +1,23 @@
+tests/FHIRBridge.UnitTests/EhrWriteBack/HealowWriteBackTests.cs
+  s_0121045dc9abeb::t_46c1f2ff53176b 46,54,204-217,243-263
+  s_0121045dc9abeb::t_647bd4388edb63 264
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/MappedEhrWriteBackDestinationWriter.cs
+  s_0121045dc9abeb::t_0f8fa25718e412 566,678-679,712-720
+  s_0121045dc9abeb::t_fab5d61f6eac29 721-723
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7e2c6ea7c115ccd73c7f2a049b17b5e182454ff4",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
