@@ -183,6 +183,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             await WriteIndividuallyAsync(
                 httpClient, baseUrl, authHeader, records, resolvedResourceCache, sourceBaseUrl,
                 individualErrors, individualWrittenIds, cancellationToken);
+            ThrowIfNothingAccepted(records.Count, individualWrittenIds.Count, individualErrors.Skip(referenceErrors.Count));
 
             return new DestinationWriteResult(
                 individualWrittenIds.Count,
@@ -196,7 +197,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         var fallbackRecords = new List<MappedDestinationRecord>();
         foreach (var record in records)
         {
-            if (TryParseFhirResource(record, resolvedResourceCache, out var resourceType, out var resource))
+            if (TryParseFhirResource(record, resolvedResourceCache, sourceBaseUrl, out var resourceType, out var resource))
             {
                 bundleEntries.Add((record, resourceType, resource));
             }
@@ -224,11 +225,31 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         await WriteIndividuallyAsync(
             httpClient, baseUrl, authHeader, fallbackRecords, resolvedResourceCache, sourceBaseUrl,
             recordErrors, writtenResourceIds, cancellationToken);
+        ThrowIfNothingAccepted(records.Count, writtenResourceIds.Count, recordErrors.Skip(referenceErrors.Count));
 
         return new DestinationWriteResult(
             writtenResourceIds.Count,
             RecordErrors: recordErrors.Count > 0 ? recordErrors : null,
             WrittenResourceIds: writtenResourceIds.Count > 0 || recordErrors.Count > 0 ? writtenResourceIds : null);
+    }
+
+    /// <summary>
+    /// Per-record rejections let the rest of a batch through, and the run reports them as a partial success. A
+    /// destination that was sent records and accepted none of them, though, has not been written at all — reporting
+    /// that as a (partial) success with 0 written hides it, so the write fails instead. Records withheld before the
+    /// write for an unresolved reference are not counted as sent: those are this run's gaps, not the destination's.
+    /// </summary>
+    private static void ThrowIfNothingAccepted(int sent, int written, IEnumerable<string> writeErrors)
+    {
+        if (sent == 0 || written > 0)
+        {
+            return;
+        }
+
+        var first = writeErrors.FirstOrDefault();
+        throw new InvalidOperationException(
+            $"The FHIR destination accepted none of the {sent} record(s) it was sent" +
+            (first is null ? "." : $". First rejection: {first}"));
     }
 
     /// <summary>
@@ -286,7 +307,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         // separate code path: a fetched record is indexed exactly like a top-level one.
         void IndexRecord(MappedDestinationRecord record)
         {
-            if (TryParseFhirResource(record, resolvedResourceCache, out var resourceType, out var resource))
+            if (TryParseFhirResource(record, resolvedResourceCache, sourceBaseUrl, out var resourceType, out var resource))
             {
                 var identity = new ResourceReference(resourceType, resource["id"]!.GetValue<string>());
                 present.Add(identity);
@@ -705,7 +726,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// this reports ONE aggregated failure for the whole write rather than per-record errors (there is nothing to
     /// isolate; every entry shares the identical fate). A transaction failure's <c>OperationOutcome</c> is the
     /// response body's own root object (unlike a batch response, where it's nested per-entry), so
-    /// <see cref="ExtractOutcomeText"/> is called directly on the parsed response body.
+    /// <see cref="DescribeOutcome"/> is called directly on the parsed response body.
     /// </summary>
     private static async Task WriteTransactionAsync(
         HttpClient httpClient,
@@ -750,8 +771,8 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         if (!response.IsSuccessStatusCode)
         {
             var outcome = string.IsNullOrWhiteSpace(responseBody) ? null : JsonNode.Parse(responseBody) as JsonObject;
-            var reason = SafeErrorText.SanitizeOr(
-                ExtractOutcomeText(outcome), $"{(int)response.StatusCode} {response.ReasonPhrase}");
+            var status = $"{(int)response.StatusCode} {response.ReasonPhrase}".TrimEnd();
+            var reason = DescribeOutcome(outcome) is { } described ? $"{status} — {described}" : status;
             var sample = entries.Take(5).Select(e => $"{e.ResourceType}/{e.Record.SourceResourceId ?? "unknown"}");
             var more = entries.Count > 5 ? $" (+{entries.Count - 5} more)" : string.Empty;
             recordErrors.Add(
@@ -791,14 +812,10 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             string? diagnostics = null;
             if (!isSuccess)
             {
-                var outcome = entryNode?["response"]?["outcome"] as JsonObject;
-                diagnostics = ExtractOutcomeText(outcome);
-                // Some servers (Aidbox included, observed in practice) return an OperationOutcome whose issue[]
-                // carries none of the usual human-readable fields — just a bare status. Embedding the outcome's
-                // own raw JSON (bounded) beats silently collapsing to just "422", which gives zero signal for
-                // diagnosing *why* the destination rejected the resource.
-                diagnostics ??= outcome is not null
-                    ? $"{status} — {Truncate(outcome.ToJsonString(JsonOptions), 500)}"
+                // Codes and paths only (see DescribeOutcome); the outcome's own text and raw JSON can carry
+                // patient values, so a bare status is the fallback.
+                diagnostics = DescribeOutcome(entryNode?["response"]?["outcome"] as JsonObject) is { } described
+                    ? $"{status} — {described}"
                     : status;
             }
 
@@ -809,58 +826,51 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     }
 
     /// <summary>
-    /// Pulls the most human-readable text out of an <c>OperationOutcome</c>'s <c>issue[]</c> — servers disagree on
-    /// which field carries it: some populate the plain-string <c>diagnostics</c>, others only <c>details</c> (a
-    /// CodeableConcept, via its <c>.text</c> or a coding's <c>.display</c>), others only the bare <c>code</c>
-    /// (e.g. <c>"invalid"</c>, <c>"not-found"</c>). Tries every issue, in that preference order, for the first
-    /// non-empty value found. Defensive against a value existing under the expected key but not being a JSON
-    /// string (an OperationOutcome is user/server content, not a shape this destination controls) — treated the
-    /// same as "not present" rather than throwing.
+    /// Describes an <c>OperationOutcome</c> by its issues' codes and the element paths they point at — e.g.
+    /// <c>invalid at Observation.status; processing</c> — and never by its <c>diagnostics</c> or <c>details</c>
+    /// text. Servers echo submitted values there (HAPI: "The value 'Smith' ..."), and this text is persisted in
+    /// run errors and logged, where patient values must not go. A code or path is kept only when it looks like
+    /// one (see <see cref="OutcomeToken"/> / <see cref="OutcomePath"/>); an OperationOutcome is server content,
+    /// not a shape this destination controls. Null when no issue yields anything.
     /// </summary>
-    private static string? ExtractOutcomeText(JsonObject? outcome)
+    private static string? DescribeOutcome(JsonObject? outcome)
     {
         if (outcome?["issue"] is not JsonArray issues)
         {
             return null;
         }
 
-        foreach (var issue in issues)
+        var described = issues.Take(3).Select(DescribeIssue).OfType<string>().Distinct().ToList();
+        return described.Count == 0 ? null : string.Join("; ", described);
+    }
+
+    private static string? DescribeIssue(JsonNode? issue)
+    {
+        var code = TryGetString(issue?["code"]) is { } c && OutcomeToken.IsMatch(c) ? c : null;
+        var detailCode = (issue?["details"]?["coding"] as JsonArray)?
+            .Select(coding => TryGetString(coding?["code"]))
+            .FirstOrDefault(value => value is not null && OutcomeToken.IsMatch(value));
+        var path = ((issue?["expression"] as JsonArray) ?? (issue?["location"] as JsonArray))?
+            .Select(TryGetString)
+            .FirstOrDefault(value => value is not null && OutcomePath.IsMatch(value));
+
+        var text = string.Join(" ", new[] { code, detailCode is null ? null : $"({detailCode})" }.OfType<string>());
+        if (path is not null)
         {
-            var diagnostics = TryGetString(issue?["diagnostics"]);
-            if (!string.IsNullOrWhiteSpace(diagnostics))
-            {
-                return diagnostics;
-            }
-
-            var detailsText = TryGetString(issue?["details"]?["text"]);
-            if (!string.IsNullOrWhiteSpace(detailsText))
-            {
-                return detailsText;
-            }
-
-            var codingDisplay = (issue?["details"]?["coding"] as JsonArray)?
-                .Select(coding => TryGetString(coding?["display"]))
-                .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
-            if (!string.IsNullOrWhiteSpace(codingDisplay))
-            {
-                return codingDisplay;
-            }
-
-            var code = TryGetString(issue?["code"]);
-            if (!string.IsNullOrWhiteSpace(code))
-            {
-                return code;
-            }
+            text = text.Length == 0 ? $"at {path}" : $"{text} at {path}";
         }
 
-        return null;
+        return text.Length == 0 ? null : text;
     }
+
+    // An issue code or a details coding's code: a short token, nothing a value could hide in.
+    private static readonly Regex OutcomeToken = new(@"^[A-Za-z0-9_.\-]{1,64}$", RegexOptions.Compiled);
+
+    // An element path (Observation.component[0].code); a FHIRPath filter like where(family='Smith') does not match.
+    private static readonly Regex OutcomePath = new(@"^[A-Za-z][A-Za-z0-9_.\[\]]{0,127}$", RegexOptions.Compiled);
 
     private static string? TryGetString(JsonNode? node)
         => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
-
-    private static string Truncate(string text, int maxLength)
-        => text.Length <= maxLength ? text : text[..maxLength] + "…";
 
     /// <summary>
     /// One <c>PUT</c> per record, in the order given (already dependency-ordered by the caller). The pre-write
@@ -871,7 +881,8 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// Observation.focus") rejects it. That used to throw and fail the whole run on one resource. Now:
     /// <list type="bullet">
     /// <item>a per-resource rejection (<see cref="IsRecordLevelRejection"/>) is reported for that record, with the
-    /// server's own reason, and the run goes on;</item>
+    /// server's issue codes and paths (<see cref="DescribeOutcome"/>), and the run goes on — unless no record at
+    /// all was accepted (<see cref="ThrowIfNothingAccepted"/>);</item>
     /// <item>a later record that references one the destination rejected (or that was skipped for this reason) is
     /// not sent at all and is reported naming that reference — it would only be rejected too, or, on a lenient
     /// server, written with a reference to something that isn't there;</item>
@@ -895,7 +906,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         foreach (var record in records)
         {
             var recordLabel = $"{record.ResourceType}/{record.SourceResourceId ?? "unknown"}";
-            ResourceReference? identity = TryParseFhirResource(record, resolvedResourceCache, out var ownType, out var ownResource)
+            ResourceReference? identity = TryParseFhirResource(record, resolvedResourceCache, sourceBaseUrl, out var ownType, out var ownResource)
                 ? new ResourceReference(ownType, ownResource["id"]!.GetValue<string>())
                 : null;
 
@@ -916,7 +927,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                 continue;
             }
 
-            var (resourceType, resourceId, body) = BuildFhirResource(record, resolvedResourceCache);
+            var (resourceType, resourceId, body) = BuildFhirResource(record, resolvedResourceCache, sourceBaseUrl);
             var endpoint = $"{baseUrl}/{resourceType}/{resourceId}";
             using var request = new HttpRequestMessage(HttpMethod.Put, endpoint)
             {
@@ -961,25 +972,30 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             or System.Net.HttpStatusCode.PreconditionFailed
             or System.Net.HttpStatusCode.UnprocessableEntity;
 
-    /// <summary>The server's own reason from an <c>OperationOutcome</c> body, made safe to show; else the bare status.</summary>
+    /// <summary>The server's reason from an <c>OperationOutcome</c> body, as codes and paths (see
+    /// <see cref="DescribeOutcome"/>); else the bare status.</summary>
     private static async Task<string> ReadRejectionReasonAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
-        var fallback = $"{(int)response.StatusCode} {response.ReasonPhrase}".TrimEnd();
-        string? outcomeText = null;
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        return DescribeOutcome(TryParseObject(body)) ?? $"{(int)response.StatusCode} {response.ReasonPhrase}".TrimEnd();
+    }
+
+    private static JsonObject? TryParseObject(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
+
         try
         {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (!string.IsNullOrWhiteSpace(body) && JsonNode.Parse(body) is JsonObject outcome)
-            {
-                outcomeText = ExtractOutcomeText(outcome);
-            }
+            return JsonNode.Parse(body) as JsonObject;
         }
         catch (JsonException)
         {
-            // Not an OperationOutcome (e.g. an HTML error page) — fall back to the bare status.
+            // Not an OperationOutcome (e.g. an HTML error page).
+            return null;
         }
-
-        return SafeErrorText.SanitizeOr(outcomeText, fallback);
     }
 
     /// <summary>
@@ -998,9 +1014,13 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             return;
         }
 
+        // Codes and paths from the OperationOutcome, not the body itself: this message becomes the run's error, and a
+        // server's body can echo the resource it refused.
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var described = DescribeOutcome(TryParseObject(body));
         throw new HttpRequestException(
-            $"FHIR destination {method} '{endpoint}' returned {(int)response.StatusCode} ({response.ReasonPhrase}): {Truncate(body, 600)}");
+            $"FHIR destination {method} '{endpoint}' returned {(int)response.StatusCode} ({response.ReasonPhrase})" +
+            (described is null ? "." : $": {described}"));
     }
 
     /// <summary>
@@ -1011,9 +1031,10 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     /// </summary>
     private static (string ResourceType, string Id, string Body) BuildFhirResource(
         MappedDestinationRecord record,
-        Dictionary<MappedDestinationRecord, (string ResourceType, JsonObject Resource)?> resolvedResourceCache)
+        Dictionary<MappedDestinationRecord, (string ResourceType, JsonObject Resource)?> resolvedResourceCache,
+        string? sourceBaseUrl)
     {
-        if (TryParseFhirResource(record, resolvedResourceCache, out var resourceType, out var resource))
+        if (TryParseFhirResource(record, resolvedResourceCache, sourceBaseUrl, out var resourceType, out var resource))
         {
             var id = resource["id"]!.GetValue<string>();
             return (resourceType, Uri.EscapeDataString(id), resource.ToJsonString(JsonOptions));
@@ -1147,12 +1168,13 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
     private static bool TryParseFhirResource(
         MappedDestinationRecord record,
         Dictionary<MappedDestinationRecord, (string ResourceType, JsonObject Resource)?> resolvedResourceCache,
+        string? sourceBaseUrl,
         out string resourceType,
         out JsonObject resource)
     {
         if (!resolvedResourceCache.TryGetValue(record, out var cached))
         {
-            cached = ParseFhirResource(record);
+            cached = ParseFhirResource(record, sourceBaseUrl);
             resolvedResourceCache[record] = cached;
         }
 
@@ -1168,7 +1190,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         return false;
     }
 
-    private static (string ResourceType, JsonObject Resource)? ParseFhirResource(MappedDestinationRecord record)
+    private static (string ResourceType, JsonObject Resource)? ParseFhirResource(MappedDestinationRecord record, string? sourceBaseUrl)
     {
         if (!string.IsNullOrWhiteSpace(record.SourceJson)
             && JsonNode.Parse(record.SourceJson) is JsonObject parsed
@@ -1209,7 +1231,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             parsed["id"] = id;
 
             // A reference to a resource whose source id is invalid points at the id that resource is written under.
-            RewriteInvalidIdReferences(parsed);
+            RewriteInvalidIdReferences(parsed, sourceBaseUrl);
             StripVersionFromStableCodings(parsed);
 
             return (type, parsed);
@@ -1232,10 +1254,13 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
 
     /// <summary>
     /// Rewrites every relative <c>"reference": "Type/{id}"</c> (optionally <c>/_history/{vid}</c>) whose id is not
-    /// valid FHIR to <see cref="DestinationId"/>. Contained (<c>#</c>), logical (<c>urn:</c>) and absolute
-    /// references are left as they are.
+    /// valid FHIR to <see cref="DestinationId"/>. An absolute reference under <paramref name="sourceBaseUrl"/> is
+    /// one reference resolution already treats as local (<see cref="TryParseReference"/>), so when its id is invalid
+    /// it becomes the relative <c>Type/{DestinationId}</c> too — left absolute it would point back at the source
+    /// server under an id this destination never wrote. Contained (<c>#</c>), logical (<c>urn:</c>) and other
+    /// absolute references are left as they are.
     /// </summary>
-    private static void RewriteInvalidIdReferences(JsonNode? node)
+    private static void RewriteInvalidIdReferences(JsonNode? node, string? sourceBaseUrl)
     {
         switch (node)
         {
@@ -1245,13 +1270,13 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                     if (property.Key == "reference"
                         && property.Value is JsonValue value
                         && value.TryGetValue<string>(out var reference)
-                        && RewrittenInvalidIdReference(reference) is { } rewritten)
+                        && RewrittenInvalidIdReference(reference, sourceBaseUrl) is { } rewritten)
                     {
                         obj[property.Key] = rewritten;
                     }
                     else
                     {
-                        RewriteInvalidIdReferences(property.Value);
+                        RewriteInvalidIdReferences(property.Value, sourceBaseUrl);
                     }
                 }
 
@@ -1259,21 +1284,28 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
             case JsonArray array:
                 foreach (var item in array)
                 {
-                    RewriteInvalidIdReferences(item);
+                    RewriteInvalidIdReferences(item, sourceBaseUrl);
                 }
 
                 break;
         }
     }
 
-    private static string? RewrittenInvalidIdReference(string reference)
+    private static string? RewrittenInvalidIdReference(string reference, string? sourceBaseUrl)
     {
         if (string.IsNullOrEmpty(reference)
             || reference[0] == '#'
-            || reference.StartsWith("urn:", StringComparison.OrdinalIgnoreCase)
-            || reference.Contains("://", StringComparison.Ordinal))
+            || reference.StartsWith("urn:", StringComparison.OrdinalIgnoreCase))
         {
             return null;
+        }
+
+        if (reference.Contains("://", StringComparison.Ordinal))
+        {
+            // Only a reference into this run's source; its relative form is what reference resolution matched.
+            return TryGetSourceRelativeReference(reference, sourceBaseUrl) is { } relative
+                ? RewrittenInvalidIdReference(relative, sourceBaseUrl)
+                : null;
         }
 
         var slash = reference.IndexOf('/');
@@ -1409,7 +1441,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
         var recordByReference = new Dictionary<ResourceReference, MappedDestinationRecord>();
         foreach (var record in recordsList)
         {
-            if (TryParseFhirResource(record, resolvedResourceCache, out var resourceType, out var resource))
+            if (TryParseFhirResource(record, resolvedResourceCache, sourceBaseUrl, out var resourceType, out var resource))
             {
                 recordByReference[new ResourceReference(resourceType, resource["id"]!.GetValue<string>())] = record;
             }
