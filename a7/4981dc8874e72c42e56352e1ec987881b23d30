@@ -1,0 +1,35 @@
+portal/src/app/auth/services/i-user.service.ts
+  s_0302d221bf5ca2::t_366c55b18eab3f 11-12
+portal/src/app/user-management/pages/role-list/role-list.search-focus.spec.ts
+  s_0302d221bf5ca2::t_b8b0594b003bd6 1-139
+portal/src/app/user-management/services/i-role.service.ts
+  s_0302d221bf5ca2::t_3ab2e971f0403c 21-22
+portal/src/app/user-management/pages/user-list/user-list.search-focus.spec.ts
+  s_0302d221bf5ca2::t_934cbffecb4c8f 2,18-20,43-44,53-56,59,71,87,90,93,97,100-101,107,109,112,116,118,120,124,129,131,133,137,139,147
+  s_0302d221bf5ca2::t_8ef895c77a90a0 1,3-17,21-31,38-42,45-52,57-58,60-70,72-86,88-89,91-92,94-96,98-99,102-106,108,110-111,113-115,117,119,121-123,125-128,130,132,134-136,138,140-146,148
+  s_0302d221bf5ca2::t_4578d3a93515f7 32-37
+portal/src/app/user-management/pages/user-list/user-list.component.ts
+  s_0302d221bf5ca2::t_366c55b18eab3f 141-142,161-163,175
+portal/src/app/user-management/pages/role-list/role-list.component.ts
+  s_0302d221bf5ca2::t_3ab2e971f0403c 89-90,96-98,106
+portal/src/app/user-management/services/api-role.service.ts
+  s_0302d221bf5ca2::t_3ab2e971f0403c 2-3,25-27,35-36
+portal/src/app/auth/services/api-user.service.ts
+  s_0302d221bf5ca2::t_366c55b18eab3f 2-3,198-202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a74981dc8874e72c42e56352e1ec987881b23d30",
+  "prompts": {},
+  "sessions": {
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

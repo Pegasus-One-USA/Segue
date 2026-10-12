@@ -1,0 +1,66 @@
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_620cce7e7c0335 352-358
+  s_d1b985c75f92bc::t_6e58a86d512459 343-351
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs
+  s_d1b985c75f92bc::t_5c0278838719d0 881-891
+  s_d1b985c75f92bc::t_a55d6c733b756d 825-828,834
+  s_d1b985c75f92bc::t_390d850e335cce 829-833
+  s_d1b985c75f92bc::t_d1c68eda726a3c 840-843
+tests/FHIRBridge.UnitTests/Scopes/ScopeGeneratorServiceTests.cs
+  s_d1b985c75f92bc::t_1a07792e7ca405 51-76
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicClinicalNoteWriteProfile.cs
+  s_d1b985c75f92bc::t_bc2e7c67e90fb3 137-144
+  s_d1b985c75f92bc::t_a68c75b3acf724 53-61
+  s_d1b985c75f92bc::t_adc477b5ce135a 79-80
+src/FHIRBridge.Application/Services/ScopeGeneratorService.cs
+  s_d1b985c75f92bc::t_8c0ef494ed4103 127-148
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/EhrNoteContent.cs
+  s_d1b985c75f92bc::t_bf5d05222fc1af 29
+  s_d1b985c75f92bc::t_f6b6b86935ecbb 22-23,27,39-40,51-52,54,56,58,60-78
+  s_d1b985c75f92bc::t_a37f101a1028a5 1-3,5-21,24-26,28,30-38,41-50,53,55,57,59,79-157
+  s_d1b985c75f92bc::t_010af3da2f9ba5 4
+tests/FHIRBridge.UnitTests/EhrWriteBack/MappedEhrWriteBackDestinationWriterTests.cs
+  s_d1b985c75f92bc::t_ad97951e50df53 433,438
+  s_d1b985c75f92bc::t_252638f39fb78e 505-524
+  s_d1b985c75f92bc::t_9bfe4a5f26b413 431-432,434-437,439-504,547-598
+  s_d1b985c75f92bc::t_82d5041764910e 525-546
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_d1b985c75f92bc::t_60c941dd0936c7 267-327
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/MappedEhrWriteBackDestinationWriter.cs
+  s_d1b985c75f92bc::t_b537701a49ea4e 235
+  s_d1b985c75f92bc::t_a883153c6164ac 221-223,233-234,236-246
+  s_d1b985c75f92bc::t_6c7f889f6d4c3b 88-96
+  s_d1b985c75f92bc::t_e978f8e274a23a 109
+  s_d1b985c75f92bc::t_655c9eb215a184 224-232
+  s_d1b985c75f92bc::t_55d7f0104a75d3 653-655
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_d1b985c75f92bc::t_46c380028c2a16 127-133
+  s_d1b985c75f92bc::t_43ceeda49b7b2f 23-24,34-36,45-46,252-253
+  s_d1b985c75f92bc::t_c459339c6d24fc 207-239,241,249-251
+tests/FHIRBridge.Runtime.UnitTests/Workflows/EhrWriteBackDestinationNodeExecutorTests.cs
+  s_d1b985c75f92bc::t_1a48f81cab6e9c 112-136
+  s_d1b985c75f92bc::t_f7fd08e1f6c699 28-36
+  s_d1b985c75f92bc::t_1edbdae762f236 41-42,50-54
+portal/src/app/execution-history/models/ehr-write-report.ts
+  s_d1b985c75f92bc::t_78a53c5973f163 171
+  s_d1b985c75f92bc::t_5b6268b8ceb5bc 175-177
+portal/src/app/execution-history/models/ehr-write-report.spec.ts
+  s_d1b985c75f92bc::t_6941172be93db3 101-103,105-106
+  s_d1b985c75f92bc::t_3c356e0c858078 104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bccb52bdcd6ae059f71c1281d85682ec724d452a",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,111 @@
+src/FHIRBridge.Application/Abstractions/Persistence/ITabularSqlConnectionRepository.cs
+  s_d1b985c75f92bc::t_df78bc32de08ca 1-22
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_d1b985c75f92bc::t_df78bc32de08ca 48
+src/FHIRBridge.Application/Services/Tabular/TabularSourceService.cs
+  s_d1b985c75f92bc::t_605f5b394954cd 41-42,298-405
+  s_d1b985c75f92bc::t_a18e6311025936 32-39,51,66-67,70,136-140,147-150,152-262
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-database-editor/tabular-database-editor.component.html
+  s_d1b985c75f92bc::t_7858cd861764d3 1-29
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-source-form.component.spec.ts
+  s_d1b985c75f92bc::t_41a7602de67b9c 1-76
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-source-form.component.ts
+  s_d1b985c75f92bc::t_e1b41c2c850a57 1,7-8,10-11,14-17,20-33,36-40,45,47,59,63,65-71,73-75,77-81,84,95-98,101-104,107-112,115-117,119-121,124-126,129-140,142-163,169-181,186,191,193-197,199-204,206,210-215,218-247,249-278,282,290-318,320-321,324-328
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-csv-files/tabular-csv-files.component.ts
+  s_d1b985c75f92bc::t_54742c6ba27e9e 1-43
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_954ac68a2e43b2 426-439
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-stream-card/tabular-stream-card.component.ts
+  s_d1b985c75f92bc::t_f05ba3a027965f 1-41
+src/FHIRBridge.Application/Services/Tabular/TabularSourceSettings.cs
+  s_d1b985c75f92bc::t_2f9d3cc2072b8a 23-26,38
+src/FHIRBridge.Infrastructure/Tabular/TabularRowReader.cs
+  s_d1b985c75f92bc::t_8264d33f330854 10,27-31,59-63,71-76,85-87,110-138,183,199-288,317-318
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.html
+  s_d1b985c75f92bc::t_aff1e9bae7d6a5 267-269
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-source-form.component.html
+  s_d1b985c75f92bc::t_93d9ec84187e24 11,19,23-24,28-29,31,34,36,38,40-41,45-62,66-68,71-75,77-78
+src/FHIRBridge.Infrastructure/Persistence/InMemoryTabularSqlConnectionRepository.cs
+  s_d1b985c75f92bc::t_df78bc32de08ca 1-31
+src/FHIRBridge.Application/Services/Tabular/TabularStreams.cs
+  s_d1b985c75f92bc::t_c15c4db2e1e4b1 1-132
+tests/FHIRBridge.UnitTests/Tabular/TabularStreamsTests.cs
+  s_d1b985c75f92bc::t_15ae7da752d4ba 67-70,75-76,78-79,124-180
+  s_d1b985c75f92bc::t_ddfcae632b3f8b 190,214-215,223,247,252
+  s_d1b985c75f92bc::t_f9e3f476763c56 1-66,71-74,77,80-123,181-189,191-213,216-222,224-246,248-251,253-263
+src/FHIRBridge.Infrastructure/Persistence/Configurations/TabularSqlConnectionConfiguration.cs
+  s_d1b985c75f92bc::t_f16560433649a8 1-24
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-database-picker/tabular-database-picker.component.html
+  s_d1b985c75f92bc::t_b4ae4355e84083 1-21
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-csv-files/tabular-csv-files.component.html
+  s_d1b985c75f92bc::t_51e978afc7e2c6 1-13
+portal/src/app/core/api-endpoints.ts
+  s_d1b985c75f92bc::t_dca9aef1bd7ba4 199-201
+src/Api/FHIRBridge.Api/Controllers/V1/TabularSourcesController.cs
+  s_d1b985c75f92bc::t_a18e6311025936 80-107
+  s_d1b985c75f92bc::t_cccab353b2ed15 119-125
+portal/src/app/source-connections/components/database-connections-panel/database-connections-panel.component.html
+  s_d1b985c75f92bc::t_c4cf921dcf5517 1-52
+portal/src/app/source-connections/pages/source-connection-list/source-connection-list.component.ts
+  s_d1b985c75f92bc::t_aff1e9bae7d6a5 35-36,50
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261008062237_AddTabularSqlConnections.cs
+  s_d1b985c75f92bc::t_763803c24befcb 1-46
+src/FHIRBridge.Application/Abstractions/Tabular/ITabularRowReader.cs
+  s_d1b985c75f92bc::t_3f8ea185f242df 26-32
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_d1b985c75f92bc::t_763803c24befcb 3236-3280
+portal/src/app/source-connections/components/database-connections-panel/database-connections-panel.component.scss
+  s_d1b985c75f92bc::t_2c66fb1b980db9 1-93
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-form-shared.scss
+  s_d1b985c75f92bc::t_aff1e9bae7d6a5 138-188
+src/FHIRBridge.Domain/Entities/TabularSqlConnection.cs
+  s_d1b985c75f92bc::t_bf1422d1fb35e3 1-2
+  s_d1b985c75f92bc::t_f16560433649a8 3-51
+src/FHIRBridge.Infrastructure/Persistence/EfTabularSqlConnectionRepository.cs
+  s_d1b985c75f92bc::t_df78bc32de08ca 1-39
+src/FHIRBridge.Application/DTOs/TabularSourceDtos.cs
+  s_d1b985c75f92bc::t_a18e6311025936 13-15,17-31
+  s_d1b985c75f92bc::t_5724e159b4b208 57-86
+  s_d1b985c75f92bc::t_6910950080e374 56
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Catalog/DefaultWorkflowNodeCatalog.cs
+  s_d1b985c75f92bc::t_a5f5d26a170158 53
+portal/src/app/services/tabular-source.service.ts
+  s_d1b985c75f92bc::t_d6dd82869bd72c 17,22-30,56-92,94,109-133,143-147
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TabularSourceNodeExecutor.cs
+  s_d1b985c75f92bc::t_a5f5d26a170158 18-21,55-60,90-175,185-186,192,197
+tests/FHIRBridge.UnitTests/Tabular/TabularRowReaderDatabaseTests.cs
+  s_d1b985c75f92bc::t_785178d464abdd 1-122
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261008062237_AddTabularSqlConnections.Designer.cs
+  s_d1b985c75f92bc::t_763803c24befcb 1-6655
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-database-editor/tabular-database-editor.component.ts
+  s_d1b985c75f92bc::t_21b052689bee3f 2-24,26-76
+  s_d1b985c75f92bc::t_7921a4025bda48 1,25
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-database-picker/tabular-database-picker.component.ts
+  s_d1b985c75f92bc::t_60088e4d64b0d2 1-75
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_d1b985c75f92bc::t_df78bc32de08ca 239,348
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-entry.model.ts
+  s_d1b985c75f92bc::t_7921a4025bda48 1-9
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-stream-card/tabular-stream-card.component.html
+  s_d1b985c75f92bc::t_8acf68d6e88b70 1-75
+tests/FHIRBridge.Runtime.UnitTests/Workflows/TabularSourceNodeExecutorTests.cs
+  s_d1b985c75f92bc::t_4bb39c50a2260e 41-43,46-47,51,60-61,63-65,68-79,154-235
+portal/src/app/source-connections/components/database-connections-panel/database-connections-panel.component.ts
+  s_d1b985c75f92bc::t_698160fd042e46 1-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a7a0b9f2c8eff00fa09e51a62642fbfa53ab36d2",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

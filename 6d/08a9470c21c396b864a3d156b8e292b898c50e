@@ -1,0 +1,29 @@
+tests/FHIRBridge.Api.IntegrationTests/run-against-postgres.ps1
+  s_d1b985c75f92bc::t_529babec4bede3 32-35
+tests/FHIRBridge.Api.IntegrationTests/Tests/EhrWriteBackPermissionTests.cs
+  s_d1b985c75f92bc::t_cc78dc8acb20d4 18-19
+  s_d1b985c75f92bc::t_9143ec1c94c54e 20
+  s_d1b985c75f92bc::t_ece5ce75c37189 1-17,21-193
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_6f8196797a4f68 78-79,86-91,465-470,1243-1248,1296-1304,1670-1677,1745-1754,2041-2045,2077-2084,2723-2724,2734-2738,3641-3726
+tests/FHIRBridge.Api.IntegrationTests/ApiFixture.cs
+  s_d1b985c75f92bc::t_cacc099129dfaa 190
+tests/FHIRBridge.Api.IntegrationTests/TestHelpers/DatabaseFactAttribute.cs
+  s_d1b985c75f92bc::t_ece5ce75c37189 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "6d08a9470c21c396b864a3d156b8e292b898c50e",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicOptInWriteProfiles.cs
+  s_d1b985c75f92bc::t_b75ba3d5e0b0b7 599
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/EhrWrite/AthenaOneEhrWriteChannel.cs
+  s_d1b985c75f92bc::t_65d3809cbf2aa5 71,106,240-255
+  s_d1b985c75f92bc::t_1828cd624ecdaa 256-257
+tests/FHIRBridge.Runtime.UnitTests/Workflows/VendorEhrWriteChannelTests.cs
+  s_d1b985c75f92bc::t_4588cf17bc5e00 120-128
+  s_d1b985c75f92bc::t_ad90675117191a 119
+tests/FHIRBridge.UnitTests/EhrWriteBack/TestRunAndOptInWriteBackTests.cs
+  s_d1b985c75f92bc::t_5ae0c4c836dbea 171-203
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_05aeeff194160b 656-658
+portal/src/app/execution-history/models/ehr-write-report.ts
+  s_d1b985c75f92bc::t_b75ba3d5e0b0b7 234
+tests/FHIRBridge.Runtime.UnitTests/Workflows/AthenaOneTestServerTests.cs
+  s_d1b985c75f92bc::t_50b455d178809b 78-96
+  s_d1b985c75f92bc::t_269387b2610c23 97-113
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/EhrWrite/AthenaOneTestServer.cs
+  s_d1b985c75f92bc::t_764c7e8d4b4952 223-225,257,259
+  s_d1b985c75f92bc::t_6cc2c1b645aa87 27,256,258,260
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e5355139a87b3da29c35c4eff75f8eca12eb60c4",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

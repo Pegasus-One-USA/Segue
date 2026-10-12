@@ -1,0 +1,26 @@
+portal/src/app/source-connections/services/api-source-connection.service.ts
+  s_3ed121661efe12::t_eed0e546109437 71-72,74-75
+portal/src/app/destination-connections/pages/destination-connection-list/destination-connection-list.component.ts
+  s_3ed121661efe12::t_eed0e546109437 243-244
+portal/src/app/destination-connections/services/destination-configuration.service.ts
+  s_3ed121661efe12::t_eed0e546109437 74-79
+portal/src/app/source-connections/pages/source-connection-list/connection-lists.search-focus.spec.ts
+  s_3ed121661efe12::t_d2a16bfd5d7cef 11-12,28
+  s_3ed121661efe12::t_40f92a850c0644 1-10,13-27,29-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "e5c6f16e68700e0b4dde6c5a7b86ecd10185fe85",
+  "prompts": {},
+  "sessions": {
+    "s_3ed121661efe12": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b59933f-9a05-4a37-838a-9f358a20502f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.resource-pretick.spec.ts
+  s_d1b985c75f92bc::t_21ea02ce978089 1-194
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_d1b985c75f92bc::t_96760a6bbb95d6 2492-2493,2497-2510,2513,2521-2527
+  s_d1b985c75f92bc::t_2156463c3855fc 40,2511-2512,2514-2520
+  s_d1b985c75f92bc::t_8f1d0e6322a1b8 668-670,2528-2529
+  s_d1b985c75f92bc::t_268890c497d433 1348-1354
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_d1b985c75f92bc::t_7b3678d934de7f 327-332,334,336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8ff9be1d0b158ba934f344958438f692a1c5b2b1",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

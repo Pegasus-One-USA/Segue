@@ -1,0 +1,50 @@
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_d1b985c75f92bc::t_4f2e28c1a11156 95-100
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceLogger.cs
+  s_d1b985c75f92bc::t_652a89cbe3a8fe 136
+  s_d1b985c75f92bc::t_93627f9593e35c 301-319
+  s_d1b985c75f92bc::t_e33ae987eb79a3 1,37,51,53,60,71,78,84,86-87,94,102,109,117,122,128,133,140,189,198,203,212,220,235,240,250,260,268,273,280,287,298-299
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_d1b985c75f92bc::t_aaf5d93857a6f2 55-59
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowRunStore.cs
+  s_d1b985c75f92bc::t_c20c5fbbff8d71 33-45
+  s_d1b985c75f92bc::t_19b21811c2cdae 32
+tests/FHIRBridge.Runtime.UnitTests/Workflows/InterruptedWorkflowRunTests.cs
+  s_d1b985c75f92bc::t_40e18c1ed19a87 1-77
+src/FHIRBridge.Infrastructure/Persistence/Workflows/InterruptedWorkflowRunReconciler.cs
+  s_d1b985c75f92bc::t_5cefa913c661e1 1-65
+src/Api/FHIRBridge.Api/Program.cs
+  s_d1b985c75f92bc::t_f99eb7164e2c49 287-293
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_d1b985c75f92bc::t_f991b42ab17690 426-431,437
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowRunStore.cs
+  s_d1b985c75f92bc::t_afee33b77000cb 108-137
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/WorkflowRunHosts.cs
+  s_d1b985c75f92bc::t_8c3a47a45bd807 1-28
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_2822ce22ab499f 1911,1913-1915,1917-1935
+  s_d1b985c75f92bc::t_c886f5a3c5df2b 2319
+  s_d1b985c75f92bc::t_04654659d98c7e 2242,2246-2247
+  s_d1b985c75f92bc::t_c14afd4292558a 2487,2515
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowRunStore.cs
+  s_d1b985c75f92bc::t_b7485f200e7d77 40-60
+src/Api/FHIRBridge.Api/Controllers/V1/GovernanceController.cs
+  s_d1b985c75f92bc::t_5ceb5552fc0bfb 92-94
+  s_d1b985c75f92bc::t_7a9da97c5d1521 102-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2598b84aee85d8e9bbdd01abfa25aced5abfc8c6",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

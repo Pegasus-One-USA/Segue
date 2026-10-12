@@ -1,0 +1,34 @@
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_3ed121661efe12::t_e185db553064df 102-103,117,119-123,129,134-141
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.component.ts
+  s_3ed121661efe12::t_e185db553064df 102-103,117,119-123,129,134-141
+portal/src/app/user/components/user-menu/user-menu.component.ts
+  s_3ed121661efe12::t_e185db553064df 4,12,30,89-93,95-97,102,106-119
+portal/src/app/core/services/unsaved-changes-prompt.service.ts
+  s_3ed121661efe12::t_838048471bf551 42-44
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-create-table-modal.layout.spec.ts
+  s_3ed121661efe12::t_575571197c111e 107-129
+  s_3ed121661efe12::t_d50eee5f314b10 106
+portal/src/app/user/components/user-menu/user-menu.sign-out-unsaved.spec.ts
+  s_3ed121661efe12::t_e4980eaad5906d 2-3,7,11,14,16-18,21-22,24-29,31-32,37,39,41-42,45-46,49,55-57,60,64-67,69,74-77,79,82-93
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_3ed121661efe12::t_838048471bf551 131-133
+portal/src/app/components/node-library/destination-wizard/field-mapping/field-mapping-join-popover.component.ts
+  s_3ed121661efe12::t_838048471bf551 106-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "73c0533b6cc3022d8f85639e93b6dd37821846e9",
+  "prompts": {},
+  "sessions": {
+    "s_3ed121661efe12": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b59933f-9a05-4a37-838a-9f358a20502f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

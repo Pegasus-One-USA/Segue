@@ -1,0 +1,25 @@
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorDestinationRestrictionTests.cs
+  s_d1b985c75f92bc::t_5d0b82fb94280f 73-132
+tests/FHIRBridge.Api.IntegrationTests/Tests/WorkflowResourceTypeSubsetTests.cs
+  s_d1b985c75f92bc::t_b143883243574d 97-106
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_ce70dd79d163de 94-100
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_d1b985c75f92bc::t_f0d40eb6f6400a 468,474-491,857-862,902
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4a4768175ebeb6aecb8e43c022224bf6f4631433",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

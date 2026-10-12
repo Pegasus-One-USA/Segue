@@ -1,0 +1,60 @@
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_4134af33ce8040 766-767
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_d1b985c75f92bc::t_4b03a3497ff802 20,67
+portal/src/app/services/live-ehr-write-targets.util.spec.ts
+  s_d1b985c75f92bc::t_41647330070ecc 1-58
+src/Api/FHIRBridge.Api/Workflows/WorkflowSummaryModels.cs
+  s_d1b985c75f92bc::t_4134af33ce8040 48-52
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/LiveEhrWriteTargets.cs
+  s_d1b985c75f92bc::t_b41fd23af9fb4c 1-64
+tests/FHIRBridge.Runtime.UnitTests/Workflows/LiveEhrWriteTargetsTests.cs
+  s_d1b985c75f92bc::t_7c9eea156b6edb 1-68
+tests/FHIRBridge.Api.IntegrationTests/Tests/WorkflowSummaryLiveEhrWriteTests.cs
+  s_d1b985c75f92bc::t_0f3ef6f84b3f7b 1-88
+portal/src/app/services/live-ehr-write-targets.util.ts
+  s_d1b985c75f92bc::t_4c5cd820bb4de9 3-77
+  s_d1b985c75f92bc::t_96b7347a9fe6d8 1-2
+portal/src/app/components/shared/live-ehr-write-badge/live-ehr-write-badge.component.ts
+  s_d1b985c75f92bc::t_84022f9b917f9c 1-17
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.spec.ts
+  s_d1b985c75f92bc::t_61877f9d6a3b7e 1-167
+portal/src/app/services/live-ehr-save-confirm.service.spec.ts
+  s_d1b985c75f92bc::t_41647330070ecc 1-56
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_d1b985c75f92bc::t_fd81d7338e7972 21-26,74-78,391-407,409-411,441,582,1108,1243
+portal/src/app/services/ehr-live-write-check.service.ts
+  s_d1b985c75f92bc::t_37397bc862da9a 25-27
+  s_d1b985c75f92bc::t_c9c4ae1955b79c 4,6-7,9-12,14,36,38-40
+portal/src/app/services/ehr-live-write-check.service.spec.ts
+  s_d1b985c75f92bc::t_bd75b8eaaf1b24 12,19,51-57
+portal/src/app/components/shared/live-ehr-write-badge/live-ehr-write-badge.component.spec.ts
+  s_d1b985c75f92bc::t_e222611d919484 1-22
+portal/src/app/components/shared/live-ehr-write-badge/live-ehr-write-badge.component.scss
+  s_d1b985c75f92bc::t_4b03a3497ff802 1
+  s_d1b985c75f92bc::t_cf7021b19c18c6 2-5
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_d1b985c75f92bc::t_4b03a3497ff802 309
+portal/src/app/services/workflow-api.service.ts
+  s_d1b985c75f92bc::t_4b03a3497ff802 366-368
+portal/src/app/services/live-ehr-save-confirm.service.ts
+  s_d1b985c75f92bc::t_9992cca4de3c76 1-34
+portal/src/app/components/shared/live-ehr-write-badge/live-ehr-write-badge.component.html
+  s_d1b985c75f92bc::t_050f299f17c246 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "49371d5647fa6b488f98f95f6a7b5ebbd146288d",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

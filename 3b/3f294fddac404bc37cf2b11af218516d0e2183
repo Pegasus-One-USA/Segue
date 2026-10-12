@@ -1,0 +1,55 @@
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_d1b985c75f92bc::t_73129776ca4d46 378-380
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-dataset-identity/tabular-dataset-identity.component.ts
+  s_d1b985c75f92bc::t_8e1a5fd7178da6 1-21
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-csv-source-form/tabular-csv-source-form.component.ts
+  s_d1b985c75f92bc::t_b761c7bf0ff5cf 1-43
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-sql-source-form/tabular-sql-source-form.component.html
+  s_d1b985c75f92bc::t_5bf8f438edede4 1-23,25-61
+  s_d1b985c75f92bc::t_bf0dd5be320dfd 24
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-dataset-key.ts
+  s_d1b985c75f92bc::t_d1f9deb3506f80 13-17,19-22
+  s_d1b985c75f92bc::t_4ce324cadd92e8 1-12,18,23-31
+portal/src/app/services/workflow-graph-mapper-v2.tabular-source.spec.ts
+  s_d1b985c75f92bc::t_4a210dfb80942d 1-63
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-csv-source-form/tabular-csv-source-form.component.spec.ts
+  s_d1b985c75f92bc::t_58dbdba5cab8dc 1-76
+portal/src/app/components/node-library-v2/source-node-vendor.util.ts
+  s_d1b985c75f92bc::t_73129776ca4d46 17
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-sql-source-form/tabular-sql-source-form.component.ts
+  s_d1b985c75f92bc::t_86ea8b2cb6efc7 1-37
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-source-form-base.ts
+  s_d1b985c75f92bc::t_a12e216e413c3e 1-351
+portal/src/app/services/phase-config-v2.service.ts
+  s_d1b985c75f92bc::t_73129776ca4d46 49-51
+portal/src/app/components/node-library-v2/source-form.registry.ts
+  s_d1b985c75f92bc::t_bf0dd5be320dfd 11-12,30-31
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-dataset-identity/tabular-dataset-identity.component.html
+  s_d1b985c75f92bc::t_faabfbe051dfb5 1-12
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-csv-source-form/tabular-csv-source-form.component.html
+  s_d1b985c75f92bc::t_5bf8f438edede4 1-23,25-52,54-60
+  s_d1b985c75f92bc::t_bf0dd5be320dfd 24,53
+portal/src/app/data/sources-v2.data.ts
+  s_d1b985c75f92bc::t_bf0dd5be320dfd 18-21
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-dataset-key.spec.ts
+  s_d1b985c75f92bc::t_d92aee91c1a7f6 1-11,17,32-39
+  s_d1b985c75f92bc::t_d1f9deb3506f80 12-16,18-31
+portal/src/app/components/node-library-v2/tabular-source-form/tabular-sql-source-form/tabular-sql-source-form.component.spec.ts
+  s_d1b985c75f92bc::t_48fa22fef1876d 1-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b3f294fddac404bc37cf2b11af218516d0e2183",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

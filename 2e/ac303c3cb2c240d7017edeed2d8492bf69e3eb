@@ -1,0 +1,19 @@
+portal/src/app/components/node-library-v2/destination-wizard/field-mapping/field-mapping-join-popover.unsaved-edits.spec.ts
+  s_0302d221bf5ca2::t_d90d5280e8701c 24,30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2eac303c3cb2c240d7017edeed2d8492bf69e3eb",
+  "prompts": {},
+  "sessions": {
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

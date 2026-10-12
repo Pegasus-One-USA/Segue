@@ -1,0 +1,25 @@
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_d1b985c75f92bc::t_cdef4c1eeb00fe 188-192
+src/FHIRBridge.Infrastructure/Governance/EfGovernanceQueryService.cs
+  s_d1b985c75f92bc::t_b2facdec5e8064 278-284
+tests/FHIRBridge.UnitTests/Governance/EfGovernanceQueryServiceSearchErrorLogsTests.cs
+  s_d1b985c75f92bc::t_1da33062e80b10 73-91
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_d1b985c75f92bc::t_d3e26ba350131e 87-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7460062247ed17aa66312ce58275fd1bd8dcea11",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

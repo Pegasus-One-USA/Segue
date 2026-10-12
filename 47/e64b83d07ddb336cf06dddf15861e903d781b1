@@ -1,0 +1,25 @@
+portal/src/app/user/components/user-menu/user-menu.component.html
+  s_0302d221bf5ca2::t_610dce0b146e3b 9,16,40
+portal/src/app/user/components/user-menu/user-menu.focused-layout.spec.ts
+  s_0302d221bf5ca2::t_3bcde4d569804f 1-83
+portal/src/app/user/components/user-menu/user-menu.component.scss
+  s_0302d221bf5ca2::t_610dce0b146e3b 89-90,92-101
+portal/src/app/user/components/user-menu/user-menu.component.ts
+  s_0302d221bf5ca2::t_610dce0b146e3b 2,50-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "47e64b83d07ddb336cf06dddf15861e903d781b1",
+  "prompts": {},
+  "sessions": {
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

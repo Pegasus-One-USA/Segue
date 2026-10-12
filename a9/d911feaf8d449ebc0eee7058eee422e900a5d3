@@ -1,0 +1,25 @@
+src/FHIRBridge.Domain/Fhir/PatientCompartmentResourceTypes.cs
+  s_d1b985c75f92bc::t_488b08abfc6765 53-58
+src/FHIRBridge.Application/Rbac/RbacSeedData.cs
+  s_d1b985c75f92bc::t_4e9dde19a00731 153-159
+tests/FHIRBridge.UnitTests/Sources/PatientCompartmentResourceTypesTests.cs
+  s_d1b985c75f92bc::t_6eb694032fe3ce 1-31
+tests/FHIRBridge.UnitTests/Security/WorkflowRunPermissionPolicyTests.cs
+  s_d1b985c75f92bc::t_7e2c452f306bc9 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a9d911feaf8d449ebc0eee7058eee422e900a5d3",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

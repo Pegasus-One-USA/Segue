@@ -1,0 +1,80 @@
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_d1b985c75f92bc::t_caf9e12be201f2 1931-1937
+  s_d1b985c75f92bc::t_977ad9df623c29 1922-1924,1926,1928-1930,1938-1942,1944-1945
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowServiceCollectionExtensions.cs
+  s_d1b985c75f92bc::t_4ff5ab91f11c9d 22
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_d1b985c75f92bc::t_9e0572f66cac94 95-97
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/InMemoryWorkflowRunStore.cs
+  s_d1b985c75f92bc::t_d42145ae0c17e9 40-64,68,70,73-83,85,88-89
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_d1b985c75f92bc::t_398db20d28adf5 5719-5721,5736-5742,5774-5775
+tests/FHIRBridge.UnitTests/Tabular/TabularSourceTests.cs
+  s_d1b985c75f92bc::t_cef29a46204570 248
+tests/FHIRBridge.UnitTests/EhrWriteBack/MappedEhrWriteBackDestinationWriterTests.cs
+  s_d1b985c75f92bc::t_a0a1408abc1e27 730-767,772-779
+  s_d1b985c75f92bc::t_26583a6c562e43 768-771
+src/FHIRBridge.Infrastructure/Tabular/TabularSqlGuard.cs
+  s_d1b985c75f92bc::t_7209e29c035539 1-205
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_d1b985c75f92bc::t_d42145ae0c17e9 151-153,166-167
+tests/FHIRBridge.UnitTests/Tabular/TabularReviewFixTests.cs
+  s_d1b985c75f92bc::t_61a2b3cbffc840 1-125
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261007032654_AddWorkflowRunLease.Designer.cs
+  s_d1b985c75f92bc::t_398db20d28adf5 1-6568
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Storage/IWorkflowRunStore.cs
+  s_d1b985c75f92bc::t_d42145ae0c17e9 34-36,38-52,56-60
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.Write.cs
+  s_d1b985c75f92bc::t_d4cc6065ff6d3f 6,21-27,35-41,55-58,85-86,88-90,135-140,147-152,281-287,289-290,305-311,313-322,324-325,328,330-333,335-344,346-347,349,351-361,365-374,377-378,380-381,384-388,408-417,472-480,674-676
+  s_d1b985c75f92bc::t_3aeb3615c2b9d0 5
+tests/FHIRBridge.Runtime.UnitTests/Connectors/FhirWriteClientTests.cs
+  s_d1b985c75f92bc::t_0b893c654a65d4 231-285,317-325
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/MappedEhrWriteBackDestinationWriter.cs
+  s_d1b985c75f92bc::t_79e55b2bd020a5 20-22,107,143-149,231-237,422-459,553-562,719-722,743,745-746
+docs/backend/20-epic-r4-write-back.md
+  s_d1b985c75f92bc::t_156290b4d0a42a 381-390,393-395
+src/FHIRBridge.Infrastructure/Persistence/Workflows/SqlWorkflowRunStore.cs
+  s_d1b985c75f92bc::t_a7a135c538cbd3 108-111,114-126,128-140,142-146,151,153,157,160-166
+src/FHIRBridge.Application/Services/Tabular/TabularFhirTemplateEngine.cs
+  s_d1b985c75f92bc::t_5ea2299878011c 24-25,27-29,98-104,208,223-224,230-236,299-303,305-307,311-323,357-359
+src/FHIRBridge.Application/Abstractions/Destinations/IEhrWriteChannel.cs
+  s_d1b985c75f92bc::t_deac4edf55a924 79-86
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261007032623_AddWorkflowRunLease.Designer.cs
+  s_d1b985c75f92bc::t_398db20d28adf5 1-6605
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261007032654_AddWorkflowRunLease.cs
+  s_d1b985c75f92bc::t_398db20d28adf5 1-59
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/ActiveWorkflowRuns.cs
+  s_d1b985c75f92bc::t_21d87d977a1a19 1-89
+tests/FHIRBridge.UnitTests/Workflows/WorkflowRunLeaseTests.cs
+  s_d1b985c75f92bc::t_a9834dc7754c78 1-136
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_d1b985c75f92bc::t_4ff5ab91f11c9d 26,41-42,56,121-127,287-288
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261007032623_AddWorkflowRunLease.cs
+  s_d1b985c75f92bc::t_398db20d28adf5 1-59
+src/FHIRBridge.Infrastructure/Tabular/TabularRowReader.cs
+  s_d1b985c75f92bc::t_ac5a82789a8176 19-23,27,34,39-40,43-53,73-77,82,99,105-106,109-119,185-186,213-214
+src/Api/FHIRBridge.Api/Program.cs
+  s_d1b985c75f92bc::t_9e0572f66cac94 287-289
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_d1b985c75f92bc::t_398db20d28adf5 5682-5684,5699-5705,5737-5738
+src/FHIRBridge.Infrastructure/Persistence/Workflows/WorkflowRunLeaseService.cs
+  s_d1b985c75f92bc::t_717ae0a3c57f8c 1-105
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_d1b985c75f92bc::t_d42145ae0c17e9 81-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ccf3791af0c3d02452c4e30b193415422a0f0d0c",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
