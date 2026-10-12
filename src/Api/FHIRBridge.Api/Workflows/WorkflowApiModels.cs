@@ -85,7 +85,11 @@ public sealed record WorkflowRunRequest(
     // Group ID / Search Criteria for an interactive (Standalone / Patient) workflow. The hosted /external-run page echoes it
     // back here after the EHR sign-in. It is the proof that an authenticated trigger chose those values, so - unlike the
     // plain GroupIdOverride / SearchCriteriaOverride above - it needs no signed-in portal user.
-    string? ExternalOverridesToken = null);
+    string? ExternalOverridesToken = null,
+    // "Execute V2": FHIR search criteria per resource type for THIS run (resource type -> criteria), replacing the saved
+    // per-resource-type criteria of each type named; a type not named keeps its saved criteria. Portal users only, like
+    // the other overrides above.
+    Dictionary<string, string>? ResourceCriteriaOverrides = null);
 
 public sealed record WorkflowRunStatusResponse(Guid WorkflowRunId, string Status, string? CorrelationId = null);
 

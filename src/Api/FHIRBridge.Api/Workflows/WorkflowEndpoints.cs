@@ -1706,16 +1706,21 @@ public static class WorkflowEndpoints
             // is never started with criteria the caller did not ask for.
             var effectiveGroupIdOverride = request?.GroupIdOverride;
             var effectiveSearchCriteriaOverride = request?.SearchCriteriaOverride;
+            IReadOnlyDictionary<string, string>? effectiveResourceCriteria = null;
             if (!string.IsNullOrWhiteSpace(request?.ExternalOverridesToken))
             {
                 if (!ExternalRunOverridesToken.TryRead(
-                        dataProtectionProvider, request.ExternalOverridesToken, workflowId, out var tokenGroupId, out var tokenSearchCriteria))
+                        dataProtectionProvider, request.ExternalOverridesToken, workflowId,
+                        out var tokenGroupId, out var tokenSearchCriteria, out var tokenResourceCriteria))
                 {
                     return Results.BadRequest(new { error = "invalid_overrides_token" });
                 }
 
                 effectiveGroupIdOverride = tokenGroupId;
                 effectiveSearchCriteriaOverride = tokenSearchCriteria;
+                // Only ever sourced from the signed token, never from the request body.
+                TryParseResourceCriteria(tokenResourceCriteria, out var tokenCriteriaMap);
+                effectiveResourceCriteria = tokenCriteriaMap;
             }
 
             // "Execute V2" per-run overrides (another EHR Endpoint, Group ID, Search Criteria) are an operator action:
@@ -1724,7 +1729,8 @@ public static class WorkflowEndpoints
             if (request is { } overrideRequest
                 && ((overrideRequest.TargetEhrEndpointId is { } requestedTarget && requestedTarget != Guid.Empty)
                     || overrideRequest.GroupIdOverride is not null
-                    || overrideRequest.SearchCriteriaOverride is not null))
+                    || overrideRequest.SearchCriteriaOverride is not null
+                    || overrideRequest.ResourceCriteriaOverrides is { Count: > 0 }))
             {
                 if (!isPortalUserCaller)
                 {
@@ -1735,6 +1741,17 @@ public static class WorkflowEndpoints
                 if (RunOverridesTooLong(overrideRequest.GroupIdOverride, overrideRequest.SearchCriteriaOverride))
                 {
                     return Results.BadRequest(new { error = "Group ID must be at most 200 characters and search criteria at most 4000." });
+                }
+
+                if (overrideRequest.ResourceCriteriaOverrides is { Count: > 0 } requestedResourceCriteria)
+                {
+                    if (!TryParseResourceCriteria(JsonSerializer.Serialize(requestedResourceCriteria), out var parsedResourceCriteria))
+                    {
+                        return Results.BadRequest(new { error = ResourceCriteriaErrorDescription });
+                    }
+
+                    // The signed external token, when present, is the only other source and takes precedence below.
+                    effectiveResourceCriteria ??= parsedResourceCriteria;
                 }
 
                 var targetError = await ValidateEhrEndpointForRunAsync(
@@ -1877,8 +1894,9 @@ public static class WorkflowEndpoints
                     ? targetEhrEndpointId.ToString()
                     : null,
                 sourceOverrides: effectiveGroupIdOverride is not null || effectiveSearchCriteriaOverride is not null
+                    || effectiveResourceCriteria is not null
                     ? new FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides(
-                        effectiveGroupIdOverride?.Trim(), effectiveSearchCriteriaOverride?.Trim())
+                        effectiveGroupIdOverride?.Trim(), effectiveSearchCriteriaOverride?.Trim(), effectiveResourceCriteria)
                     : null);
 
             if (request?.Async == true)
@@ -1984,10 +2002,20 @@ public static class WorkflowEndpoints
                 }
             }
 
+            // The resource types mapped on the workflow's destination nodes: what the Execute V2 dialog offers in its
+            // per-resource criteria dropdown.
+            var resourceTypes = workflow.Nodes
+                .Where(node => node.Category == WorkflowNodeCategory.Destination)
+                .SelectMany(node => GetConfiguredResourceTypes(node.ConfigurationJson))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
             if (source is null)
             {
                 return Results.Ok(new
                 {
+                    resourceTypes,
                     supportsHospitalSwitch = false,
                     hospitalSwitchReason = "This workflow has no source connection.",
                     supportsRunCriteria = false,
@@ -2024,6 +2052,7 @@ public static class WorkflowEndpoints
 
             return Results.Ok(new
             {
+                resourceTypes,
                 supportsHospitalSwitch = reason is null,
                 hospitalSwitchReason = reason,
                 supportsRunCriteria = !interactive,
@@ -2123,7 +2152,8 @@ public static class WorkflowEndpoints
                 return Results.Redirect(AppendExternalTriggerQuery(validation.ValidatedReturnUrl, "status=Failed&error=ehr_endpoint_invalid"));
             }
 
-            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria))
+            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria)
+                || !TryParseResourceCriteria(fields.ResourceCriteria, out _))
             {
                 return Results.Redirect(AppendExternalTriggerQuery(validation.ValidatedReturnUrl, "status=Failed&error=invalid_request"));
             }
@@ -2222,6 +2252,12 @@ public static class WorkflowEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
+            if (!TryParseResourceCriteria(fields.ResourceCriteria, out var ticketResourceCriteria))
+            {
+                return Results.Json(new { error = "invalid_request", error_description = ResourceCriteriaErrorDescription },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
             Guid? apiClientId;
             string? validatedReturnUrl = null;
             if (!string.IsNullOrWhiteSpace(fields.ReturnUrl))
@@ -2258,7 +2294,8 @@ public static class WorkflowEndpoints
                 apiClientId.Value, fields.ClientId, workflowId, validatedReturnUrl,
                 string.IsNullOrWhiteSpace(fields.EhrEndpointCode) ? null : fields.EhrEndpointCode.Trim(),
                 fields.Mode, fields.WindowMode, fields.CloseOnComplete, string.Empty,
-                NullIfBlank(fields.GroupId), NullIfBlank(fields.SearchCriteria)));
+                NullIfBlank(fields.GroupId), NullIfBlank(fields.SearchCriteria),
+                ticketResourceCriteria is null ? null : JsonSerializer.Serialize(ticketResourceCriteria)));
 
             var runUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/api/v1/workflows/external/run-page?ticket={Uri.EscapeDataString(ticket)}";
             return Results.Ok(new { ticket, run_url = runUrl, expires_in = (int)ExternalRunTicketService.Lifetime.TotalSeconds });
@@ -2313,7 +2350,7 @@ public static class WorkflowEndpoints
                 fields = new ExternalTriggerFields(
                     ticket.ClientId, null, ticket.WorkflowId.ToString(), ticket.ReturnUrl, ticket.EhrEndpointCode,
                     ticket.Mode, ticket.WindowMode, ticket.CloseOnComplete,
-                    GroupId: ticket.GroupId, SearchCriteria: ticket.SearchCriteria);
+                    GroupId: ticket.GroupId, SearchCriteria: ticket.SearchCriteria, ResourceCriteria: ticket.ResourceCriteria);
             }
             else if (!configuration.GetValue("ExternalTrigger:AllowBrowserCredentials", true))
             {
@@ -2401,7 +2438,8 @@ public static class WorkflowEndpoints
                 return Results.Redirect($"{portalBaseUrl}/external-run?error=ehr_endpoint_invalid");
             }
 
-            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria))
+            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria)
+                || !TryParseResourceCriteria(fields.ResourceCriteria, out _))
             {
                 return Results.Redirect($"{portalBaseUrl}/external-run?error=invalid_request");
             }
@@ -2425,7 +2463,10 @@ public static class WorkflowEndpoints
                 // accepts per-run overrides from signed-in portal users). They go as a signed, expiring token the portal page
                 // hands back to /run after the EHR sign-in.
                 var overridesToken = ExternalRunOverridesToken.Protect(
-                    dataProtectionProvider, workflowId, NullIfBlank(fields.GroupId), NullIfBlank(fields.SearchCriteria));
+                    dataProtectionProvider, workflowId, NullIfBlank(fields.GroupId), NullIfBlank(fields.SearchCriteria),
+                    TryParseResourceCriteria(fields.ResourceCriteria, out var tokenCriteria) && tokenCriteria is not null
+                        ? JsonSerializer.Serialize(tokenCriteria)
+                        : null);
                 var overridesQuery = overridesToken is null ? string.Empty : $"&overridesToken={Uri.EscapeDataString(overridesToken)}";
                 return Results.Redirect($"{portalBaseUrl}/external-run?workflowId={workflowId}&flow={flow}{endpointQuery}{overridesQuery}{behaviourQuery}");
             }
@@ -2579,10 +2620,18 @@ public static class WorkflowEndpoints
 
             // sourceSystemType lets the EHR Endpoint Code picker filter to the vendor this workflow actually
             // reads from (e.g. Epic vs Athena) instead of listing every endpoint across every vendor.
+            // resourceTypes (the types mapped on the destination nodes) populates the caller's per-resource
+            // criteria dropdown, sent back as resource_criteria.
             return Results.Ok(workflows.Select(w =>
             {
                 var (_, sourceSystemType) = ResolveWorkflowSource(w, sourceInfoById);
-                return new { id = w.Id, name = w.Name, sourceSystemType };
+                var resourceTypes = w.Nodes
+                    .Where(node => node.Category == WorkflowNodeCategory.Destination)
+                    .SelectMany(node => GetConfiguredResourceTypes(node.ConfigurationJson))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                return new { id = w.Id, name = w.Name, sourceSystemType, resourceTypes };
             }));
         }).AllowAnonymous().WithMetadata(new CsrfExemptAttribute()).RequireRateLimiting("oauth");
 
@@ -4646,15 +4695,72 @@ public static class WorkflowEndpoints
     {
         var groupId = NullIfBlank(fields.GroupId);
         var searchCriteria = NullIfBlank(fields.SearchCriteria);
-        return groupId is null && searchCriteria is null
+        TryParseResourceCriteria(fields.ResourceCriteria, out var resourceCriteria);
+        return groupId is null && searchCriteria is null && resourceCriteria is null
             ? null
-            : new FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides(groupId, searchCriteria);
+            : new FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides(groupId, searchCriteria, resourceCriteria);
+    }
+
+    private const int MaxResourceCriteriaEntries = 50;
+    private const int MaxResourceCriteriaLength = 4000;
+    private const string ResourceCriteriaErrorDescription =
+        "resource_criteria must be a JSON object of resource type to FHIR search criteria (at most 50 entries, each at most 4000 characters).";
+
+    /// <summary>Parses the external caller's optional per-resource-type criteria, a JSON object such as
+    /// <c>{"Condition":"clinical-status=active","Observation":"category=vital-signs"}</c>. Blank/absent is valid and yields
+    /// null. Returns false for anything that is not such an object, a key that is not a plain resource type name, too many
+    /// entries or an over-long value. Entries with a blank value are dropped. Criteria values stay raw, as they are for the
+    /// saved "Criteria" button.</summary>
+    private static bool TryParseResourceCriteria(string? raw, out Dictionary<string, string>? criteria)
+    {
+        criteria = null;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string?>>(raw);
+            if (parsed is null || parsed.Count > MaxResourceCriteriaEntries)
+            {
+                return false;
+            }
+
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (key, value) in parsed)
+            {
+                var resourceType = key.Trim();
+                if (resourceType.Length == 0 || resourceType.Length > 64 || !resourceType.All(char.IsAsciiLetter))
+                {
+                    return false;
+                }
+
+                var trimmed = value?.Trim();
+                if (string.IsNullOrEmpty(trimmed))
+                {
+                    continue;
+                }
+
+                if (trimmed.Length > MaxResourceCriteriaLength || !result.TryAdd(resourceType, trimmed))
+                {
+                    return false;
+                }
+            }
+
+            criteria = result.Count == 0 ? null : result;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private sealed record ExternalTriggerFields(
         string? ClientId, string? ClientSecret, string? WorkflowId, string? ReturnUrl, string? EhrEndpointCode, string? Mode,
         string? WindowMode = null, string? CloseOnComplete = null, string? Ticket = null,
-        string? GroupId = null, string? SearchCriteria = null);
+        string? GroupId = null, string? SearchCriteria = null, string? ResourceCriteria = null);
 
     /// <summary>Reads the external-trigger fields from either a real HTML form POST (the primary, intended shape
     /// — a plain &lt;form method="post"&gt; needs no JS) or a JSON body (for a programmatic/test caller).
@@ -4676,17 +4782,44 @@ public static class WorkflowEndpoints
                 return new ExternalTriggerFields(
                     form["client_id"], form["client_secret"], form["workflow_id"], form["return_url"],
                     form["ehr_endpoint_code"], form["mode"], form["window_mode"], form["close_on_complete"], form["ticket"],
-                    form["group_id"], form["search_criteria"]);
+                    form["group_id"], form["search_criteria"], form["resource_criteria"]);
             }
 
-            var json = await request.ReadFromJsonAsync<Dictionary<string, string?>>();
-            json ??= new Dictionary<string, string?>();
+            // resource_criteria may be sent as a nested JSON object (the natural shape for a JSON caller) or as a JSON string
+            // (the only shape a form field can carry); every other field must still be a string or null, as before.
+            var element = await request.ReadFromJsonAsync<Dictionary<string, JsonElement>>()
+                ?? new Dictionary<string, JsonElement>();
+            string? resourceCriteria = null;
+            var json = new Dictionary<string, string?>();
+            foreach (var (key, value) in element)
+            {
+                if (key == "resource_criteria")
+                {
+                    resourceCriteria = value.ValueKind switch
+                    {
+                        JsonValueKind.Object => value.GetRawText(),
+                        JsonValueKind.String => value.GetString(),
+                        JsonValueKind.Null => null,
+                        _ => throw new JsonException("resource_criteria must be an object or a string."),
+                    };
+                    continue;
+                }
+
+                json[key] = value.ValueKind switch
+                {
+                    JsonValueKind.String => value.GetString(),
+                    JsonValueKind.Null => null,
+                    _ => throw new JsonException("Fields must be strings."),
+                };
+            }
+
             return new ExternalTriggerFields(
                 json.GetValueOrDefault("client_id"), json.GetValueOrDefault("client_secret"),
                 json.GetValueOrDefault("workflow_id"), json.GetValueOrDefault("return_url"),
                 json.GetValueOrDefault("ehr_endpoint_code"), json.GetValueOrDefault("mode"),
                 json.GetValueOrDefault("window_mode"), json.GetValueOrDefault("close_on_complete"),
-                json.GetValueOrDefault("ticket"), json.GetValueOrDefault("group_id"), json.GetValueOrDefault("search_criteria"));
+                json.GetValueOrDefault("ticket"), json.GetValueOrDefault("group_id"), json.GetValueOrDefault("search_criteria"),
+                resourceCriteria);
         }
         catch (Exception exception) when (exception is JsonException
                                           or InvalidOperationException // no/unknown Content-Type: not readable as JSON

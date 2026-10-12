@@ -59,7 +59,7 @@
         <app-searchable-select
           [options]="workflowOptions()"
           [value]="selectedWorkflowId()"
-          (valueChange)="selectedWorkflowId.set($event)"
+          (valueChange)="selectWorkflow($event)"
           placeholder="Select a workflow"
         />
       </label>
@@ -98,6 +98,29 @@
         <input type="text" [ngModel]="searchCriteria()" (ngModelChange)="searchCriteria.set($event)"
           placeholder="e.g. identifier=203713,203711 — blank = the workflow's saved criteria" />
       </label>
+      <div class="field field--full">
+        Resource criteria (optional — blank = each resource type's saved criteria)
+        @for (row of criteriaRows(); track row.resourceType; let i = $index) {
+          <div class="criteria-row">
+            <span class="criteria-row__type">{{ row.resourceType }}</span>
+            <span class="criteria-row__value">{{ row.criteria }}</span>
+            <button type="button" class="btn" (click)="removeCriteriaRow(i)">Remove</button>
+          </div>
+        }
+        <div class="criteria-row">
+          <select [ngModel]="pendingResourceType()" (ngModelChange)="pendingResourceType.set($event)"
+            [disabled]="availableResourceTypes().length === 0">
+            <option value="">{{ !selectedWorkflowId() ? 'Pick a workflow first' : availableResourceTypes().length ? 'Select a resource type…' : 'No more mapped resource types' }}</option>
+            @for (t of availableResourceTypes(); track t) {
+              <option [value]="t">{{ t }}</option>
+            }
+          </select>
+          <input type="text" [ngModel]="pendingCriteria()" (ngModelChange)="pendingCriteria.set($event)"
+            (keydown.enter)="addCriteriaRow()" placeholder="e.g. clinical-status=active" />
+          <button type="button" class="btn" (click)="addCriteriaRow()"
+            [disabled]="!pendingResourceType() || !pendingCriteria().trim()">Add</button>
+        </div>
+      </div>
       <label class="field">
         Mode
         <select [ngModel]="mode()" (ngModelChange)="mode.set($event)">

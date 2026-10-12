@@ -486,6 +486,9 @@ export class WorkflowApiService {
     if (v2?.targetEhrEndpointId) body['targetEhrEndpointId'] = v2.targetEhrEndpointId;
     if (v2?.groupIdOverride != null) body['groupIdOverride'] = v2.groupIdOverride;
     if (v2?.searchCriteriaOverride != null) body['searchCriteriaOverride'] = v2.searchCriteriaOverride;
+    if (v2?.resourceCriteriaOverrides && Object.keys(v2.resourceCriteriaOverrides).length > 0) {
+      body['resourceCriteriaOverrides'] = v2.resourceCriteriaOverrides;
+    }
     return this.http.post<WorkflowRunResultDto | WorkflowRunStatus>(WORKFLOW_ENDPOINTS.run(workflowId), body);
   }
 
@@ -612,12 +615,16 @@ export interface ExecuteV2RunOptions {
   targetEhrEndpointId?: string | null;
   groupIdOverride?: string | null;
   searchCriteriaOverride?: string | null;
+  /** Resource type -> FHIR search criteria for this run only; replaces the saved criteria of each type named. */
+  resourceCriteriaOverrides?: Record<string, string> | null;
 }
 
 export interface WorkflowRunOptions {
   supportsHospitalSwitch: boolean;
   hospitalSwitchReason: string | null;
   supportsRunCriteria: boolean;
+  /** Resource types mapped on the workflow's destination nodes (offered in the per-resource criteria dropdown). */
+  resourceTypes?: string[];
   retrieval: { method: string | null; exportScope: string | null; groupId: string | null; searchCriteria: string | null } | null;
   vendor: string | null;
   sourceName: string | null;

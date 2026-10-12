@@ -302,7 +302,7 @@ function ticketOptionValues(origin: string, includeCriteria: boolean): Integrati
     {
       label: 'Options you can send with the ticket request',
       value: 'return_url · mode · window_mode · close_on_complete · ehr_endpoint_code'
-        + (includeCriteria ? ' · group_id · search_criteria' : ''),
+        + (includeCriteria ? ' · group_id · search_criteria · resource_criteria' : ''),
       hint: 'return_url - where the browser is sent when the run finishes; it must be one of your Allowed Caller URLs. '
         + 'mode - “async” (default) shows “Workflow execution started” straight away and returns status=Triggered; '
         + '“sync” waits and returns status=Succeeded or Failed. window_mode - “new” opens Segue’s page in a new window, '
@@ -310,7 +310,9 @@ function ticketOptionValues(origin: string, includeCriteria: boolean): Integrati
         + 'goes to return_url. ehr_endpoint_code - the id of an EHR Endpoint (hospital); see “Hospitals” below.'
         + (includeCriteria
           ? ' group_id / search_criteria - replace the workflow’s saved Group ID / search criteria for this run only '
-            + '(e.g. identifier=203713,203711); leave them out to use the saved ones.'
+            + '(e.g. identifier=203713,203711); leave them out to use the saved ones. resource_criteria - a JSON object of '
+            + 'resource type to search criteria, e.g. {"Condition":"clinical-status=active"}; each type named uses these '
+            + 'criteria instead of its saved ones for this run only, the others keep theirs.'
           : ''),
       code: true,
     },

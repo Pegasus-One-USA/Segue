@@ -17,7 +17,8 @@ public sealed record ExternalRunTicket(
     string? CloseOnComplete,
     string TicketId,
     string? GroupId = null,
-    string? SearchCriteria = null);
+    string? SearchCriteria = null,
+    string? ResourceCriteria = null);
 
 /// <summary>
 /// Short-lived, single-use launch tickets for the browser-redirect trigger flow. The caller's BACKEND proves its

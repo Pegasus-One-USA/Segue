@@ -84,6 +84,33 @@
             <p class="summary">Used for this run only and recorded in the execution log; the saved source connection is not changed.</p>
           </div>
         }
+
+        <div class="criteria">
+          <h3>Resource criteria for this run (optional)</h3>
+          @for (r of resourceRows(); track r.resourceType; let i = $index) {
+            <div class="field">
+              <label [for]="'ev2-rc-' + i">{{ r.resourceType }}</label>
+              <textarea [id]="'ev2-rc-' + i" rows="2" [ngModel]="r.criteria" (ngModelChange)="updateResourceRow(i, $event)" [disabled]="executing()" placeholder="e.g. clinical-status=active"></textarea>
+              <span class="hint">
+                @if (r.saved) { Pre-filled from the saved criteria. } @else { Added for this run only. }
+                @if (r.criteria.trim() !== r.saved) {
+                  @if (r.saved) { <a href="javascript:void(0)" (click)="resetResourceRow(i)">Reset to saved</a> }
+                  @else { <a href="javascript:void(0)" (click)="removeResourceRow(i)">Remove</a> }
+                }
+              </span>
+            </div>
+          }
+          <div class="add-row">
+            <select [ngModel]="newResourceType()" (ngModelChange)="newResourceType.set($event)" [disabled]="executing() || availableResourceTypes().length === 0">
+              <option value="">{{ availableResourceTypes().length ? 'Select a resource type…' : 'No more mapped resource types' }}</option>
+              @for (t of availableResourceTypes(); track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+            <button mat-button type="button" (click)="addResourceRow()" [disabled]="executing() || !newResourceType()">Add</button>
+          </div>
+          <p class="summary">A resource type listed here uses these criteria instead of its saved ones for this run only; other types keep theirs.</p>
+        </div>
     }
     }
   </div>

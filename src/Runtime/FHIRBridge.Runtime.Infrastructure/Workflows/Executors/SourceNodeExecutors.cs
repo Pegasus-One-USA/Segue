@@ -347,6 +347,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // request in SearchWithPolicyAsync; a resource type with no row keeps the connection-wide
         // SearchCriteria fallback that SourceConnectionRuntimeResolver already composed into SearchParameters.
         source = await ApplyResourceTypeCriteriaAsync(source, node, cancellationToken);
+        source = ApplyRunResourceCriteriaOverrides(source, context.SourceOverrides?.CriteriaByResourceType);
 
         // See TrustResolverSourceType's own remarks — trust the resolver's real SourceType for a vendor whose
         // client is actually registered; every other vendor keeps the existing override behavior unchanged.
@@ -1086,6 +1087,40 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         return criteriaByResourceType.Count == 0
             ? source
             : source with { SearchCriteriaByResourceType = criteriaByResourceType };
+    }
+
+    /// <summary>
+    /// External-trigger runs only: overlays the criteria the caller supplied for THIS run onto
+    /// <see cref="FhirSourceConfiguration.SearchCriteriaByResourceType"/>. A type named here has its saved criteria
+    /// REPLACED (not merged — <see cref="MergeSearchParameters"/> keeps the first value of a repeated key, so a merge would
+    /// let the saved value win); a type not named keeps its saved criteria. Returns <paramref name="source"/> unchanged
+    /// when there is no override, so every other run is unaffected.
+    /// </summary>
+    private static FhirSourceConfiguration ApplyRunResourceCriteriaOverrides(
+        FhirSourceConfiguration source,
+        IReadOnlyDictionary<string, string>? overrides)
+    {
+        if (overrides is not { Count: > 0 })
+        {
+            return source;
+        }
+
+        var merged = new Dictionary<string, string>(
+            source.SearchCriteriaByResourceType ?? new Dictionary<string, string>(),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var (resourceType, criteria) in overrides)
+        {
+            merged[resourceType] = criteria;
+        }
+
+        // A Patient override is the caller's explicit Patient search: like RunSearchCriteriaActive for the run-wide
+        // criteria, the Patient fetch must use it as given and not also be pinned to the launched patient's _id.
+        var patientOverridden = overrides.Keys.Any(key => string.Equals(key, "Patient", StringComparison.OrdinalIgnoreCase));
+        return source with
+        {
+            SearchCriteriaByResourceType = merged,
+            RunSearchCriteriaActive = source.RunSearchCriteriaActive || patientOverridden,
+        };
     }
 
     private static IEnumerable<string> SplitSearchParameters(string? searchParameters) =>

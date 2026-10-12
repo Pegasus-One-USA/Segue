@@ -20,6 +20,13 @@ export interface ExecuteV2DialogData {
   workflowName: string;
 }
 
+interface ResourceCriteriaRow {
+  resourceType: string;
+  criteria: string;
+  /** Saved criteria for this type ('' when the row was added just for this run). */
+  saved: string;
+}
+
 interface SettingRow {
   label: string;
   current: string;
@@ -63,6 +70,37 @@ export class ExecuteV2DialogComponent implements OnInit {
     () => (this.options()?.retrieval?.method ?? '').toLowerCase() === 'bulk-export');
   protected readonly groupIdChanged = computed(() => this.groupId().trim() !== this.savedGroupId);
   protected readonly searchCriteriaChanged = computed(() => this.searchCriteria().trim() !== this.savedSearchCriteria);
+
+  /** Per-resource-type criteria for this run, pre-filled from the saved ones (the "Criteria" button). */
+  protected readonly resourceRows = signal<ResourceCriteriaRow[]>([]);
+  protected readonly newResourceType = signal<string>('');
+
+  protected updateResourceRow(index: number, criteria: string): void {
+    this.resourceRows.update(rows => rows.map((r, i) => (i === index ? { ...r, criteria } : r)));
+  }
+
+  protected resetResourceRow(index: number): void {
+    this.resourceRows.update(rows => rows.map((r, i) => (i === index ? { ...r, criteria: r.saved } : r)));
+  }
+
+  protected removeResourceRow(index: number): void {
+    this.resourceRows.update(rows => rows.filter((_, i) => i !== index));
+  }
+
+  /** The workflow's mapped resource types that don't have a row yet. */
+  protected readonly availableResourceTypes = computed(() => {
+    const taken = new Set(this.resourceRows().map(r => r.resourceType.toLowerCase()));
+    return (this.options()?.resourceTypes ?? []).filter(t => !taken.has(t.toLowerCase()));
+  });
+
+  protected addResourceRow(): void {
+    const resourceType = this.newResourceType().trim();
+    if (!resourceType) return;
+    if (!this.resourceRows().some(r => r.resourceType.toLowerCase() === resourceType.toLowerCase())) {
+      this.resourceRows.update(rows => [...rows, { resourceType, criteria: '', saved: '' }]);
+    }
+    this.newResourceType.set('');
+  }
 
   protected resetGroupId(): void { this.groupId.set(this.savedGroupId); }
   protected resetSearchCriteria(): void { this.searchCriteria.set(this.savedSearchCriteria); }
@@ -124,11 +162,30 @@ export class ExecuteV2DialogComponent implements OnInit {
         // Auto-fill: start on the hospital the workflow is already configured for ('' = Default when it matches none).
         this.selectedId.set('');
         this.loading.set(false);
+        this.loadSavedResourceCriteria();
       },
       error: (err: HttpErrorResponse) => {
         this.loadError.set(err.error?.title ?? 'Could not load the run options for this workflow.');
         this.loading.set(false);
       },
+    });
+  }
+
+  /** Best effort: without view access to the saved criteria the section simply starts empty. */
+  private loadSavedResourceCriteria(): void {
+    this.api.listResourceTypeCriteria(this.data.workflowId).subscribe({
+      next: saved => {
+        const byType = new Map<string, ResourceCriteriaRow>();
+        for (const row of saved) {
+          const key = row.resourceType.toLowerCase();
+          if (row.criteria?.trim() && !byType.has(key)) {
+            const criteria = row.criteria.trim();
+            byType.set(key, { resourceType: row.resourceType, criteria, saved: criteria });
+          }
+        }
+        this.resourceRows.set([...byType.values()].sort((a, b) => a.resourceType.localeCompare(b.resourceType)));
+      },
+      error: () => this.resourceRows.set([]),
     });
   }
 
@@ -144,6 +201,14 @@ export class ExecuteV2DialogComponent implements OnInit {
       if (this.isBulkExport()) v2.groupIdOverride = this.groupId().trim();
       else v2.searchCriteriaOverride = this.searchCriteria().trim();
     }
+
+    // Only rows the user changed or added are sent; an untouched row keeps using its saved criteria server-side.
+    const resourceCriteria: Record<string, string> = {};
+    for (const row of this.resourceRows()) {
+      const criteria = row.criteria.trim();
+      if (criteria && criteria !== row.saved) resourceCriteria[row.resourceType] = criteria;
+    }
+    if (Object.keys(resourceCriteria).length > 0) v2.resourceCriteriaOverrides = resourceCriteria;
 
     this.executing.set(true);
     this.api.run(this.data.workflowId, true, v2).subscribe({

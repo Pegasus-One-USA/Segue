@@ -8,7 +8,9 @@ public sealed record ListWorkflowsDemoRequest(string FhirBridgeBaseUrl, string C
 public sealed record LaunchDemoRequest(
     string FhirBridgeBaseUrl, string ClientId, string ClientSecret, string WorkflowId, string? ReturnUrl,
     string? EhrEndpointCode, string? Mode, string? WindowMode, string? CloseOnComplete,
-    string? GroupId = null, string? SearchCriteria = null);
+    string? GroupId = null, string? SearchCriteria = null,
+    // Optional per-resource-type search criteria (resource type -> criteria), forwarded as launch-ticket's resource_criteria.
+    Dictionary<string, string>? ResourceCriteria = null);
 
 /// <summary>
 /// Server-side proxy for the one read-only call the external-trigger console needs before it can render its
@@ -104,6 +106,7 @@ public static class ExternalTriggerDemoEndpoints
                 close_on_complete = request.CloseOnComplete,
                 group_id = request.GroupId,
                 search_criteria = request.SearchCriteria,
+                resource_criteria = request.ResourceCriteria is { Count: > 0 } ? request.ResourceCriteria : null,
             });
 
             HttpResponseMessage response;

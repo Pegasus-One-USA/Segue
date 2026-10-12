@@ -60,7 +60,7 @@
   <li><a href="#give">What we give you</a></li>
   <li><a href="#need">What we need from you</a></li>
   <li><a href="#build">What you build (PHP)</a></li>
-  <li><a href="#options">Options you can send</a></li>
+  <li><a href="#options">Options you can send</a> (including <a href="#resource-criteria">resource criteria</a>)</li>
   <li><a href="#proof">How you know it worked</a></li>
   <li><a href="#errors">If something goes wrong</a></li>
   <li><a href="#golive">Go-live checklist</a></li>
@@ -340,9 +340,115 @@ echo $res['body'];</code></pre>
   <tr><td class="k">mode</td><td>No</td><td><code>async</code> (default) or <code>sync</code></td><td><code>async</code>: reply immediately with <code>Triggered</code>, the work continues in the background. <code>sync</code>: wait until the work is finished, then reply <code>Succeeded</code> or <code>Failed</code> (can take a while).</td></tr>
   <tr><td class="k">window_mode</td><td>No</td><td><code>same</code> (default) or <code>new</code></td><td>Case A only: whether FHIRBridge's page replaces your page or opens in a new window.</td></tr>
   <tr><td class="k">close_on_complete</td><td>No</td><td><code>true</code> or <code>false</code> (default)</td><td>Case A, new window only: close the window when done instead of returning to <code>return_url</code>.</td></tr>
-  <tr><td class="k">search_criteria</td><td>No</td><td>e.g. <code>identifier=203713,203711</code></td><td>Case B (system) workflows: use these search terms for this run instead of the saved ones.</td></tr>
+  <tr><td class="k">search_criteria</td><td>No</td><td>e.g. <code>identifier=203713,203711</code></td><td>Use these search terms for this run instead of the workflow's saved ones. Works in Case A and Case B (it travels inside the one-time link).</td></tr>
   <tr><td class="k">group_id</td><td>No</td><td>text</td><td>Bulk-export workflows: use this group for this run instead of the saved one.</td></tr>
+  <tr><td class="k">resource_criteria</td><td>No</td><td>a JSON object, e.g. <code>{"Condition":"clinical-status=active"}</code></td><td>Search terms for individual resource types, for this run only. See <a href="#resource-criteria">Resource criteria</a> below.</td></tr>
 </table></div>
+
+<h3 id="resource-criteria">Resource criteria &ndash; different search terms for each resource type</h3>
+<p>A workflow can read several resource types (for example <code>Condition</code>, <code>Observation</code>, <code>Encounter</code>). Each type may already have its own saved search terms, set by an administrator with the <em>Criteria</em> button on the workflow's mapping screen. With <code>resource_criteria</code> you can give different terms for chosen types, for this one run only. Nothing is saved, and the workflow is not changed.</p>
+
+<p><strong>How it behaves</strong></p>
+<ul>
+  <li>A resource type you list uses <em>your</em> terms <em>instead of</em> its saved terms (they replace, they are not added).</li>
+  <li>A resource type you do not list keeps its saved terms. If it has none, it is read without a filter, as before.</li>
+  <li>Leave <code>resource_criteria</code> out and nothing changes: every type uses its saved terms.</li>
+  <li>Use it on its own, or together with <code>search_criteria</code> / <code>group_id</code>.</li>
+  <li>If you give terms for <code>Patient</code>, those terms are used exactly as given to find the patients, and the run is not also narrowed to the one person who signed in.</li>
+  <li>A run that uses <code>resource_criteria</code> reads a different slice of data than usual, so it does not use or move the workflow's &ldquo;only what changed since last time&rdquo; marker.</li>
+</ul>
+
+<p><strong>The value</strong> is a JSON object. The key is the resource type name, the value is the search terms, written the way the hospital's FHIR server expects them (several terms are joined with <code>&amp;</code>).</p>
+<pre><code>{
+  "Condition":   "clinical-status=active",
+  "Observation": "category=vital-signs&amp;date=ge2025-01-01",
+  "Encounter":   "status=finished"
+}</code></pre>
+<div class="scroll"><table>
+  <tr><th>Rule</th><th>Detail</th></tr>
+  <tr><td>Key</td><td>A resource type name, letters only (<code>Condition</code>, not <code>Condition/</code> or <code>condition-1</code>). Capitals do not matter.</td></tr>
+  <tr><td>Value</td><td>The search terms, up to 4000 characters. An empty value is ignored (that type keeps its saved terms).</td></tr>
+  <tr><td>How many</td><td>Up to 50 resource types in one request.</td></tr>
+  <tr><td>Which types</td><td>Use the types the workflow actually reads. The list is returned by the workflow list call below, as <code>resourceTypes</code>.</td></tr>
+</table></div>
+
+<p><strong>Which resource types can I use?</strong> Ask FHIRBridge for your workflows. Each one comes back with the resource types it reads:</p>
+<div class="lbl"><span>list-workflows.php</span><button class="copy" data-t="c8">Copy</button></div>
+<pre id="c8"><code>&lt;?php
+$cfg = require __DIR__ . '/../config.php';
+require __DIR__ . '/fhirbridge.php';
+
+$res = fb_request('POST', $cfg['base_url'] . '/api/v1/workflows/external/list', [
+    'client_id'     =&gt; $cfg['client_id'],
+    'client_secret' =&gt; $cfg['client_secret'],
+    'return_url'    =&gt; $cfg['return_url'],
+]);
+// [ { "id": "...", "name": "...", "sourceSystemType": "Epic",
+//     "resourceTypes": ["Condition", "Encounter", "Observation", "Patient"] }, ... ]
+header('Content-Type: application/json');
+echo $res['body'];</code></pre>
+<p>Show those types to your user as a drop-down (one row per type with a box for its terms), then send only the rows they filled in.</p>
+
+<p><strong>Case A &ndash; with a person signing in.</strong> Add one line to the <code>launch-ticket</code> call from <code>start.php</code>. The terms travel inside the one-time link, so the browser cannot change them.</p>
+<div class="lbl"><span>start.php (the changed part)</span><button class="copy" data-t="c9">Copy</button></div>
+<pre id="c9"><code>$payload = [
+    'client_id'         =&gt; $cfg['client_id'],
+    'client_secret'     =&gt; $cfg['client_secret'],
+    'workflow_id'       =&gt; $cfg['workflow_id'],
+    'ehr_endpoint_code' =&gt; $cfg['ehr_code'],
+    'return_url'        =&gt; $cfg['return_url'],
+    'mode'              =&gt; 'async',
+    'window_mode'       =&gt; 'same',
+];
+
+// Optional: terms per resource type, for this run only. Only add the key when there is something to send.
+$resourceCriteria = [
+    'Condition'   =&gt; 'clinical-status=active',
+    'Observation' =&gt; 'category=vital-signs',
+];
+if (!empty($resourceCriteria)) {
+    $payload['resource_criteria'] = $resourceCriteria;     // json_encode turns this into a JSON object
+}
+
+$res = fb_request('POST', $cfg['base_url'] . '/api/v1/workflows/external/launch-ticket', $payload);</code></pre>
+
+<p><strong>Case B &ndash; no person involved.</strong> The same field, on the <code>run</code> call from <code>trigger.php</code>:</p>
+<div class="lbl"><span>trigger.php (the changed part)</span><button class="copy" data-t="c10">Copy</button></div>
+<pre id="c10"><code>$payload = [
+    'client_id'         =&gt; $cfg['client_id'],
+    'client_secret'     =&gt; $cfg['client_secret'],
+    'workflow_id'       =&gt; $cfg['workflow_id'],
+    'ehr_endpoint_code' =&gt; $cfg['ehr_code'],
+    'return_url'        =&gt; $cfg['return_url'],
+    'mode'              =&gt; 'async',
+    'resource_criteria' =&gt; ['Condition' =&gt; 'clinical-status=active'],   // optional
+];
+
+$res = fb_request('POST', $cfg['base_url'] . '/api/v1/workflows/external/run', $payload);</code></pre>
+
+<div class="callout warn"><strong>A PHP detail.</strong>Send the field only when it has at least one entry. An empty PHP array is sent as <code>[]</code> (a list), not <code>{}</code> (an object), and FHIRBridge will refuse it. In a plain HTML form (not JSON), put the same JSON text in a single field called <code>resource_criteria</code>.</div>
+
+<p><strong>All the details in one request</strong> &ndash; every option together (Case A shown; Case B is the same without <code>window_mode</code> and <code>close_on_complete</code>):</p>
+<pre><code>POST {Portal Base URL}/api/v1/workflows/external/launch-ticket
+Content-Type: application/json
+
+{
+  "client_id":          "&hellip;",
+  "client_secret":      "&hellip;",
+  "workflow_id":        "&hellip;",
+  "ehr_endpoint_code":  "&hellip;",
+  "return_url":         "https://your-app.example.com/fhirbridge-return.php",
+  "mode":               "async",
+  "window_mode":        "same",
+  "close_on_complete":  "false",
+  "search_criteria":    "identifier=203713,203711",
+  "group_id":           "&hellip;",
+  "resource_criteria": {
+    "Condition":   "clinical-status=active",
+    "Observation": "category=vital-signs"
+  }
+}</code></pre>
+<p>If a value is wrong, FHIRBridge answers <code>400 invalid_request</code> with a short reason and starts nothing (Case A), or sends the browser to your <code>return_url</code> with <code>status=Failed&amp;error=invalid_request</code> (Case B). Nothing is half-started.</p>
 
 <h2 id="proof"><span class="n">7</span>How you know it worked</h2>
 <h3>1. Your trigger code says "Triggered"</h3>
@@ -399,6 +505,7 @@ echo json_encode(['stored' =&gt; $stored]);                           // HTTP 20
   <tr><td><code>401 invalid_client</code></td><td>Client ID or Secret is wrong, or your client was switched off.</td><td>Check the two values. Ask us to issue a new secret if unsure.</td></tr>
   <tr><td><code>403 caller_url_not_allowed</code></td><td>The <code>return_url</code> is not on the list of addresses you gave us.</td><td>Use an address we allow-listed, or send us the new address.</td></tr>
   <tr><td><code>404 workflow_not_found</code></td><td>Wrong Workflow ID.</td><td>Check the value we gave you.</td></tr>
+  <tr><td><code>400 invalid_request</code> mentioning <code>resource_criteria</code> (or a redirect with <code>status=Failed&amp;error=invalid_request</code>)</td><td><code>resource_criteria</code> is not a JSON object, a key is not a plain resource type name, there are more than 50 entries, or a value is longer than 4000 characters.</td><td>Send a JSON object such as <code>{"Condition":"clinical-status=active"}</code>. In PHP, leave the field out when it is empty.</td></tr>
   <tr><td>Redirect with <code>status=Failed&amp;error=ehr_endpoint_invalid</code></td><td>The EHR Code is wrong or belongs to another EHR.</td><td>Check the EHR Code.</td></tr>
   <tr><td>"This launch link has expired or was already used" (Case A)</td><td>The one-time link lasts about 90 seconds and works once.</td><td>Start again from <code>start.php</code>. Do not reload or share the link.</td></tr>
   <tr><td>Status <code>Triggered</code> but nothing reaches your API</td><td>The run is still going, or it failed after starting, or your API refused the requests.</td><td>Check <code>status.php</code>. Check your API log for 401 / 4xx answers. Tell us the run reference.</td></tr>

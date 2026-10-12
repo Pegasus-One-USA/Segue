@@ -17,26 +17,35 @@ public static class ExternalRunOverridesToken
     public const string ProtectorPurpose = "FHIRBridge.ExternalRunOverrides.v1";
     public static readonly TimeSpan Lifetime = TimeSpan.FromHours(2);
 
-    private sealed record Payload(Guid WorkflowId, string? GroupId, string? SearchCriteria);
+    private sealed record Payload(Guid WorkflowId, string? GroupId, string? SearchCriteria, string? ResourceCriteria = null);
 
-    /// <summary>Null when the caller supplied neither value (nothing to carry).</summary>
-    public static string? Protect(IDataProtectionProvider provider, Guid workflowId, string? groupId, string? searchCriteria)
+    /// <summary>Null when the caller supplied no value (nothing to carry). <paramref name="resourceCriteria"/> is the
+    /// normalised JSON object of per-resource-type criteria (see WorkflowEndpoints.TryParseResourceCriteria).</summary>
+    public static string? Protect(
+        IDataProtectionProvider provider, Guid workflowId, string? groupId, string? searchCriteria, string? resourceCriteria = null)
     {
-        if (groupId is null && searchCriteria is null)
+        if (groupId is null && searchCriteria is null && resourceCriteria is null)
         {
             return null;
         }
 
-        var json = JsonSerializer.Serialize(new Payload(workflowId, groupId, searchCriteria));
+        var json = JsonSerializer.Serialize(new Payload(workflowId, groupId, searchCriteria, resourceCriteria));
         return provider.CreateProtector(ProtectorPurpose).ToTimeLimitedDataProtector().Protect(json, Lifetime);
     }
 
     /// <summary>False for a tampered, expired, or another workflow's token.</summary>
     public static bool TryRead(
         IDataProtectionProvider provider, string token, Guid workflowId, out string? groupId, out string? searchCriteria)
+        => TryRead(provider, token, workflowId, out groupId, out searchCriteria, out _);
+
+    /// <summary>False for a tampered, expired, or another workflow's token.</summary>
+    public static bool TryRead(
+        IDataProtectionProvider provider, string token, Guid workflowId,
+        out string? groupId, out string? searchCriteria, out string? resourceCriteria)
     {
         groupId = null;
         searchCriteria = null;
+        resourceCriteria = null;
         try
         {
             var json = provider.CreateProtector(ProtectorPurpose).ToTimeLimitedDataProtector().Unprotect(token);
@@ -48,6 +57,7 @@ public static class ExternalRunOverridesToken
 
             groupId = payload.GroupId;
             searchCriteria = payload.SearchCriteria;
+            resourceCriteria = payload.ResourceCriteria;
             return true;
         }
         catch (Exception)

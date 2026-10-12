@@ -22,6 +22,13 @@ interface WorkflowOption {
   id: string;
   name: string;
   sourceSystemType: string | null;
+  /** Resource types mapped on the workflow's destination nodes; feeds the criteria dropdown. */
+  resourceTypes?: string[];
+}
+
+interface CriteriaRow {
+  resourceType: string;
+  criteria: string;
 }
 
 interface ListWorkflowsResponse {
@@ -82,6 +89,10 @@ export class ExternalTriggerConsoleComponent implements OnInit {
   /** Per-run Group ID / search criteria; blank keeps the workflow's saved values. */
   protected readonly groupId = signal('');
   protected readonly searchCriteria = signal('');
+  /** Per-resource-type criteria for this run; a type not listed keeps its saved criteria. */
+  protected readonly criteriaRows = signal<CriteriaRow[]>([]);
+  protected readonly pendingResourceType = signal('');
+  protected readonly pendingCriteria = signal('');
   protected readonly mode = signal<'async' | 'sync'>('async');
   /** Where the run happens: a new window (this console stays put) or this same window (replaced by the run page). */
   protected readonly windowMode = signal<'new' | 'same'>('new');
@@ -109,6 +120,34 @@ export class ExternalTriggerConsoleComponent implements OnInit {
     const matching = all.filter(e => e.vendor.toLowerCase() === vendor.toLowerCase());
     return matching.length > 0 ? matching : all;
   });
+
+  /** The selected workflow's mapped resource types that don't have a criteria row yet. */
+  protected readonly availableResourceTypes = computed(() => {
+    const taken = new Set(this.criteriaRows().map(r => r.resourceType.toLowerCase()));
+    const workflow = this.workflows().find(w => w.id === this.selectedWorkflowId());
+    return (workflow?.resourceTypes ?? []).filter(t => !taken.has(t.toLowerCase()));
+  });
+
+  protected selectWorkflow(id: string): void {
+    this.selectedWorkflowId.set(id);
+    // Criteria rows belong to the workflow they were entered for.
+    this.criteriaRows.set([]);
+    this.pendingResourceType.set('');
+    this.pendingCriteria.set('');
+  }
+
+  protected addCriteriaRow(): void {
+    const resourceType = this.pendingResourceType();
+    const criteria = this.pendingCriteria().trim();
+    if (!resourceType || !criteria) return;
+    this.criteriaRows.update(rows => [...rows, { resourceType, criteria }]);
+    this.pendingResourceType.set('');
+    this.pendingCriteria.set('');
+  }
+
+  protected removeCriteriaRow(index: number): void {
+    this.criteriaRows.update(rows => rows.filter((_, i) => i !== index));
+  }
 
   protected readonly workflowOptions = computed<SearchableOption[]>(() =>
     this.workflows().map(w => ({ value: w.id, label: w.name, hint: w.sourceSystemType ?? undefined })));
@@ -179,6 +218,11 @@ export class ExternalTriggerConsoleComponent implements OnInit {
       return;
     }
 
+    // A half-filled "add" row is picked up too, so the user does not have to click Add before launching.
+    this.addCriteriaRow();
+    const resourceCriteria: Record<string, string> = {};
+    for (const row of this.criteriaRows()) resourceCriteria[row.resourceType] = row.criteria;
+
     // Must open synchronously inside the click handler, otherwise popup blockers refuse it. It is pointed at the
     // run page once the ticket arrives; a script-opened window is also one this page may close itself.
     const newWindow = this.windowMode() === 'new' ? window.open('', '_blank') : null;
@@ -195,6 +239,7 @@ export class ExternalTriggerConsoleComponent implements OnInit {
           ehrEndpointCode: this.ehrEndpointCode(),
           groupId: this.groupId().trim(),
           searchCriteria: this.searchCriteria().trim(),
+          resourceCriteria,
           mode: this.mode(),
           windowMode: this.windowMode(),
           closeOnComplete: this.closeOnComplete() ? 'true' : 'false',
