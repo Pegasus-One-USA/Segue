@@ -195,7 +195,7 @@ public sealed class EhrWriteConnectionTests(ApiFixture f)
         var department = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, null, departmentId: "2"));
         var deactivate = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, null, activated: false));
         var downgrade = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, "Read"));
-        // Endpoint and credentials stay under the vendor's own edit right, as for any connection.
+        // PR #244 review, round 3: where a write connection's live writes (and their PHI) go needs the right too.
         var baseUrl = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, null, baseUrl: "https://elsewhere.example.test/fhir"));
         var unchanged = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, null));
         var allowed = await withWriteBack.PutAsJsonAsync(url, AthenaBody(name, null, departmentId: "2"));
@@ -203,7 +203,7 @@ public sealed class EhrWriteConnectionTests(ApiFixture f)
         Assert.Equal(HttpStatusCode.Forbidden, department.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, deactivate.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, downgrade.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, baseUrl.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, baseUrl.StatusCode);
         Assert.Equal(HttpStatusCode.OK, unchanged.StatusCode);
         Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
         var saved = await GetConnectionAsync(id);

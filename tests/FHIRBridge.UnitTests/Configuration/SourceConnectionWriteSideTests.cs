@@ -335,20 +335,36 @@ public sealed class SourceConnectionWriteSideTests
     {
         var saved = SavedWriteConnection();
         // A source form: no access, department or activation, no secret reference (keeps the saved one), new scopes,
-        // and endpoint/credential values that need not match the saved row exactly (a legacy null AuthPlacement
-        // against the portal's 'post', another base URL or client id): those stay under the vendor's own right.
+        // a legacy null AuthPlacement against the portal's 'post', and the same endpoint written differently.
         var request = AthenaRequest("athena", null, null) with
         {
-            BaseUrl = "https://elsewhere.example.com/fhir",
+            BaseUrl = saved.BaseUrl.ToUpperInvariant() + "/",
             Authentication = BackendAuth with
             {
-                PrivateKeyKeyVaultName = null, PrivateKeySecretName = null, Scopes = ["system/*.read"], ClientId = "other", AuthPlacement = "post",
+                PrivateKeyKeyVaultName = null, PrivateKeySecretName = null, Scopes = ["system/*.read"], AuthPlacement = "post",
             },
         };
 
         SourceConnectionWriteSide.UpdateChangesWriteSide(saved, request).Should().BeFalse();
         SourceConnectionWriteSide.UpdateChangesWriteSide(saved, request with { Access = SourceConnectionAccess.ReadWrite, DepartmentId = " 150 " })
             .Should().BeFalse();
+    }
+
+    // PR #244 review, round 3: where a write connection's live writes (and their PHI) go is a write-side setting.
+    [Fact]
+    public void Repointing_a_write_connection_touches_the_write_side()
+    {
+        var saved = SavedWriteConnection();
+        var same = AthenaRequest("athena", null, null);
+
+        SourceConnectionWriteSide.UpdateChangesWriteSide(saved, same with { BaseUrl = "https://elsewhere.example.com/fhir" }).Should().BeTrue();
+        SourceConnectionWriteSide.UpdateChangesWriteSide(saved, same with { Authentication = same.Authentication with { ClientId = "other" } }).Should().BeTrue();
+        SourceConnectionWriteSide.UpdateChangesWriteSide(saved, same with { Authentication = same.Authentication with { TokenEndpoint = "https://evil.example.com/token" } }).Should().BeTrue();
+        SourceConnectionWriteSide.UpdateChangesWriteSide(saved, same with { Authentication = same.Authentication with { InlineClientSecret = "s3cret" } }).Should().BeTrue();
+        SourceConnectionWriteSide.UpdateChangesWriteSide(saved, same with { Authentication = same.Authentication with { PrivateKeySecretName = "another-key" } }).Should().BeTrue();
+        SourceConnectionWriteSide.UpdateChangesWriteSide(saved, same with { SourceSystemType = SourceSystemType.Epic }).Should().BeTrue();
+        SourceConnectionWriteSide.UpdateChangesWriteSide(saved with { Access = SourceConnectionAccess.Read }, same with { BaseUrl = "https://elsewhere.example.com/fhir" })
+            .Should().BeFalse(because: "a read-only connection has no write side");
     }
 
     [Fact]

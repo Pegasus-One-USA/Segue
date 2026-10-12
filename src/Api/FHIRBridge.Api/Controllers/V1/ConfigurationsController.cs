@@ -109,8 +109,9 @@ public sealed class ConfigurationsController : ControllerBase
             denied = await AuthorizeVendorWriteActivationAsync(request, saved.VendorWriteApisActivated);
             if (denied is not null) return denied;
 
-            // Changing a write connection's write-side settings (access, department, activation) needs the EHR
-            // Write-Back edit right as well. Source forms send none of them, so their re-saves never need it.
+            // Changing a write connection's write-side settings (access, department, activation) or where its writes
+            // go (vendor, base URL, token endpoint, credentials) needs the EHR Write-Back edit right as well. A source
+            // form's re-save that keeps the endpoint and credentials never needs it.
             if (SourceConnectionWriteSide.UpdateChangesWriteSide(saved, request))
             {
                 denied = await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, PermissionActionCode.Edit);
