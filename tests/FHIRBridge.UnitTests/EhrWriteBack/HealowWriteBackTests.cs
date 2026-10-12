@@ -43,7 +43,7 @@ public sealed class HealowWriteBackTests
          "code":{"coding":[{"system":"http://hl7.org/fhir/sid/icd-10-cm","code":"E11.9","display":"Type 2 diabetes"}],"text":"Type 2 diabetes"}}
         """;
 
-    private static MappedEhrWriteBackDestinationWriter Writer(IEhrTargetPatientMatcher? matcher = null) =>
+    private static MappedEhrWriteBackDestinationWriter Writer(IEhrTargetPatientMatcher? matcher = null, FHIRBridge.Application.Abstractions.Persistence.IEhrWriteLedgerRepository? ledger = null) =>
         new(
             new EhrWriteProfileRegistry(
             [
@@ -51,7 +51,7 @@ public sealed class HealowWriteBackTests
                 new HealowEncounterDiagnosisWriteProfile(), new HealowMedicalHistoryWriteProfile(),
                 new HealowVitalSignWriteProfile(), new HealowPatientWriteProfile(),
             ]),
-            new InMemoryEhrWriteLedgerRepository(),
+            ledger ?? new InMemoryEhrWriteLedgerRepository(),
             Mock.Of<IEhrCloneModePolicy>(),
             NullLogger<MappedEhrWriteBackDestinationWriter>.Instance,
             matcher);
@@ -201,6 +201,20 @@ public sealed class HealowWriteBackTests
         channel.Sent.Should().OnlyContain(r => r["category"]![0]!["coding"]![0]!["code"]!.GetValue<string>() == "435871000124102");
     }
 
+    // PR #244 review, round 3: the encounter is created only once this run holds the record's ledger claim. A record
+    // another run claimed first must not leave a telephone encounter in the chart that nothing records.
+    [Fact]
+    public async Task No_telephone_encounter_is_created_for_a_record_another_run_claimed_first()
+    {
+        var channel = new HealowChannel(dryRun: false, activated: true, "Condition") { IdentifierHit = IdentifierHit, CreateHolderEncounter = true };
+
+        var result = await RunAsync(Writer(ledger: new ClaimedElsewhereLedger()), channel, Patient, Condition("h1", "medical-history", "resolved"));
+
+        channel.HolderEncounters.Should().Be(0);
+        channel.Sent.Should().BeEmpty();
+        Summary(result, "Condition").AlreadyWritten.Should().Be(1);
+    }
+
     [Fact]
     public async Task A_dry_run_never_creates_a_telephone_encounter()
     {
@@ -224,6 +238,28 @@ public sealed class HealowWriteBackTests
 
         Summary(result, "Condition").Reasons.Should().ContainKey("holder-encounter-not-created");
         channel.Sent.Should().BeEmpty();
+    }
+
+    /// <summary>Every record is claimed by another run between this run's read and its insert.</summary>
+    private sealed class ClaimedElsewhereLedger : FHIRBridge.Application.Abstractions.Persistence.IEhrWriteLedgerRepository
+    {
+        private readonly InMemoryEhrWriteLedgerRepository _inner = new();
+
+        public Task<IReadOnlyDictionary<string, EhrWriteLedgerEntry>> FindAsync(
+            string targetKey, string resourceType, IReadOnlyCollection<string> sourceKeys, CancellationToken cancellationToken) =>
+            _inner.FindAsync(targetKey, resourceType, sourceKeys, cancellationToken);
+
+        public Task<bool> TryAddAsync(EhrWriteLedgerEntry entry, CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public Task<bool> TryClaimAsync(EhrWriteLedgerEntry entry, CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<(IReadOnlyList<EhrWriteLedgerEntry> Items, int TotalCount)> ListNeedingReviewAsync(
+            string? resourceType, DateTime utcNow, int skip, int take, CancellationToken cancellationToken) =>
+            _inner.ListNeedingReviewAsync(resourceType, utcNow, skip, take, cancellationToken);
+
+        public Task<EhrWriteLedgerEntry?> GetAsync(Guid id, CancellationToken cancellationToken) => _inner.GetAsync(id, cancellationToken);
     }
 
     private sealed class HealowChannel : IEhrWriteChannel

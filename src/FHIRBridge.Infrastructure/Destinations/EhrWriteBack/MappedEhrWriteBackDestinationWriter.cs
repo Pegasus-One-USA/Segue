@@ -563,16 +563,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             return new SendResult(SendKind.WouldWrite, null);
         }
 
-        // Last step before the send, after every check that could stop it: anything it creates (a holder encounter)
-        // exists only for a record that is really sent. The content hash above was taken before it, so it does not
-        // change from run to run.
-        if (prepare is not null && await prepare(cancellationToken) is { } prepareProblem)
-        {
-            tally.Count(EhrShapeOutcome.Skipped, prepareProblem);
-            return new SendResult(SendKind.NotWritten, null);
-        }
-
-        var createdId = await SendAsync(run, resourceType, sourceId, recordIndex, shaped, existing, sourceKey, contentHash, tally, cancellationToken);
+        var createdId = await SendAsync(run, resourceType, sourceId, recordIndex, shaped, existing, sourceKey, contentHash, tally, cancellationToken, prepare);
         return new SendResult(createdId is null ? SendKind.NotWritten : SendKind.Written, createdId);
     }
 
@@ -684,7 +675,8 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         string sourceKey,
         string contentHash,
         Tally tally,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<CancellationToken, Task<string?>>? prepare = null)
     {
         var channel = run.Channel;
         var label = recordIndex is { } index ? $"{resourceType} #{index + 1}" : $"{resourceType} (for a record)";
@@ -714,6 +706,18 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         {
             tally.AlreadyWritten++;
             tally.Reason("awaiting-review");
+            return null;
+        }
+
+        // Only once this run holds the record's claim, as the last step before the create: anything it creates in the
+        // EHR (a holder encounter) exists only for a record this run really sends, never for one another run claimed
+        // first. The content hash was taken before it, so it does not change from run to run. If it cannot bind the
+        // record, nothing was sent for it: the claim is settled as a refusal with no HTTP status, retried as is.
+        if (prepare is not null && await prepare(cancellationToken) is { } prepareProblem)
+        {
+            entry.MarkRejected(null, prepareProblem, DateTime.UtcNow);
+            await _ledger.SaveChangesAsync(CancellationToken.None);
+            tally.Count(EhrShapeOutcome.Skipped, prepareProblem);
             return null;
         }
 
