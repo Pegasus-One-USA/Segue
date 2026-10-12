@@ -18,7 +18,8 @@ namespace FHIRBridge.Runtime.Infrastructure.Workflows.EhrWrite;
 /// alongside its FHIR scopes.
 ///
 /// <para>Per run it caches each patient's department and each reference lookup, so a batch of fifty problems for one
-/// patient reads the department once.</para>
+/// patient reads the department once. Only a definitive answer is cached (see <see cref="IsDefinitive"/>): after a
+/// timeout, 429 or 5xx the next record asks again rather than every later record being refused.</para>
 ///
 /// <para><b>PHI.</b> Response bodies are read for ids and success flags only. athena's error text can echo what was
 /// sent, so it is never logged or stored: a refusal is reported as <c>athena-{status}</c>.</para>
@@ -158,6 +159,12 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
             var kind = Text(lookup, R.LookupKind) ?? string.Empty;
             var name = Text(lookup, R.LookupName) ?? string.Empty;
             var token = Text(lookup, R.LookupToken) ?? string.Empty;
+            if (token.Length == 0)
+            {
+                // Nowhere to put the id: the request was built without a placeholder for it.
+                return Refused($"athena-{kind}-no-placeholder");
+            }
+
             var id = await LookupAsync(kind, name, cancellationToken);
             if (id is null)
             {
@@ -243,7 +250,7 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
     private string? AthenaPatientId(string? targetPatientId) =>
         PatientId(targetPatientId) ?? (Options.IsTestRun ? TestServerPatientId(targetPatientId) : null);
 
-    /// <summary>A FHIR id (letters, digits, '-' and '.', at most 64), without a leading <c>Patient/</c>.</summary>
+    /// <summary>A FHIR id (letters, digits, '-' and '.', at most 64, not dots alone), without a leading <c>Patient/</c>.</summary>
     internal static string? TestServerPatientId(string? targetPatientId)
     {
         var id = targetPatientId?.Trim() ?? string.Empty;
@@ -252,7 +259,12 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
             id = id["Patient/".Length..];
         }
 
-        return id.Length is > 0 and <= 64 && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.') ? id : null;
+        // An id of dots alone ('.', '..') would be a path segment in chart/{id}/..., not an id.
+        return id.Length is > 0 and <= 64
+            && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.')
+            && id.Any(c => c != '.')
+            ? id
+            : null;
     }
 
     /// <summary>athenaOne's patient id from a target patient id: athena's FHIR id <c>a-{practice}.E-{enterpriseid}</c>
@@ -366,7 +378,11 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
             }
         }
 
-        _departments[patientId] = department;
+        if (IsDefinitive(result))
+        {
+            _departments[patientId] = department;
+        }
+
         return department;
     }
 
@@ -387,6 +403,7 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
         };
 
         string? id = null;
+        var definitive = true;
         if (path is not null && name.Trim().Length >= 2)
         {
             var result = await GetAsync($"{path}?searchvalue={Uri.EscapeDataString(name.Trim())}", cancellationToken);
@@ -409,9 +426,15 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
                     id = null;
                 }
             }
+
+            definitive = IsDefinitive(result);
         }
 
-        _lookups[(kind, name)] = id;
+        if (definitive)
+        {
+            _lookups[(kind, name)] = id;
+        }
+
         return id;
     }
 
@@ -420,6 +443,13 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
             new FhirRawWriteRequest("GET", $"{_apiBase}/{relativePath}", Idempotent: true, AddSourceQueryParameters: false),
             _fhir.Source,
             cancellationToken);
+
+    /// <summary>athena answered, so the answer holds for the rest of the run: a 2xx, or a 4xx about the request. Not an
+    /// unknown outcome (timeout, 5xx, 429 retries spent), a refusal made before sending (no token), or 401/403/408,
+    /// which say nothing about the patient or the name looked up.</summary>
+    private static bool IsDefinitive(FhirRawWriteResult result) =>
+        result.Kind == FhirWriteOutcomeKind.Created
+        || (result.Kind == FhirWriteOutcomeKind.Rejected && result.StatusCode is { } status && status is not (401 or 403 or 408));
 
     /// <summary>A refusal made before anything was sent (no HTTP status), so the next run tries again.</summary>
     private static EhrCreateOutcome Refused(string code) =>

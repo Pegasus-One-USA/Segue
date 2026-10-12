@@ -121,6 +121,8 @@ public sealed class VendorEhrWriteChannelTests
     [InlineData("42", "42")]
     [InlineData("a b", null)]
     [InlineData("", null)]
+    [InlineData(".", null)]
+    [InlineData("Patient/..", null)]
     public void On_a_test_server_any_fhir_patient_id_is_used_as_it_is(string? target, string? expected)
     {
         AthenaOneEhrWriteChannel.TestServerPatientId(target).Should().Be(expected);
@@ -232,6 +234,63 @@ public sealed class VendorEhrWriteChannelTests
         outcome.HttpStatus.Should().BeNull(because: "nothing was sent, so the next run may try again");
         outcome.Issues.Single().VendorCode.Should().Be("athena-medication-not-found");
         sent.Should().OnlyContain(r => r.Method == "GET");
+    }
+
+    [Fact]
+    public async Task Athena_refuses_a_lookup_with_no_placeholder_to_fill_instead_of_throwing()
+    {
+        var client = new Mock<IFhirWriteClient>();
+        var sent = new List<FhirRawWriteRequest>();
+        client.Setup(c => c.SendAsync(Capture.In(sent), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Ok("""{"success":true}"""));
+        var channel = new AthenaOneEhrWriteChannel(
+            Fhir(client, AthenaFhirBase, SourceSystemType.Athenahealth, Options with { TargetDepartmentId = "1" }), "195900");
+        var request = """
+            {"resourceType":"AthenaOneRequest","operation":"medication","method":"POST","path":"chart/{patientid}/medications",
+             "fields":{"medicationid":"x"},
+             "lookups":[{"kind":"medication","name":"metformin 500 mg tablet"}],
+             "patient":"a-195900.E-12"}
+            """;
+
+        var outcome = await channel.CreateAsync("MedicationRequest", request, CancellationToken.None);
+
+        outcome.Kind.Should().Be(EhrCreateKind.Rejected);
+        outcome.Issues.Single().VendorCode.Should().Be("athena-medication-no-placeholder");
+        sent.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Athena_asks_again_for_a_department_after_a_transient_failure_but_not_after_an_answer()
+    {
+        var client = new Mock<IFhirWriteClient>();
+        var departmentReads = 0;
+        client.Setup(c => c.SendAsync(It.IsAny<FhirRawWriteRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((FhirRawWriteRequest r, FhirSourceConfiguration _, CancellationToken _) =>
+            {
+                if (!r.Url.EndsWith("/patients/12", StringComparison.Ordinal))
+                {
+                    return Ok("""{"success":true}""");
+                }
+
+                // The first read times out; the second answers.
+                return ++departmentReads == 1
+                    ? new FhirRawWriteResult(FhirWriteOutcomeKind.OutcomeUnknown, 503, null, [])
+                    : Ok("""[{"patientid":"12","primarydepartmentid":"150"}]""");
+            });
+        var channel = new AthenaOneEhrWriteChannel(Fhir(client, AthenaFhirBase, SourceSystemType.Athenahealth), "195900");
+        var request = """
+            {"resourceType":"AthenaOneRequest","operation":"problem","method":"POST","path":"chart/{patientid}/problems",
+             "department":true,"fields":{"snomedcode":"1"},"patient":"a-195900.E-12"}
+            """;
+
+        var first = await channel.CreateAsync("Condition", request, CancellationToken.None);
+        var second = await channel.CreateAsync("Condition", request, CancellationToken.None);
+        var third = await channel.CreateAsync("Condition", request, CancellationToken.None);
+
+        first.Issues.Single().VendorCode.Should().Be("athena-department-unknown");
+        second.Kind.Should().Be(EhrCreateKind.Created);
+        third.Kind.Should().Be(EhrCreateKind.Created);
+        departmentReads.Should().Be(2, because: "the answer from the second read is kept for the rest of the run");
     }
 
     [Fact]
