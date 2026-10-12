@@ -156,6 +156,14 @@ const LAUNCHER_ROWS: readonly LauncherRow[] = [
     summary: 'External identity providers for single sign-on',
     superAdminOnly: true,
   },
+  {
+    isLauncher: true,
+    code: 'error-log',
+    label: 'Error Log Handling',
+    summary: 'Which errors are recorded, how long they are kept, auto-clear and log size',
+    // Same permission the Errors screens use; saving inside needs governance.write.
+    permissions: ['governance.read'],
+  },
 ];
 
 @Component({
@@ -499,22 +507,6 @@ export class SystemSettingListComponent implements OnInit {
     // Shared opener, so every entry point (this row, the app shell's license banners, the dev-mint page)
     // lands on the identical dialog.
     this.settingsPageDialog.open(row.code);
-  }
-
-  openAdd(): void {
-    this.customDialog
-      .open<SystemSettingDialogComponent, SystemSettingDialogData, boolean>(SystemSettingDialogComponent, {
-        width: '520px',
-        disableClose: true,
-        data: { mode: 'create' },
-      })
-      .afterClosed()
-      .subscribe(res => {
-        if (res) {
-          this.toast.success('Setting saved.');
-          this.load();
-        }
-      });
   }
 
   openEdit(setting: SystemSetting): void {

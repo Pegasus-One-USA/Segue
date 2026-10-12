@@ -26,6 +26,12 @@ public sealed class LicenseServerDbContext : DbContext
 
     public DbSet<LicenseRequest> LicenseRequests => Set<LicenseRequest>();
 
+    public DbSet<ErrorReportImport> ErrorReportImports => Set<ErrorReportImport>();
+
+    public DbSet<ErrorReportEntry> ErrorReportEntries => Set<ErrorReportEntry>();
+
+    public DbSet<ErrorReportCorrelation> ErrorReportCorrelations => Set<ErrorReportCorrelation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<IssuedLicense>(entity =>
@@ -65,6 +71,51 @@ public sealed class LicenseServerDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.FulfilledIssuedLicenseId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ErrorReportImport>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(200);
+            entity.Property(x => x.ClientName).HasMaxLength(200);
+            entity.Property(x => x.ImportedBy).HasMaxLength(200);
+            entity.Property(x => x.SourceFileName).HasMaxLength(300);
+            entity.Property(x => x.Format).HasMaxLength(10);
+            entity.Property(x => x.ApplicationVersion).HasMaxLength(400);
+            entity.HasIndex(x => x.ImportedAtUtc);
+            entity.HasIndex(x => x.ClientName);
+            entity.HasMany(x => x.Entries)
+                .WithOne(x => x.Import)
+                .HasForeignKey(x => x.ImportId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ErrorReportCorrelation>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.CorrelationId).HasMaxLength(150);
+            entity.Property(x => x.RunStatus).HasMaxLength(60);
+            entity.Property(x => x.EventsJson).HasColumnType("text");
+            entity.HasIndex(x => new { x.ImportId, x.CorrelationId });
+            entity.HasOne(x => x.Import)
+                .WithMany(x => x.Correlations)
+                .HasForeignKey(x => x.ImportId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ErrorReportEntry>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Message).HasColumnType("text");
+            entity.Property(x => x.StackTrace).HasColumnType("text");
+            entity.Property(x => x.Cause).HasMaxLength(1000);
+            entity.Property(x => x.WorkflowName).HasMaxLength(200);
+            entity.Property(x => x.NodeName).HasMaxLength(200);
+            entity.Property(x => x.NodeType).HasMaxLength(200);
+            entity.Property(x => x.SourceName).HasMaxLength(200);
+            entity.Property(x => x.DestinationName).HasMaxLength(200);
+            entity.Property(x => x.ResourceType).HasMaxLength(200);
+            entity.HasIndex(x => new { x.ImportId, x.OccurredOnUtc });
         });
     }
 }

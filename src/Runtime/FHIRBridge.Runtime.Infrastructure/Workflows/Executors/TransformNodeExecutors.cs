@@ -140,6 +140,7 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
         var transformedCount = 0;
         var ruleErrors = new List<string>();
 
+        FHIRBridge.Governance.WorkflowDebug.Stage($"Transformation: applying the rules for destination ‘{destination.Name}’ ({destination.DestinationType}) to the incoming resources.");
         foreach (var resource in ReadResourceEnvelopes(inputs))
         {
             var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
@@ -158,9 +159,18 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
             }
 
             transformed.Add(resource with { Payload = result.Json });
+            FHIRBridge.Governance.WorkflowDebug.Resource(
+                $"Resource {resource.ResourceType}/{resource.ResourceId} transformed ({(ReferenceEquals(result.Json, sourceJson) ? "unchanged" : "changed")}); {result.Hops.Count(hop => !hop.Success)} rule hop(s) failed.");
+            foreach (var failedHop in result.Hops.Where(hop => !hop.Success))
+            {
+                FHIRBridge.Governance.WorkflowDebug.Resource(
+                    $"Resource {resource.ResourceType}/{resource.ResourceId}: transformation of '{failedHop.SourceField}' failed in rule step [{failedHop.NodeType}]: {failedHop.Error}", isFailure: true);
+            }
+
             await CaptureLineageAsync(context, node, resource, result, destination, sourceSystem, cancellationToken);
         }
 
+        FHIRBridge.Governance.WorkflowDebug.Stage($"Transformation finished: {transformed.Count} resource(s), {transformedCount} changed, {ruleErrors.Count} rule hop(s) failed.");
         if (ruleErrors.Count > 0)
         {
             // Warning, not Error: a failed rule hop degrades one field, it doesn't fail the run — so nothing
@@ -216,6 +226,11 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
         var transformedCount = 0;
         var ruleErrors = new List<string>();
 
+        FHIRBridge.Governance.WorkflowDebug.Stage($"Transformation: applying {inlineRules.Count} rule(s) defined on this node to the incoming resources.");
+        if (FHIRBridge.Governance.WorkflowDebug.StagesEnabled)
+        {
+            FHIRBridge.Governance.WorkflowDebug.Stage(FHIRBridge.Runtime.Infrastructure.Workflows.WorkflowDebugConfig.DescribeRules(inlineRules));
+        }
         foreach (var resource in ReadResourceEnvelopes(inputs))
         {
             var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
@@ -237,8 +252,16 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
             }
 
             transformed.Add(resource with { Payload = result.Json });
+            FHIRBridge.Governance.WorkflowDebug.Resource(
+                $"Resource {resource.ResourceType}/{resource.ResourceId} transformed ({(ReferenceEquals(result.Json, sourceJson) ? "unchanged" : "changed")}); {result.Hops.Count(hop => !hop.Success)} rule hop(s) failed.");
+            foreach (var failedHop in result.Hops.Where(hop => !hop.Success))
+            {
+                FHIRBridge.Governance.WorkflowDebug.Resource(
+                    $"Resource {resource.ResourceType}/{resource.ResourceId}: transformation of '{failedHop.SourceField}' failed in rule step [{failedHop.NodeType}]: {failedHop.Error}", isFailure: true);
+            }
         }
 
+        FHIRBridge.Governance.WorkflowDebug.Stage($"Transformation finished: {transformed.Count} resource(s), {transformedCount} changed, {ruleErrors.Count} rule hop(s) failed.");
         Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(
             Logger,
             FHIRBridge.Observability.Logging.LogEvents.TransformCompleted,
@@ -372,8 +395,9 @@ public sealed class FhirResourceTransformNodeExecutor : PassThroughNodeExecutor
                 },
                 cancellationToken);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            FHIRBridge.Governance.SwallowedError.Report(exception, "Transform.Lineage capture");
             // Intentionally swallowed — see the method summary.
         }
     }
@@ -650,6 +674,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // token, same as JsonMappingEngine already does for any token absent from systemValues.
             };
 
+            FHIRBridge.Governance.WorkflowDebug.Stage($"Mapping ‘{resourceType}’ -> ‘{destinationObject}’: {fields.Count} field mapping(s) for {group.Count()} resource(s).");
+            if (FHIRBridge.Governance.WorkflowDebug.StagesEnabled)
+            {
+                FHIRBridge.Governance.WorkflowDebug.Stage(FHIRBridge.Runtime.Infrastructure.Workflows.WorkflowDebugConfig.DescribeMapping(resourceType, destinationObject, fields));
+            }
             foreach (var resource in group)
             {
                 var sourceJson = Convert.ToString(resource.Payload) ?? "{}";
@@ -662,6 +691,11 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 // ConfiguredPipelineService's identical Configured Pipeline handling of this token.
                 systemValues["@newGuid"] = Guid.NewGuid();
                 var mapped = _mappingEngine?.Map(sourceJson, fields, systemValues);
+                FHIRBridge.Governance.WorkflowDebug.Resource(
+                    mapped is null
+                        ? $"Resource {resource.ResourceType}/{resource.ResourceId}: no mapping engine result - passed through unmapped to '{destinationObject}'."
+                        : $"Resource {resource.ResourceType}/{resource.ResourceId} mapped to '{destinationObject}'.",
+                    isFailure: mapped is null);
                 if (mapped is null)
                 {
                     records.Add(new MappedDestinationRecord(
@@ -1766,8 +1800,9 @@ public sealed class MappingNodeExecutor : WorkflowNodeExecutorBase
                 },
                 cancellationToken);
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
+            FHIRBridge.Governance.SwallowedError.Report(exception, "Transform.Lineage capture");
         }
     }
 

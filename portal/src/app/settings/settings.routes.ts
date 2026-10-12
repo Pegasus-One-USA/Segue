@@ -20,7 +20,7 @@ const TERMINOLOGY_PERMISSIONS = TERMINOLOGY_PERMISSION_CODES;
 // role holding only e.g. loinc.view would still see this shell's parent tab, then find every child
 // inside it hidden (Email needs configuration.*, General/Security need SuperAdmin, and Terminology
 // is force-disabled below), landing on an empty shell instead of being routed to something real.
-const SYSTEM_SETTINGS_PERMISSIONS = ['configuration.view', 'configuration.write', ...(TERMINOLOGY_FEATURE_ENABLED ? TERMINOLOGY_PERMISSIONS : [])];
+const SYSTEM_SETTINGS_PERMISSIONS = ['configuration.view', 'configuration.write', 'governance.read', ...(TERMINOLOGY_FEATURE_ENABLED ? TERMINOLOGY_PERMISSIONS : [])];
 
 // Every child below keeps the exact guard/permission it had as a standalone top-level route
 // before consolidation under this shell — see docs/backend/12-provider-standalone-ehr-launch-fixes.md.
@@ -174,7 +174,7 @@ export const SETTINGS_ROUTES: Routes = [
             // only that permission has to reach General to open it. Such a role sees the EHR Endpoints row
             // and nothing else — the setting groups themselves still render only for configuration.* holders
             // (see SystemSettingListComponent.canSee / SUPER_ADMIN_ONLY_GROUPS).
-            data: { permissions: ['configuration.view', 'configuration.write', 'ehrendpoints.view'] },
+            data: { permissions: ['configuration.view', 'configuration.write', 'ehrendpoints.view', 'governance.read'] },
             loadComponent: () =>
               import('../system-settings/pages/system-setting-list/system-setting-list.component').then(
                 m => m.SystemSettingListComponent

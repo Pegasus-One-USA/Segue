@@ -1,8 +1,10 @@
 <div class="list-page">
-  <div class="page-header">
-    <h1>Errors</h1>
-    <p class="page-sub">Problems that happened while running your workflows or connecting to Segue. Some you can fix yourself (like an expired connection); others need our support team — the "What to do" column tells you which.</p>
-  </div>
+  @if (!embedded) {
+    <div class="page-header">
+      <h1>Errors</h1>
+      <p class="page-sub">Problems that happened while running your workflows or connecting to Segue. Some you can fix yourself (like an expired connection); others need our support team — the "What to do" column tells you which.</p>
+    </div>
+  }
 
   <details class="info-panel">
     <summary>What am I looking at?</summary>
@@ -45,11 +47,25 @@
           placeholder="Error Reference ID (e.g. ERR-20260721-000123)…"
           [value]="errorReferenceId()"
           (input)="errorReferenceId.set($any($event.target).value)"
-          (keyup.enter)="load()"
+          (keyup.enter)="search()"
         />
       </div>
+      <select class="type-select" aria-label="Entry type" [value]="severity()" (change)="severity.set($any($event.target).value)">
+        <option value="" [selected]="!severity()">Errors (default)</option>
+        <option value="Critical" [selected]="severity() === 'Critical'">Critical</option>
+        <option value="Error" [selected]="severity() === 'Error'">Error</option>
+        <option value="WorkflowDebug" [selected]="severity() === 'WorkflowDebug'">Workflow debug trace</option>
+        <option value="Warning" [selected]="severity() === 'Warning'">Warnings</option>
+        <option value="Information" [selected]="severity() === 'Information'">Information</option>
+      </select>
+      <select class="type-select" aria-label="Category" [value]="category()" (change)="category.set($any($event.target).value)">
+        <option value="" [selected]="!category()">All categories</option>
+        @for (c of categoryOptions; track c) {
+          <option [value]="c" [selected]="c === category()">{{ c }}</option>
+        }
+      </select>
       <div class="filter-actions">
-        <button class="btn-search" type="button" (click)="load()">Search</button>
+        <button class="btn-search" type="button" (click)="search()">Search</button>
         <button class="btn-reset" type="button" (click)="reset()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
@@ -60,6 +76,23 @@
       </div>
     </div>
   </div>
+
+  <div class="applied" aria-live="polite">
+    <span class="applied-label">Showing:</span>
+    @if (chips().length === 0) {
+      <span class="chip">All errors</span>
+    }
+    @for (chip of chips(); track chip.key) {
+      <span class="chip">
+        <span class="chip-label">{{ chip.label }}:</span> {{ chip.value }}
+        <button class="chip-remove" type="button" [attr.aria-label]="'Remove ' + chip.label + ' filter'" (click)="removeChip(chip.key)">×</button>
+      </span>
+    }
+    <span class="applied-count">{{ result().totalCount }} found</span>
+  </div>
+  @if (dirty()) {
+    <p class="dirty-note">You have changed the search. Press <strong>Search</strong> to update the list.</p>
+  }
 
   <div class="table-card">
     <div class="table-wrapper">
@@ -83,34 +116,7 @@
         <ng-container matColumnDef="message">
           <th mat-header-cell *matHeaderCellDef>What happened</th>
           <td mat-cell *matCellDef="let r">
-            <span
-              class="clickable"
-              role="button"
-              tabindex="0"
-              [attr.aria-expanded]="expandedId() === r.id"
-              (click)="toggleStackTrace(r.id)"
-              (keydown.enter)="toggleStackTrace(r.id)"
-              (keydown.space)="toggleStackTrace(r.id); $event.preventDefault()"
-            >{{ r.userFriendlyMessage || r.message }}</span>
-            @if (expandedId() === r.id) {
-              <div class="detail-panel">
-                <p class="detail-context">
-                  @if (r.severity) { <span>Severity: <code>{{ r.severity }}</code></span> }
-                  @if (r.category) { <span>Category: <code>{{ r.category }}</code></span> }
-                  @if (r.diagnosisAction) { <span>Diagnosis: <code>{{ r.diagnosisAction }}</code></span> }
-                  @if (r.executionId) { <span>Execution: <code>{{ r.executionId }}</code></span> }
-                  @if (r.workflowId) { <span>Workflow: <code>{{ r.workflowId }}</code></span> }
-                  @if (r.endpointId) { <span>Endpoint: <code>{{ r.endpointId }}</code></span> }
-                  @if (r.traceId) { <span>Trace: <code>{{ r.traceId }}</code></span> }
-                  @if (r.spanId) { <span>Span: <code>{{ r.spanId }}</code></span> }
-                </p>
-                @if (r.resolvedBy) { <p><strong>Resolved by:</strong> {{ r.resolvedBy }} ({{ r.resolvedOnUtc | date:'medium' }})</p> }
-                <button class="btn btn-ghost btn-sm" type="button" (click)="copyForSupport(r); $event.stopPropagation()">Copy for support</button>
-                <p class="detail-heading">Technical details</p>
-                <p class="mono">{{ r.exceptionType }}: {{ r.message }}</p>
-                @if (r.stackTrace) { <pre class="stack-trace">{{ r.stackTrace }}</pre> }
-              </div>
-            }
+            <button class="clickable" type="button" title="Open full details" (click)="openDetail(r)">{{ r.userFriendlyMessage || r.message }}</button>
           </td>
         </ng-container>
 
@@ -121,11 +127,6 @@
               {{ actionLabel(r) }}
             </span>
           </td>
-        </ng-container>
-
-        <ng-container matColumnDef="status">
-          <th mat-header-cell *matHeaderCellDef>Status</th>
-          <td mat-cell *matCellDef="let r"><span class="status-badge" [class]="'status-' + (r.status || 'open').toLowerCase()">{{ r.status || 'Open' }}</span></td>
         </ng-container>
 
         <ng-container matColumnDef="correlationId">
@@ -142,13 +143,7 @@
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef>Actions</th>
           <td mat-cell *matCellDef="let r">
-            @if (r.errorReferenceId) {
-              @if ((r.status || 'Open') === 'Open') {
-                <button class="btn btn-ghost btn-sm" type="button" *appHideWithoutPermission="'governance.write'" (click)="resolve(r)">Resolve</button>
-              } @else {
-                <button class="btn btn-ghost btn-sm" type="button" *appHideWithoutPermission="'governance.write'" (click)="reopen(r)">Reopen</button>
-              }
-            }
+            <button class="btn btn-ghost btn-sm" type="button" (click)="openDetail(r)">Details</button>
           </td>
         </ng-container>
 
@@ -176,3 +171,5 @@
     }
   </div>
 </div>
+
+<app-error-detail-dialog (showInList)="applyTarget($event)" />

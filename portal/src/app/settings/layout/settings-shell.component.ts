@@ -53,7 +53,7 @@ const SETTINGS_TABS: SettingsTab[] = [
     // route and its landing candidate: EHR Endpoints is a row on this tab now, so a role holding only
     // that permission must still see the tab that leads to it.
     permissions: [
-      'configuration.view', 'configuration.write',
+      'configuration.view', 'configuration.write', 'governance.read',
       'ehrendpoints.view',
       ...(TERMINOLOGY_FEATURE_ENABLED ? TERMINOLOGY_PERMISSION_CODES : []),
     ],

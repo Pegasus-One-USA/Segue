@@ -3788,9 +3788,10 @@ public static class WorkflowEndpoints
                     CorrelationId: workflowRunId.ToString()),
                 cancellationToken);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // Audit-trail best effort: a logging failure must never turn a clean 404 into a 500.
+            FHIRBridge.Governance.SwallowedError.Report(exception, "Workflow.LaunchResult audit write");
         }
     }
 
@@ -3809,9 +3810,10 @@ public static class WorkflowEndpoints
                     CorrelationId: workflowId.ToString()),
                 cancellationToken);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // Audit-trail best effort: a logging failure must never turn a clean 404 into a 500.
+            FHIRBridge.Governance.SwallowedError.Report(exception, "Workflow.LaunchResult audit write");
         }
     }
 

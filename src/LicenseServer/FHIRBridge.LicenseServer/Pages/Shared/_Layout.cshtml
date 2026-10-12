@@ -39,6 +39,7 @@
                     <a class="@NavClass("/LicenseRequests/History")" href="/LicenseRequests/History">Request History</a>
                     <a class="@NavClass("/Licenses/Create")" href="/Licenses/Create">Mint License</a>
                     <a class="@NavClass("/Licenses")" href="/Licenses">Issued Licenses</a>
+                    <a class="@(Context.Request.Path.StartsWithSegments("/ErrorReports") ? "active" : "")" href="/ErrorReports">Error Reports</a>
                     <a class="@NavClass("/Guide")" href="/Guide">Guide</a>
                 </nav>
                 <form method="post" action="/Account/Logout" class="logout-form">

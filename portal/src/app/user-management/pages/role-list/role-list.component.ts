@@ -86,13 +86,16 @@ export class RoleListComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef),
     ).subscribe(() => {
       this.pageIndex.set(0);
-      this.loadRoles();
+      // Silent: with the app-wide loader the page goes [inert] and the search box loses focus mid-typing.
+      this.loadRoles(true);
     });
 
     this.loadRoles();
   }
 
-  loadRoles(): void {
+  /** `silent` comes only from the debounced search box — see ApiRoleService.getPagedRoles. Every other reload (open,
+   *  sort, paging, after an edit) keeps the app-wide loader. */
+  loadRoles(silent = false): void {
     this.loading.set(true);
     const direction = this.actionOnSortDirection();
     this.svc.getPagedRoles({
@@ -100,7 +103,7 @@ export class RoleListComponent implements OnInit {
       sortDescending: direction ? direction === 'desc' : undefined,
       page: this.pageIndex() + 1,
       pageSize: this.pageSize(),
-    }).subscribe({
+    }, silent).subscribe({
       next: result => {
         this.roles.set(result.items);
         this.totalCount.set(result.totalCount);

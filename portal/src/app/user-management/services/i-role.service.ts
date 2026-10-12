@@ -18,7 +18,8 @@ export interface RoleFilter {
 
 export abstract class IRoleService {
   abstract getRoles(): Observable<Role[]>;
-  abstract getPagedRoles(filter: RoleFilter): Observable<PagedResult<Role>>;
+  /** `silent` (passed only from the Role list's search box) skips the app-wide loader — see ApiRoleService. */
+  abstract getPagedRoles(filter: RoleFilter, silent?: boolean): Observable<PagedResult<Role>>;
   abstract getRole(id: string): Observable<Role>;
   abstract createRole(req: CreateRoleRequest): Observable<Role>;
   abstract updateRole(id: string, req: UpdateRoleRequest): Observable<Role>;

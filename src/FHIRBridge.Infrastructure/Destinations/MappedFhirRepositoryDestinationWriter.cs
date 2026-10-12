@@ -341,6 +341,7 @@ public sealed class MappedFhirRepositoryDestinationWriter : IConfiguredDestinati
                 }
                 catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException)
                 {
+                    FHIRBridge.Governance.SwallowedError.Report(exception, "Destination.FHIR existing-resource check");
                     inconclusiveTypes.Add(type);
                     continue;
                 }

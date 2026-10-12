@@ -1,0 +1,82 @@
+<div class="list-page">
+  <div class="page-header">
+    <h1>Error Log Settings</h1>
+    <p class="page-sub">Choose which entries are written to the error log, and how long they are kept.</p>
+  </div>
+
+  @if (loading()) {
+    <p class="empty-state">Loading…</p>
+  } @else {
+    <section class="card" aria-labelledby="storage-title">
+      <h2 id="storage-title">Current size</h2>
+      @if (storage(); as st) {
+        <dl class="facts">
+          <dt>Size of entries</dt><dd>{{ formatBytes(st.dataBytes ?? st.sizeBytes) }}</dd>
+          <dt>Space reserved by the database</dt><dd>{{ formatBytes(st.sizeBytes) }}</dd>
+          <dt>Entries</dt><dd>{{ st.entryCount | number }}</dd>
+          <dt>Oldest entry</dt><dd>{{ st.oldestUtc ? (st.oldestUtc | date: 'medium') : '—' }}</dd>
+          <dt>Newest entry</dt><dd>{{ st.newestUtc ? (st.newestUtc | date: 'medium') : '—' }}</dd>
+        </dl>
+        <p class="hint">The database keeps the space it has reserved after entries are deleted and reuses it for new ones, so that figure may not go down. "Size of entries" is what changes when you delete.</p>
+      }
+    </section>
+
+    <section class="card" aria-labelledby="types-title">
+      <h2 id="types-title">What to record</h2>
+      <p class="help">Entry types</p>
+      @for (name of severities(); track name) {
+        <label class="option">
+          <input type="checkbox" [checked]="selectedSeverities().includes(name)" (change)="toggle('severity', name, $any($event.target).checked)" />
+          <span><strong>{{ name }}</strong><span class="hint">{{ severityHelp(name) }}</span></span>
+        </label>
+      }
+      @if (lowSeverityOn()) {
+        <p class="note">Warning and Information entries come from the application's own log lines (not framework messages) and are limited to a fixed number per minute. They are recorded alongside errors and appear in the Errors list and on the dashboard.</p>
+      }
+
+      @if (workflowDebugOn()) {
+        <p class="help">WorkflowDebug detail</p>
+        @for (option of detailOptions; track option.value) {
+          <label class="option">
+            <input type="radio" name="workflowDebugDetail" [checked]="workflowDebugDetail() === option.value" (change)="workflowDebugDetail.set(option.value)" />
+            <span><strong>{{ option.label }}</strong><span class="hint">{{ option.help }}</span></span>
+          </label>
+        }
+        <p class="note">WorkflowDebug writes several entries per workflow run. Turn it on while investigating a problem and off afterwards (or let auto-clear remove them). To read a run's trace, open an error from that run and choose "View correlation details", or search its correlation ID in Errors.</p>
+      }
+
+      <p class="help">Error categories</p>
+      <div class="option-grid">
+        @for (name of categories(); track name) {
+          <label class="option">
+            <input type="checkbox" [checked]="selectedCategories().includes(name)" (change)="toggle('category', name, $any($event.target).checked)" />
+            <span><strong>{{ name }}</strong><span class="hint">{{ categoryHelp(name) }}</span></span>
+          </label>
+        }
+      </div>
+      @if (nothingSelected()) {
+        <p class="warn">Select at least one entry type and one category, otherwise nothing would be recorded.</p>
+      }
+    </section>
+
+    <section class="card" aria-labelledby="retention-title">
+      <h2 id="retention-title">Keeping entries</h2>
+      <label class="option">
+        <input type="checkbox" [checked]="autoClear()" (change)="autoClear.set($any($event.target).checked)" />
+        <span><strong>Automatically delete old entries</strong>
+          <span class="hint">When on, entries (including Warning and Information entries) older than the number of days below are permanently deleted. Checked about once an hour.</span></span>
+      </label>
+      <label class="field">
+        <span class="field-label">Keep entries for (days)</span>
+        <input class="field-input" type="number" [min]="minRetentionDays()" max="3650" [value]="retentionDays()" (change)="setDays($any($event.target).value)" />
+      </label>
+      <p class="hint">Between {{ minRetentionDays() }} and 3,650 days. Changes take effect within a minute.</p>
+    </section>
+
+    <div class="actions">
+      <button class="btn-search" type="button" (click)="save()" [disabled]="saving() || nothingSelected()">Save settings</button>
+      <button class="btn-reset" type="button" (click)="load()" [disabled]="saving()">Discard changes</button>
+      <button class="btn-reset" type="button" (click)="confirmPurge()" [disabled]="purging()">Delete entries older than {{ retentionDays() }} days now</button>
+    </div>
+  }
+</div>

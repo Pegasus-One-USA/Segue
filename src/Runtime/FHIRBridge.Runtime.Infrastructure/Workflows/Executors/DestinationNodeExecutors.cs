@@ -922,6 +922,25 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
 
         var destination = ReadConfiguration<DestinationConfiguration>(node, "destination")
             ?? CreateDestinationConfiguration(context, node);
+        if (FHIRBridge.Governance.WorkflowDebug.StagesEnabled)
+        {
+            FHIRBridge.Governance.WorkflowDebug.Stage(FHIRBridge.Runtime.Infrastructure.Workflows.WorkflowDebugConfig.DescribeDestination(
+                destination,
+                [
+                    ("write mode", ReadStringConfiguration(node, "dest_writeMode")),
+                    ("FHIR mapping mode", ReadStringConfiguration(node, "dest_fhirMapMode")),
+                    ("destination object", ReadStringConfiguration(node, "destinationObject")),
+                    ("auth type", ReadStringConfiguration(node, "authType")),
+                    ("content type", ReadStringConfiguration(node, "contentType")),
+                    ("http method", ReadStringConfiguration(node, "httpMethod")),
+                    ("on failure", ReadStringConfiguration(node, "onFailure")),
+                ]));
+        }
+
+        FHIRBridge.Governance.ErrorContext.Set(
+            destinationName: destination.Name,
+            resourceType: string.Join(", ", records.Select(r => r.ResourceType)
+                .Where(t => !string.IsNullOrWhiteSpace(t)).Distinct().Take(5)));
 
         if (_writerFactory is null)
         {
@@ -1007,6 +1026,8 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 // discards writeFailureReasons entirely, so the run reports only the downstream symptom
                 // ("no row in [dbo].[X] has [Y] = ...") and hides the failure that actually caused it.
                 FHIRBridge.Application.Abstractions.Destinations.DestinationWriteResult groupResult;
+                FHIRBridge.Governance.ErrorContext.Set(resourceType: group.Key);
+                FHIRBridge.Governance.WorkflowDebug.Write($"Writing {groupRecords.Length} ‘{group.Key}’ record(s) to destination ‘{destination.Name}’ ({_destinationType}).");
                 try
                 {
                     groupResult = await writer.WriteAsync(destination, effectiveProfile, groupRecords, writeContext, cancellationToken);
@@ -1027,6 +1048,15 @@ public abstract class DestinationNodeExecutor : WorkflowNodeExecutorBase
                 }
 
                 totalWritten += groupResult.Count;
+                if (groupResult.RecordErrors is { Count: > 0 } traceErrors)
+                {
+                    foreach (var recordError in traceErrors.Take(100))
+                    {
+                        FHIRBridge.Governance.WorkflowDebug.Resource($"Destination ‘{destination.Name}’: a ‘{group.Key}’ record was not written - {recordError}", isFailure: true);
+                    }
+                }
+
+                FHIRBridge.Governance.WorkflowDebug.Write($"Destination ‘{destination.Name}’: ‘{group.Key}’ write finished - {groupResult.Count} of {groupRecords.Length} record(s) written, {groupResult.RecordErrors?.Count ?? 0} record error(s).");
                 firstDownloadUrl ??= groupResult.DownloadUrl;
                 writeResult = groupResult;
 

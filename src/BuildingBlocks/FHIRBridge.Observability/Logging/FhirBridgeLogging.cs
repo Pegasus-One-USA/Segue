@@ -43,7 +43,10 @@ public static class FhirBridgeLogging
             .Enrich.WithSpan()
             .Enrich.WithProperty("Application", serviceName)
             .Enrich.With(new PhiMaskingEnricher(configuration))
-            .WriteTo.Console();
+            .WriteTo.Console()
+            // Central error capture: relays Error/Fatal events to FHIRBridge.Governance's ambient capture service
+            // (no-op until that service attaches, or when ErrorCapture:Ambient:Enabled is false).
+            .WriteTo.Sink(new ErrorCaptureRelaySink(), LogEventLevel.Information);
 
         var seqUrl = configuration["Observability:SeqServerUrl"];
         if (!string.IsNullOrWhiteSpace(seqUrl))
