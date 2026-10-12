@@ -139,6 +139,44 @@ public sealed class WorkflowSaveRuleCleanupTests : IDisposable
     }
 
     [Fact]
+    public async Task Deleting_the_destination_together_with_its_De_identification_step_deletes_the_rules()
+    {
+        // The saved definition no longer references the destination at all, but its connection still names the
+        // policy. Ownership is judged against what this workflow used BEFORE the save too, so the connection is
+        // recognised as the workflow's own rather than an outside user that keeps the rules alive.
+        var (destination, policy) = await SeedAsync();
+        var replacement = new DestinationConfiguration(
+            "New warehouse", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        _db.DestinationConfigurations.Add(replacement);
+        await SaveAsync();
+
+        var result = await SaveWorkflowAsync(
+            Definition(_workflowId, destination.Id), Definition(_workflowId, replacement.Id, deIdentification: false));
+
+        result.DeIdentificationRulesKeptBecauseUsedBy.Should().BeNull();
+        result.DeIdentificationRulesDeleted.Should().Be(1);
+        (await PolicyRuleCountAsync(policy.Id)).Should().Be(0);
+        (await _db.DestinationConfigurations.SingleAsync(d => d.Id == destination.Id)).DeIdentificationProfileId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_removed_destination_still_used_by_another_workflow_keeps_the_rules()
+    {
+        var (destination, policy) = await SeedAsync();
+        _db.WorkflowDefinitions.Add(Definition(Guid.NewGuid(), destination.Id));
+        var replacement = new DestinationConfiguration(
+            "New warehouse", DestinationType.SqlServer, new SecretReference("kv", "secret"), "FHIRBridge");
+        _db.DestinationConfigurations.Add(replacement);
+        await SaveAsync();
+
+        var result = await SaveWorkflowAsync(
+            Definition(_workflowId, destination.Id), Definition(_workflowId, replacement.Id, deIdentification: false));
+
+        result.DeIdentificationRulesKeptBecauseUsedBy.Should().ContainSingle().Which.Should().Contain("Warehouse");
+        (await PolicyRuleCountAsync(policy.Id)).Should().Be(1);
+    }
+
+    [Fact]
     public async Task A_save_that_keeps_the_De_identification_step_deletes_nothing()
     {
         var (destination, policy) = await SeedAsync();

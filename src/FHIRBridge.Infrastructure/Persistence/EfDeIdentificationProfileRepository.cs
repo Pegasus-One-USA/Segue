@@ -26,7 +26,7 @@ public sealed class EfDeIdentificationProfileRepository : IDeIdentificationProfi
     }
 
     public async Task<DeIdentificationProfileUsage> FindUsageAsync(
-        Guid profileId, Guid workflowId, CancellationToken cancellationToken)
+        Guid profileId, Guid workflowId, IReadOnlyCollection<Guid> previousDestinationIds, CancellationToken cancellationToken)
     {
         var usedElsewhere = new List<string>();
         var ownDestinationIds = new List<Guid>();
@@ -44,9 +44,12 @@ public sealed class EfDeIdentificationProfileRepository : IDeIdentificationProfi
         foreach (var destination in destinations)
         {
             var destinationIdText = destination.Id.ToString();
-            var referencedHere = await _db.WorkflowNodes.AsNoTracking().AnyAsync(
-                node => node.WorkflowDefinitionId == workflowId && node.ConfigurationJson.Contains(destinationIdText),
-                cancellationToken);
+            // This workflow's stored nodes are already the saved definition by now, so a destination the save just
+            // removed is only found among the ones it referenced before.
+            var referencedHere = previousDestinationIds.Contains(destination.Id)
+                || await _db.WorkflowNodes.AsNoTracking().AnyAsync(
+                    node => node.WorkflowDefinitionId == workflowId && node.ConfigurationJson.Contains(destinationIdText),
+                    cancellationToken);
             var otherWorkflows = await OtherWorkflowsReferencingAsync(destinationIdText, workflowId, cancellationToken);
             var v1Routes = await V1RoutesWritingToAsync(destination.Id, cancellationToken);
 

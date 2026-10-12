@@ -29,7 +29,7 @@ public sealed class InMemoryDeIdentificationProfileRepository : IDeIdentificatio
     /// <summary>The no-database profile keeps no destination connections or workflow definitions alongside its
     /// profiles to consult, so nothing outside the workflow is known to use one.</summary>
     public Task<DeIdentificationProfileUsage> FindUsageAsync(
-        Guid profileId, Guid workflowId, CancellationToken cancellationToken) =>
+        Guid profileId, Guid workflowId, IReadOnlyCollection<Guid> previousDestinationIds, CancellationToken cancellationToken) =>
         Task.FromResult(new DeIdentificationProfileUsage([], []));
 
     public Task ClearFromDestinationsAsync(

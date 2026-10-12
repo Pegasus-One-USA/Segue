@@ -25,6 +25,8 @@ public interface IDeIdentificationProfileService
     /// when anything outside this workflow still uses that policy. The policy itself is kept, empty: adding a
     /// De-identification step again starts with no rules.
     /// </summary>
+    /// <param name="previousDestinationIds">The destinations the workflow referenced before the save that is running
+    /// — see IDeIdentificationProfileRepository.FindUsageAsync.</param>
     Task<WorkflowDeIdentificationRuleDeletionResult> DeleteWorkflowPolicyRulesAsync(
-        Guid workflowId, CancellationToken cancellationToken);
+        Guid workflowId, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? previousDestinationIds = null);
 }

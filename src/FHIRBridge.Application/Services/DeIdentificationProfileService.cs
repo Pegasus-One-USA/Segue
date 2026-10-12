@@ -72,7 +72,7 @@ public sealed class DeIdentificationProfileService : IDeIdentificationProfileSer
     }
 
     public async Task<WorkflowDeIdentificationRuleDeletionResult> DeleteWorkflowPolicyRulesAsync(
-        Guid workflowId, CancellationToken cancellationToken)
+        Guid workflowId, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? previousDestinationIds = null)
     {
         // The workflow's own policy is the one named with its id — the only link a policy has to a workflow.
         var workflowName = workflowId.ToString();
@@ -85,7 +85,7 @@ public sealed class DeIdentificationProfileService : IDeIdentificationProfileSer
             return new WorkflowDeIdentificationRuleDeletionResult(0, []);
         }
 
-        var usage = await _repository.FindUsageAsync(owned.Id, workflowId, cancellationToken);
+        var usage = await _repository.FindUsageAsync(owned.Id, workflowId, previousDestinationIds ?? [], cancellationToken);
         if (usage.UsedElsewhere.Count > 0)
         {
             return new WorkflowDeIdentificationRuleDeletionResult(0, usage.UsedElsewhere);

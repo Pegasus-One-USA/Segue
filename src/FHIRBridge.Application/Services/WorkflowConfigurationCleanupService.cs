@@ -159,7 +159,12 @@ public sealed class WorkflowConfigurationCleanupService : IWorkflowConfiguration
             return (0, null);
         }
 
-        var result = await _deIdentificationProfileService.DeleteWorkflowPolicyRulesAsync(workflowId, cancellationToken);
+        // The previous definition's destinations too: the save has already replaced this workflow's stored nodes, so
+        // a destination removed together with its De-identification step is referenced only there.
+        var previousDestinationIds = CollectGuids(
+            previousDefinition.Nodes.Select(node => node.ConfigurationJson), "destinationId");
+        var result = await _deIdentificationProfileService.DeleteWorkflowPolicyRulesAsync(
+            workflowId, cancellationToken, previousDestinationIds);
         if (result.UsedElsewhere.Count == 0)
         {
             return (result.Deleted, null);
