@@ -283,6 +283,28 @@ public sealed class FhirWriteClientTests
         handler.Requests.Should().BeEmpty();
     }
 
+    // PR #244 review, round 2: the eCW and athenaOne channels write through SendAsync, which must stop the same way.
+    [Fact]
+    public async Task A_raw_write_cancelled_before_it_is_sent_is_a_refusal_not_an_unknown_outcome_or_a_throw()
+    {
+        var handler = new ScriptedHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new CancellationAwareTokenProvider(), Options.Create(new EpicFhirClientOptions
+        {
+            MinimumMillisecondsBetweenRequestsPerSource = 0,
+        }));
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        var result = await client.SendAsync(
+            new FhirRawWriteRequest("POST", "https://api.example.com/v1/1/chart/12/problems", Idempotent: false, AddSourceQueryParameters: false),
+            Source(),
+            cancelled.Token);
+
+        result.Kind.Should().Be(FhirWriteOutcomeKind.Rejected);
+        result.Issues.Single().DetailCodes.Should().Equal(FHIRBridge.Application.Abstractions.Destinations.EhrWriteOutcomeCodes.CancelledBeforeSend);
+        handler.Requests.Should().BeEmpty();
+    }
+
     private sealed record CapturedRequest(HttpMethod Method, string Uri, string? Prefer, string? ContentType, string? Body);
 
     private sealed class ScriptedHandler : HttpMessageHandler

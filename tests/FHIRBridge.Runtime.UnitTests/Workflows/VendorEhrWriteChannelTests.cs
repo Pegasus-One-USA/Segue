@@ -259,6 +259,29 @@ public sealed class VendorEhrWriteChannelTests
         sent.Should().BeEmpty();
     }
 
+    // PR #244 review, round 2: a department read the run's cancel cut short says nothing about athena; the writer is
+    // told the run was cancelled before sending, so it stops instead of recording the record as refused.
+    [Fact]
+    public async Task Athena_reports_a_cancel_during_its_lookups_as_cancelled_before_send()
+    {
+        var client = new Mock<IFhirWriteClient>();
+        client.Setup(c => c.SendAsync(It.IsAny<FhirRawWriteRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FhirRawWriteResult(FhirWriteOutcomeKind.Rejected, null, null, []));
+        var channel = new AthenaOneEhrWriteChannel(Fhir(client, AthenaFhirBase, SourceSystemType.Athenahealth), "195900");
+        var request = """
+            {"resourceType":"AthenaOneRequest","operation":"problem","method":"POST","path":"chart/{patientid}/problems",
+             "department":true,"fields":{"snomedcode":"1"},"patient":"a-195900.E-12"}
+            """;
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        var outcome = await channel.CreateAsync("Condition", request, cancelled.Token);
+
+        outcome.Kind.Should().Be(EhrCreateKind.Rejected);
+        outcome.Issues.Single().VendorCode.Should().Be(FHIRBridge.Application.Abstractions.Destinations.EhrWriteOutcomeCodes.CancelledBeforeSend);
+        client.Verify(c => c.SendAsync(It.Is<FhirRawWriteRequest>(r => r.Method == "POST"), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task Athena_asks_again_for_a_department_after_a_transient_failure_but_not_after_an_answer()
     {

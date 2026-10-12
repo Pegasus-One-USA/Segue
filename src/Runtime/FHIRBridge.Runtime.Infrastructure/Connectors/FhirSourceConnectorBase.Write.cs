@@ -136,6 +136,11 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
         {
             accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // As CreateAsync: a run cancelled while the token was fetched sent nothing, and says so.
+            return new FhirRawWriteResult(FhirWriteOutcomeKind.Rejected, null, null, [CancelledBeforeSendIssue()]);
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning("{Source} {Method} not sent: no access token ({ExceptionType}).", SourceDisplayName, request.Method, ex.GetType().Name);
@@ -155,7 +160,9 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
             if (exchange.RefusedBeforeSend)
             {
                 _logger.LogWarning("{Source} {Method} {Url} not sent ({Reason}).", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), exchange.FailureReason);
-                return new FhirRawWriteResult(FhirWriteOutcomeKind.Rejected, null, null, [NotSentIssue()]);
+                return new FhirRawWriteResult(
+                    FhirWriteOutcomeKind.Rejected, null, null,
+                    [exchange.FailureReason == CancelledBeforeSendReason ? CancelledBeforeSendIssue() : NotSentIssue()]);
             }
 
             _logger.LogWarning("{Source} {Method} {Url}: outcome unknown ({Reason}).", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), exchange.FailureReason);

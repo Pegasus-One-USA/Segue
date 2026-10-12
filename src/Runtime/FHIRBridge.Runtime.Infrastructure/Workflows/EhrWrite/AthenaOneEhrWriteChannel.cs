@@ -148,7 +148,7 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
             var department = patientId is null ? Options.TargetDepartmentId : await DepartmentAsync(patientId, cancellationToken);
             if (department is null)
             {
-                return Refused("athena-department-unknown");
+                return RefusedUnlessCancelled("athena-department-unknown", cancellationToken);
             }
 
             fields["departmentid"] = department;
@@ -168,7 +168,7 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
             var id = await LookupAsync(kind, name, cancellationToken);
             if (id is null)
             {
-                return Refused($"athena-{kind}-not-found");
+                return RefusedUnlessCancelled($"athena-{kind}-not-found", cancellationToken);
             }
 
             foreach (var key in fields.Keys.ToList())
@@ -454,6 +454,11 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
     /// <summary>A refusal made before anything was sent (no HTTP status), so the next run tries again.</summary>
     private static EhrCreateOutcome Refused(string code) =>
         new(EhrCreateKind.Rejected, null, null, [new EhrOutcomeIssue("error", "processing", code, null)]);
+
+    /// <summary>A department or reference read that the run's cancel cut short found nothing, but that says nothing
+    /// about athena: the writer is told the run was cancelled before sending, and stops (as the FHIR create path does).</summary>
+    private static EhrCreateOutcome RefusedUnlessCancelled(string code, CancellationToken cancellationToken) =>
+        Refused(cancellationToken.IsCancellationRequested ? EhrWriteOutcomeCodes.CancelledBeforeSend : code);
 
     private static string SyntheticId(string operation, string? patientId, IReadOnlyDictionary<string, string> fields)
     {
