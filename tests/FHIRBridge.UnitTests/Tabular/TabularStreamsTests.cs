@@ -51,10 +51,14 @@ public sealed class TabularStreamsTests
             return Task.FromResult(new TabularRows(Described[query.Query], [], false));
         }
 
+        public HashSet<string> Unreachable { get; } = [];
+
         public Task<IReadOnlyList<string>> DescribeSqlAsync(TabularSqlQuery query, CancellationToken cancellationToken) =>
-            Refused.TryGetValue(query.Query, out var message)
-                ? throw new BusinessRuleException(message)
-                : Task.FromResult(Described[query.Query]);
+            Unreachable.Contains(query.Query)
+                ? throw new TimeoutException()
+                : Refused.TryGetValue(query.Query, out var message)
+                    ? throw new BusinessRuleException(message)
+                    : Task.FromResult(Described[query.Query]);
     }
 
     private sealed class PlainEncryptor : IPhiFieldEncryptor
@@ -198,6 +202,54 @@ public sealed class TabularStreamsTests
         result.Streams[0].Problems.Should().ContainSingle().Which.Should().Contain("relation \"nope\" does not exist");
         result.Streams[1].Passed.Should().BeTrue();
         reader.RowReads.Should().Be(0, because: "checking describes a query, it never reads its rows");
+    }
+
+    // PR #244 review: an unreachable database, a timeout or a refused login is one entry's problem, not a 500.
+    [Fact]
+    public async Task A_database_that_cannot_be_reached_is_reported_on_the_entry_and_the_others_are_still_checked()
+    {
+        var reader = new ScriptedReader();
+        reader.Unreachable.Add("SELECT * FROM slow");
+        reader.Described[AllergyQuery] = ["allergy_id", "patient_id", "allergen", "rxnorm_code", "onset_date", "reaction"];
+        var (service, _) = Create(reader);
+
+        var result = await service.CheckAsync(
+            Sql(Streams(Entry("Patient", query: "SELECT * FROM slow"), Entry("AllergyIntolerance", query: AllergyQuery))),
+            CancellationToken.None);
+
+        result.AllPassed.Should().BeFalse();
+        result.Streams[0].Problems.Should().ContainSingle().Which.Should().StartWith("Could not connect.");
+        result.Streams[1].Passed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Deleting_a_saved_database_deletes_its_connection_string_first()
+    {
+        var secrets = new Mock<ISecretWriter>();
+        var (service, _) = Create(new ScriptedReader(), secrets);
+        var saved = await service.SaveSqlConnectionAsync(new SaveTabularSqlConnectionRequest("postgresql", "Host=db", "Warehouse"), CancellationToken.None);
+
+        await service.DeleteSqlConnectionAsync(saved.Id!.Value, CancellationToken.None);
+
+        secrets.Verify(s => s.DeleteSecretAsync(
+            It.Is<SecretReference>(r => r.KeyVaultName == saved.SecretKeyVaultName && r.SecretName == saved.SecretName),
+            It.IsAny<CancellationToken>()), Times.Once);
+        (await service.ListSqlConnectionsAsync(CancellationToken.None)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_saved_database_whose_secret_cannot_be_deleted_is_kept_so_the_delete_can_be_retried()
+    {
+        var secrets = new Mock<ISecretWriter>();
+        secrets.Setup(s => s.DeleteSecretAsync(It.IsAny<SecretReference>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("vault unavailable"));
+        var (service, _) = Create(new ScriptedReader(), secrets);
+        var saved = await service.SaveSqlConnectionAsync(new SaveTabularSqlConnectionRequest("postgresql", "Host=db", "Warehouse"), CancellationToken.None);
+
+        var act = () => service.DeleteSqlConnectionAsync(saved.Id!.Value, CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        (await service.ListSqlConnectionsAsync(CancellationToken.None)).Should().ContainSingle();
     }
 
     [Fact]

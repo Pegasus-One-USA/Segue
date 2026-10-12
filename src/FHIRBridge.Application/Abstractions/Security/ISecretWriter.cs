@@ -10,4 +10,8 @@ namespace FHIRBridge.Application.Abstractions.Security;
 public interface ISecretWriter
 {
     Task WriteSecretAsync(SecretReference secretReference, string secretValue, CancellationToken cancellationToken);
+
+    /// <summary>Removes the secret wherever <see cref="WriteSecretAsync"/> could have put it, so a reference to it no
+    /// longer resolves. A secret that does not exist is not an error.</summary>
+    Task DeleteSecretAsync(SecretReference secretReference, CancellationToken cancellationToken);
 }

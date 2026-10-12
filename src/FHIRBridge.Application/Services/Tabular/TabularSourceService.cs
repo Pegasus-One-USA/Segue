@@ -181,14 +181,21 @@ public sealed class TabularSourceService : ITabularSourceService
         return ToDto(saved);
     }
 
+    /// <summary>Deletes the connection string itself, then the saved connection. A node still pointing at it fails to
+    /// read instead of going on with the deleted login; if the secret cannot be deleted, the connection is kept so the
+    /// delete can be retried.</summary>
     public async Task DeleteSqlConnectionAsync(Guid id, CancellationToken cancellationToken)
     {
+        var saved = await _connections.GetAsync(id, cancellationToken) ?? throw new NotFoundException("Database connection", id);
+        await _secretWriter.DeleteSecretAsync(new SecretReference(saved.KeyVaultName, saved.SecretName), cancellationToken);
+
         if (!await _connections.DeleteAsync(id, cancellationToken))
         {
             throw new NotFoundException("Database connection", id);
         }
 
-        _logger.LogInformation("Tabular SQL connection {TabularSqlConnectionId} deleted.", id);
+        _logger.LogInformation(
+            "Tabular SQL connection {TabularSqlConnectionId} deleted with its secret {SecretName}.", id, saved.SecretName);
     }
 
     /// <summary>Connects with the saved login, checks it can only read, and runs nothing but <c>SELECT 1</c>.</summary>
@@ -206,13 +213,20 @@ public sealed class TabularSourceService : ITabularSourceService
         {
             return new TabularSqlConnectionTestDto(false, ex.Message);
         }
-        catch (Exception ex) when (ex is System.Data.Common.DbException or InvalidOperationException or TimeoutException)
+        catch (Exception ex) when (IsDatabaseFailure(ex))
         {
             // The driver's message can echo the server name but never a password; the exception type is enough here.
             _logger.LogWarning("Tabular SQL connection {TabularSqlConnectionId} test failed: {ErrorType}.", id, ex.GetType().Name);
-            return new TabularSqlConnectionTestDto(false, "Could not connect. Check the server, database, login and password.");
+            return new TabularSqlConnectionTestDto(false, CouldNotConnect);
         }
     }
+
+    private const string CouldNotConnect = "Could not connect. Check the server, database, login and password.";
+
+    /// <summary>The database could not be reached or refused the login or query (unreachable host, timeout, bad
+    /// password, permission denied): something to report on the form, not a server error.</summary>
+    private static bool IsDatabaseFailure(Exception ex) =>
+        ex is System.Data.Common.DbException or InvalidOperationException or TimeoutException;
 
     private async Task RequireUniqueNameAsync(string name, Guid? exceptId, CancellationToken cancellationToken)
     {
@@ -354,6 +368,10 @@ public sealed class TabularSourceService : ITabularSourceService
         {
             problems.Add(ex.Message);
         }
+        catch (Exception ex) when (IsDatabaseFailure(ex))
+        {
+            problems.Add(DatabaseProblem(index, ex));
+        }
 
         var known = new HashSet<string>(columns, StringComparer.OrdinalIgnoreCase);
         var missing = problems.Count > 0
@@ -389,10 +407,22 @@ public sealed class TabularSourceService : ITabularSourceService
             {
                 problems.Add(ex.Message);
             }
+            catch (Exception ex) when (IsDatabaseFailure(ex))
+            {
+                problems.Add(DatabaseProblem(index, ex));
+            }
         }
 
         return new TabularStreamCheckDto(
             index, stream.ResourceType, problems.Count == 0, problems, columns, missing, rowsRead, resources, rowErrors);
+    }
+
+    /// <summary>The same answer the connection test gives, as one entry's problem; the type only is logged (see
+    /// <see cref="TestSqlConnectionAsync"/>).</summary>
+    private string DatabaseProblem(int index, Exception ex)
+    {
+        _logger.LogWarning("Tabular check of entry {EntryIndex} could not reach the database: {ErrorType}.", index, ex.GetType().Name);
+        return $"{CouldNotConnect} The database may also have refused the query or taken too long to answer.";
     }
 
     /// <summary>The first rows the entry keeps: the whole file is read so a row filter can find them, then cut.</summary>

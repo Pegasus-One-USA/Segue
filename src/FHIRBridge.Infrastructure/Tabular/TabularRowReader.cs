@@ -39,6 +39,15 @@ public sealed class TabularRowReader : ITabularRowReader
     private readonly ISecretProvider _secrets;
     private readonly ITenantSecretVaultResolver _vaults;
 
+    // CURRENT_USER() is user@host; information_schema names a grantee 'user'@'host'. The host is after the last '@'.
+    private const string MySqlCurrentGrantee =
+        "CONCAT('''', LEFT(CURRENT_USER(), CHAR_LENGTH(CURRENT_USER()) - CHAR_LENGTH(SUBSTRING_INDEX(CURRENT_USER(), '@', -1)) - 1), " +
+        "'''@''', SUBSTRING_INDEX(CURRENT_USER(), '@', -1), '''')";
+
+    private const string MySqlWritePrivileges =
+        "'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX', 'FILE', 'SUPER', 'EXECUTE', 'TRIGGER', " +
+        "'EVENT', 'CREATE ROUTINE', 'ALTER ROUTINE', 'CREATE VIEW', 'CREATE TEMPORARY TABLES', 'LOCK TABLES'";
+
     // One opener per engine, never a switch: a new engine is one more entry.
     private static readonly IReadOnlyDictionary<string, SqlEngine> Engines = new Dictionary<string, SqlEngine>(StringComparer.Ordinal)
     {
@@ -69,6 +78,20 @@ public sealed class TabularRowReader : ITabularRowReader
                 return connection;
             },
             BeginReadOnly: "SET TRANSACTION READ ONLY",
+            // The READ ONLY transaction does not hold back a superuser (pg_terminate_backend, COPY ... PROGRAM via a
+            // function, ...), and the connection test promises a login that can only read: so a superuser, or a
+            // login that can write any table, is refused here as on SQL Server.
+            VerifyReadOnlySql: """
+                SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND rolsuper)
+                    OR EXISTS (
+                        SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE c.relkind IN ('r', 'p')
+                          AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+                          AND n.nspname NOT LIKE 'pg\_%'
+                          AND (has_table_privilege(c.oid, 'INSERT') OR has_table_privilege(c.oid, 'UPDATE')
+                            OR has_table_privilege(c.oid, 'DELETE') OR has_table_privilege(c.oid, 'TRUNCATE')))
+                THEN 1 ELSE 0 END
+                """,
             DescribeAsync: DescribeWithLimitZeroAsync,
             // undefined table / column / function, syntax error, unknown schema.
             ExplainedError: ex => ex is PostgresException { SqlState: "42P01" or "42703" or "42883" or "42601" or "3F000" } pg
@@ -85,7 +108,21 @@ public sealed class TabularRowReader : ITabularRowReader
             DescribeAsync: DescribeWithLimitZeroAsync,
             // 1146 no such table, 1054 unknown column, 1064 syntax, 1305 unknown function, 1049 unknown database.
             ExplainedError: ex => ex is MySqlException { Number: 1146 or 1054 or 1064 or 1305 or 1049 } ? ex.Message : null,
-            StartTransactionSql: "START TRANSACTION READ ONLY"),
+            StartTransactionSql: "START TRANSACTION READ ONLY",
+            // A READ ONLY transaction does not stop INTO OUTFILE (FILE) or a routine that writes (EXECUTE), so the
+            // login's own grants are checked: global, schema or table privileges that change anything are refused.
+            // Privileges held only through a MySQL 8 role do not show here; the READ ONLY transaction still applies.
+            VerifyReadOnlySql: """
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1 FROM information_schema.USER_PRIVILEGES WHERE GRANTEE = @grantee AND PRIVILEGE_TYPE IN (@writes)
+                    UNION ALL
+                    SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES WHERE GRANTEE = @grantee AND PRIVILEGE_TYPE IN (@writes)
+                    UNION ALL
+                    SELECT 1 FROM information_schema.TABLE_PRIVILEGES WHERE GRANTEE = @grantee AND PRIVILEGE_TYPE IN (@writes))
+                THEN 1 ELSE 0 END
+                """
+                .Replace("@grantee", MySqlCurrentGrantee, StringComparison.Ordinal)
+                .Replace("@writes", MySqlWritePrivileges, StringComparison.Ordinal)),
     };
 
     public TabularRowReader(
@@ -160,7 +197,8 @@ public sealed class TabularRowReader : ITabularRowReader
             if (Convert.ToInt32(await check.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) != 0)
             {
                 throw new BusinessRuleException(
-                    "This database login can change data. Use a read-only login (for SQL Server, a user with db_datareader only).");
+                    "This database login can change data. Use a read-only login (for SQL Server, a user with db_datareader " +
+                    "only; for PostgreSQL and MySQL, a login granted SELECT only).");
             }
         }
 
@@ -184,14 +222,29 @@ public sealed class TabularRowReader : ITabularRowReader
         }
         finally
         {
-            if (transaction is not null)
+            // Nothing was written, so a rollback that fails (a connection the server already dropped) changes nothing;
+            // it must not replace the exception that explains why the work failed.
+            try
             {
-                await transaction.RollbackAsync(CancellationToken.None);
-                await transaction.DisposeAsync();
+                if (transaction is not null)
+                {
+                    await transaction.RollbackAsync(CancellationToken.None);
+                }
+                else
+                {
+                    await ExecuteAsync(connection, null, "ROLLBACK", CancellationToken.None);
+                }
             }
-            else
+            catch (Exception ex) when (ex is DbException or InvalidOperationException)
             {
-                await ExecuteAsync(connection, null, "ROLLBACK", CancellationToken.None);
+                // The connection is disposed below either way.
+            }
+            finally
+            {
+                if (transaction is not null)
+                {
+                    await transaction.DisposeAsync();
+                }
             }
         }
     }
@@ -203,31 +256,63 @@ public sealed class TabularRowReader : ITabularRowReader
         command.Transaction = transaction;
         command.CommandText = sql;
         command.CommandTimeout = CommandTimeoutSeconds;
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
-
-        var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
-        RequireUniqueColumns(columns);
-
-        var rows = new List<IReadOnlyDictionary<string, string?>>();
+        var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
         var truncated = false;
-        while (await reader.ReadAsync(cancellationToken))
+        try
         {
-            if (rows.Count >= maxRows)
+            var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
+            RequireUniqueColumns(columns);
+
+            var rows = new List<IReadOnlyDictionary<string, string?>>();
+            while (await reader.ReadAsync(cancellationToken))
             {
-                truncated = true;
-                break;
+                if (rows.Count >= maxRows)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                for (var i = 0; i < columns.Count; i++)
+                {
+                    row[columns[i]] = await reader.IsDBNullAsync(i, cancellationToken) ? null : Format(reader.GetValue(i));
+                }
+
+                rows.Add(row);
             }
 
-            var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            for (var i = 0; i < columns.Count; i++)
-            {
-                row[columns[i]] = await reader.IsDBNullAsync(i, cancellationToken) ? null : Format(reader.GetValue(i));
-            }
-
-            rows.Add(row);
+            return new TabularRows(columns, rows, truncated);
         }
+        finally
+        {
+            // Closing a reader reads the rest of its result set; a preview of a large query would wait out the
+            // command timeout. Cancelling first ends the query, and the error the cancel raises on close is ours.
+            if (truncated)
+            {
+                CancelQuietly(command);
+            }
 
-        return new TabularRows(columns, rows, truncated);
+            try
+            {
+                await reader.DisposeAsync();
+            }
+            catch (DbException) when (truncated)
+            {
+                // The cancel requested above.
+            }
+        }
+    }
+
+    private static void CancelQuietly(DbCommand command)
+    {
+        try
+        {
+            command.Cancel();
+        }
+        catch (Exception ex) when (ex is DbException or InvalidOperationException)
+        {
+            // Best effort: without it the reader still closes, only more slowly.
+        }
     }
 
     /// <summary>SQL Server: the result's columns from the query's compiled plan; the query itself never runs.</summary>

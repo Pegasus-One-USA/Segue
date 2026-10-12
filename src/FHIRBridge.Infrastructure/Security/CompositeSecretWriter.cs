@@ -72,4 +72,21 @@ public sealed class CompositeSecretWriter : ISecretWriter
             await _dbSecretStore.WriteSecretAsync(secretReference, secretValue, cancellationToken);
         }
     }
+
+    /// <summary>Deletes from both stores a write could have used: the local store always (a Key Vault write may have
+    /// fallen back to it), Key Vault when it is enabled. A Key Vault failure is not swallowed: the caller must not
+    /// report a secret gone that can still be read.</summary>
+    public async Task DeleteSecretAsync(SecretReference secretReference, CancellationToken cancellationToken)
+    {
+        secretReference = new SecretReference(
+            _vaultResolver.ResolveVaultName(secretReference.KeyVaultName), secretReference.SecretName);
+
+        await _dbSecretStore.DeleteSecretAsync(secretReference, cancellationToken);
+
+        if (_configuration.GetValue("KeyVault:UseAzureKeyVault", false))
+        {
+            await _azureKeyVaultSecretWriter.DeleteSecretAsync(
+                SecretPrefixing.Apply(secretReference, _configuration["KeyVault:SecretPrefix"]), cancellationToken);
+        }
+    }
 }

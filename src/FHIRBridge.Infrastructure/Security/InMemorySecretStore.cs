@@ -27,6 +27,12 @@ public sealed class InMemorySecretStore : ISecretWriter, ISecretProvider, IAppSe
         return Task.CompletedTask;
     }
 
+    public Task DeleteSecretAsync(SecretReference secretReference, CancellationToken cancellationToken)
+    {
+        _secrets.TryRemove((secretReference.KeyVaultName, secretReference.SecretName), out _);
+        return Task.CompletedTask;
+    }
+
     public Task<string> GetSecretAsync(SecretReference secretReference, CancellationToken cancellationToken)
     {
         if (_secrets.TryGetValue((secretReference.KeyVaultName, secretReference.SecretName), out var stored))

@@ -32,6 +32,26 @@ public class AzureKeyVaultSecretWriter : ISecretWriter
             secretReference.KeyVaultName);
     }
 
+    /// <summary>Starts Key Vault's delete (the secret becomes soft-deleted: no longer readable, recoverable until
+    /// purged by the vault's retention). A secret that is not there is not an error.</summary>
+    public virtual async Task DeleteSecretAsync(SecretReference secretReference, CancellationToken cancellationToken)
+    {
+        var client = GetClient(secretReference.KeyVaultName);
+        try
+        {
+            await client.StartDeleteSecretAsync(secretReference.SecretName, cancellationToken);
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+        {
+            return;
+        }
+
+        _logger.LogDebug(
+            "Deleted secret {SecretName} from Azure Key Vault {KeyVaultName}.",
+            secretReference.SecretName,
+            secretReference.KeyVaultName);
+    }
+
     private SecretClient GetClient(string keyVaultNameOrUri)
     {
         lock (_clients)
