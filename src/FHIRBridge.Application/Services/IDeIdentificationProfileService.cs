@@ -14,4 +14,19 @@ public interface IDeIdentificationProfileService
 
     Task<DeIdentificationPreviewResult> PreviewAsync(
         Guid profileId, DeIdentificationPreviewRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes every rule of the de-identification policy <paramref name="workflowId"/> owns — run by the workflow
+    /// save (IWorkflowConfigurationCleanupService) when the saved definition no longer has a De-identification step,
+    /// inside that save's transaction, so it happens only if the save does.
+    ///
+    /// Scope: only the policy NAMED with this workflow's id (the builder creates exactly one per workflow, and the
+    /// name is its only link to the workflow), never a policy the caller names by id. Refused — nothing deleted —
+    /// when anything outside this workflow still uses that policy. The policy itself is kept, empty: adding a
+    /// De-identification step again starts with no rules.
+    /// </summary>
+    /// <param name="previousDestinationIds">The destinations the workflow referenced before the save that is running
+    /// — see IDeIdentificationProfileRepository.FindUsageAsync.</param>
+    Task<WorkflowDeIdentificationRuleDeletionResult> DeleteWorkflowPolicyRulesAsync(
+        Guid workflowId, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? previousDestinationIds = null);
 }

@@ -23,8 +23,8 @@ const CHAIN_STEP_IDS: readonly string[] = ['field-mapping', 'transformation', 'd
  * straight back on the next destination save.
  *
  * `transformation` owns no key here on purpose: transformation rules are the one step that lives
- * server-side (TransformationRule rows), so there is nothing local to clear — see the caveat on
- * NodeDeletePlan.serverSideLeftovers.
+ * server-side (TransformationRule rows), so there is nothing local to clear — the rules themselves are
+ * deleted on the server instead (see NodeDeletePlan.transformationRuleDeletes).
  */
 const CHAIN_STEP_OWNED_FIELDS: Record<string, readonly string[]> = {
   'field-mapping': [
@@ -70,9 +70,18 @@ export interface NodeDeletePlan {
   fieldClears: PlannedFieldClear[];
   /** Edges to add after the removal so the surviving graph stays one connected chain. */
   relink: { from: string; to: string }[];
-  /** Steps whose data does NOT live on the canvas and therefore survives this delete — shown in the
-   *  confirmation so the wording never over-promises. Currently only ever "transformation rules". */
+  /** What happens to step data that does NOT live on the canvas — shown in the confirmation so the user
+   *  knows exactly what the delete reaches. Currently only ever about transformation rules. */
   serverSideLeftovers: string[];
+  /** Destinations that STAY on the canvas but lose their Transformation step. Their saved rules are deleted by
+   *  the workflow save that drops the step (WorkflowConfigurationCleanupService); the canvas only discards the
+   *  user's unsaved drafts for them. A destination that is itself removed is not listed — its own delete covers it. */
+  transformationRuleDeletes: { destinationNodeId: string; label: string }[];
+  /** True when this delete removes the workflow's LAST De-identification step (directly or through a
+   *  Mapping / destination / source delete): the rules of the workflow's own de-identification policy are then
+   *  deleted by the next successful workflow save (WorkflowConfigurationCleanupService). A policy is per workflow,
+   *  not per destination, so while another De-identification step remains its rules are kept. */
+  deIdentificationRuleDelete: boolean;
 }
 
 function isDestinationNode(node: CanvasNode): boolean {
@@ -252,6 +261,7 @@ export function buildNodeDeletePlanV2(
   // Configuration a removed chain step authored on a destination that is NOT going away with it.
   const clearsByNode = new Map<string, { keys: Set<string>; labels: string[] }>();
   const serverSideLeftovers: string[] = [];
+  const transformationRuleDeletes: { destinationNodeId: string; label: string }[] = [];
   for (const removedId of removedIds) {
     const node = nodes.find(candidate => candidate.id === removedId);
     if (!node || !isChainStep(node)) continue;
@@ -263,16 +273,23 @@ export function buildNodeDeletePlanV2(
     // is just as true when the destination is what you are deleting, and that case is the one users actually
     // hit, so it used to remove a node and be told nothing at all.
     //
-    // The two cases now differ in what happens, so they say different things. With the destination gone the
-    // canvas discards this user's unsaved drafts for that type (see canvas.component's confirmDelete), and
-    // only rules already attached to a saved workflow remain.
+    // Either way they are deleted with the step now. Removing the Transformation step is how a user says "no
+    // transformations here"; leaving the rules behind kept every one of them running on the next run, and
+    // brought the step straight back the next time the destination was saved.
     if (transformId === 'transformation' && owner) {
-      serverSideLeftovers.push(
-        removedIds.has(owner.id)
-          ? 'The transformation rules this destination owns are deleted with it — including ones already '
-            + 'saved with this workflow. Rules on a destination that stays are untouched.'
-          : 'Transformation rules are stored server-side, so they stay until deleted from the destination’s Rules screen.',
-      );
+      if (removedIds.has(owner.id)) {
+        serverSideLeftovers.push(
+          'The transformation rules this destination owns are deleted with it — including ones already '
+          + 'saved with this workflow. Rules on a destination that stays are untouched.',
+        );
+      } else {
+        const ownerLabel = labelOf(owner);
+        transformationRuleDeletes.push({ destinationNodeId: owner.id, label: ownerLabel });
+        serverSideLeftovers.push(
+          `All transformation rules on ${ownerLabel} are deleted when you save the workflow — including ones `
+          + 'already saved with it. De-identification rules are not affected.',
+        );
+      }
     }
     if (!owner || removedIds.has(owner.id)) continue;
 
@@ -294,6 +311,21 @@ export function buildNodeDeletePlanV2(
       entry.labels.push(`De-identification profile selection (held on ${ownerLabel})`);
     }
     clearsByNode.set(owner.id, entry);
+  }
+
+  const isDeIdentificationStep = (node: CanvasNode) => transformIdOf(node) === 'deidentification';
+  const removesDeIdentificationStep = nodes.some(node => removedIds.has(node.id) && isDeIdentificationStep(node));
+  const deIdentificationStepRemains = nodes.some(node => !removedIds.has(node.id) && isDeIdentificationStep(node));
+  const deIdentificationRuleDelete = removesDeIdentificationStep && !deIdentificationStepRemains;
+  if (deIdentificationRuleDelete) {
+    serverSideLeftovers.push(
+      'All de-identification rules of this workflow are deleted when you save the workflow. Until then nothing is '
+      + 'deleted, so leaving without saving keeps them. Transformation rules are not affected.',
+    );
+  } else if (removesDeIdentificationStep) {
+    serverSideLeftovers.push(
+      'De-identification rules are kept: another De-identification step in this workflow still uses them.',
+    );
   }
 
   const fieldClears: PlannedFieldClear[] = [...clearsByNode.entries()].map(([id, entry]) => ({
@@ -321,5 +353,7 @@ export function buildNodeDeletePlanV2(
     fieldClears,
     relink,
     serverSideLeftovers: [...new Set(serverSideLeftovers)],
+    transformationRuleDeletes,
+    deIdentificationRuleDelete,
   };
 }

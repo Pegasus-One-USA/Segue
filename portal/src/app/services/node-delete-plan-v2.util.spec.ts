@@ -105,11 +105,62 @@ describe('buildNodeDeletePlanV2', () => {
     expect(plan.fieldClears[0].keys).toEqual(['deIdentificationProfileId']);
   });
 
-  it('reports transformation rules as a server-side leftover, since they are not on the canvas', () => {
+  it('deletes the destination\'s transformation rules with the Transformation step, and says so', () => {
+    // Removing the step used to leave every rule on the server — still running, and bringing the step back on
+    // the next destination save. The destination stays, so it is listed for the canvas to delete its rules.
     const graph = chainGraph();
-    const leftovers = buildNodeDeletePlanV2('n3', graph.nodes, graph.edges)!.serverSideLeftovers;
-    expect(leftovers.length).toBe(1);
-    expect(leftovers[0]).toContain('stay until deleted');
+    const plan = buildNodeDeletePlanV2('n3', graph.nodes, graph.edges)!;
+
+    expect(plan.transformationRuleDeletes).toEqual([{ destinationNodeId: 'n5', label: jasmine.any(String) }]);
+    expect(plan.serverSideLeftovers.length).toBe(1);
+    expect(plan.serverSideLeftovers[0]).toContain('All transformation rules on');
+    expect(plan.serverSideLeftovers[0]).toContain('De-identification rules are not affected');
+    expect(plan.serverSideLeftovers[0]).not.toContain('stay until deleted');
+  });
+
+  it('deletes the rules too when a Mapping delete takes the Transformation step with it', () => {
+    const graph = chainGraph();
+    expect(buildNodeDeletePlanV2('n2', graph.nodes, graph.edges)!.transformationRuleDeletes.map(d => d.destinationNodeId))
+      .toEqual(['n5']);
+  });
+
+  it('lists no rule delete when no Transformation step is removed', () => {
+    const graph = chainGraph();
+    expect(buildNodeDeletePlanV2('n4', graph.nodes, graph.edges)!.transformationRuleDeletes).toEqual([]);
+  });
+
+  it('deletes the workflow\'s de-identification rules with its last De-identification step, and says so', () => {
+    const graph = chainGraph();
+    const plan = buildNodeDeletePlanV2('n4', graph.nodes, graph.edges)!;
+
+    expect(plan.deIdentificationRuleDelete).toBeTrue();
+    expect(plan.serverSideLeftovers.some(note => note.includes('All de-identification rules of this workflow'))).toBeTrue();
+  });
+
+  it('deletes them whichever delete takes the last De-identification step (Mapping, destination, source)', () => {
+    const graph = chainGraph();
+    for (const id of ['n2', 'n5', 'n1']) {
+      expect(buildNodeDeletePlanV2(id, graph.nodes, graph.edges)!.deIdentificationRuleDelete).withContext(id).toBeTrue();
+    }
+  });
+
+  it('keeps them while another De-identification step in the workflow still uses them', () => {
+    const graph = chainGraph();
+    const nodes = [...graph.nodes, { id: 'other-deid', kind: 'transform', transformId: 'deidentification', x: 0, y: 0, fields: {} }] as typeof graph.nodes;
+    const plan = buildNodeDeletePlanV2('n4', nodes, graph.edges)!;
+
+    expect(plan.deIdentificationRuleDelete).toBeFalse();
+    expect(plan.serverSideLeftovers.some(note => note.includes('are kept'))).toBeTrue();
+  });
+
+  it('never deletes them when no De-identification step is removed', () => {
+    const graph = chainGraph();
+    expect(buildNodeDeletePlanV2('n3', graph.nodes, graph.edges)!.deIdentificationRuleDelete).toBeFalse();
+  });
+
+  it('leaves a removed destination\'s rules to the destination delete, not the step', () => {
+    const graph = chainGraph();
+    expect(buildNodeDeletePlanV2('n5', graph.nodes, graph.edges)!.transformationRuleDeletes).toEqual([]);
   });
 
   it('warns that deleting the destination deletes the rules it owns', () => {
@@ -120,13 +171,15 @@ describe('buildNodeDeletePlanV2', () => {
     // be re-applied to the next node mapped to the same column.
     const graph = chainGraph();
     const leftovers = buildNodeDeletePlanV2('n5', graph.nodes, graph.edges)!.serverSideLeftovers;
+    // The other note is the workflow's de-identification rules, which go with its last De-identification step.
+    const transformationNote = leftovers.find(note => note.includes('transformation rules this destination owns'))!;
 
-    expect(leftovers.length).toBe(1);
-    expect(leftovers[0]).toContain('deleted with it');
-    expect(leftovers[0]).toContain('already saved with this workflow');
+    expect(leftovers.length).toBe(2);
+    expect(transformationNote).toContain('deleted with it');
+    expect(transformationNote).toContain('already saved with this workflow');
     // The promise this used to make was the opposite of what happens now: nothing removed a deleted
     // destination's rules, so a replacement destination of the same type arrived with them applied.
-    expect(leftovers[0]).not.toContain('stay until deleted');
+    expect(transformationNote).not.toContain('stay until deleted');
   });
 
   it('takes the whole pipeline when the source goes', () => {

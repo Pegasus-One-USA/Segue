@@ -24,4 +24,80 @@ public sealed class EfDeIdentificationProfileRepository : IDeIdentificationProfi
         await _db.DeIdentificationProfiles.AddAsync(profile, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<DeIdentificationProfileUsage> FindUsageAsync(
+        Guid profileId, Guid workflowId, IReadOnlyCollection<Guid> previousDestinationIds, CancellationToken cancellationToken)
+    {
+        var usedElsewhere = new List<string>();
+        var ownDestinationIds = new List<Guid>();
+
+        // A workflow references a policy or a connection by id inside its nodes' configuration JSON, so the id's
+        // text is what to look for.
+        var profileIdText = profileId.ToString();
+        usedElsewhere.AddRange((await OtherWorkflowsReferencingAsync(profileIdText, workflowId, cancellationToken))
+            .Select(name => $"workflow '{name}'"));
+
+        var destinations = await _db.DestinationConfigurations.AsNoTracking()
+            .Where(destination => destination.DeIdentificationProfileId == profileId)
+            .Select(destination => new { destination.Id, destination.Name })
+            .ToListAsync(cancellationToken);
+        foreach (var destination in destinations)
+        {
+            var destinationIdText = destination.Id.ToString();
+            // This workflow's stored nodes are already the saved definition by now, so a destination the save just
+            // removed is only found among the ones it referenced before.
+            var referencedHere = previousDestinationIds.Contains(destination.Id)
+                || await _db.WorkflowNodes.AsNoTracking().AnyAsync(
+                    node => node.WorkflowDefinitionId == workflowId && node.ConfigurationJson.Contains(destinationIdText),
+                    cancellationToken);
+            var otherWorkflows = await OtherWorkflowsReferencingAsync(destinationIdText, workflowId, cancellationToken);
+            var v1Routes = await V1RoutesWritingToAsync(destination.Id, cancellationToken);
+
+            if (referencedHere && otherWorkflows.Count == 0 && !v1Routes)
+            {
+                ownDestinationIds.Add(destination.Id);
+            }
+            else
+            {
+                usedElsewhere.Add($"destination connection '{destination.Name}'");
+            }
+        }
+
+        return new DeIdentificationProfileUsage(usedElsewhere.Distinct().ToList(), ownDestinationIds);
+    }
+
+    public async Task ClearFromDestinationsAsync(
+        Guid profileId, IReadOnlyCollection<Guid> destinationIds, CancellationToken cancellationToken)
+    {
+        var destinations = await _db.DestinationConfigurations
+            .Where(destination => destinationIds.Contains(destination.Id) && destination.DeIdentificationProfileId == profileId)
+            .ToListAsync(cancellationToken);
+        foreach (var destination in destinations)
+        {
+            destination.SetDeIdentificationProfile(null);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    private Task<List<string>> OtherWorkflowsReferencingAsync(string idText, Guid workflowId, CancellationToken cancellationToken) =>
+        _db.WorkflowNodes.AsNoTracking()
+            .Where(node => node.WorkflowDefinitionId != workflowId && node.ConfigurationJson.Contains(idText))
+            .Join(_db.WorkflowDefinitions.AsNoTracking(), node => node.WorkflowDefinitionId, workflow => workflow.Id,
+                (_, workflow) => workflow.Name)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+    /// <summary>Whether a V1 route writes to the destination — through its own mapping profile or one of its
+    /// per-resource mappings. Such a route reads the de-identification profile from the connection itself.</summary>
+    private Task<bool> V1RoutesWritingToAsync(Guid destinationId, CancellationToken cancellationToken)
+    {
+        var profilesForDestination = _db.MappingProfiles.AsNoTracking()
+            .Where(profile => profile.DestinationId == destinationId)
+            .Select(profile => profile.Id);
+        return _db.ResourcePipelineRoutes.AsNoTracking().AnyAsync(
+            route => profilesForDestination.Contains(route.MappingProfileId)
+                || route.ResourceMappings.Any(mapping => profilesForDestination.Contains(mapping.MappingProfileId)),
+            cancellationToken);
+    }
 }

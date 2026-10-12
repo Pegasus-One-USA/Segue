@@ -47,6 +47,9 @@ export interface AddTransformEvent {
    *  actually opened — the destination node is still what gets updated (it owns the configuration), but
    *  any confirmation shown should name the step the user clicked, not that destination. */
   chainLabel?: string;
+  /** Set alongside chainLabel: the canvas id of the chain node the user opened and saved — so the builder knows
+   *  the user has now configured that step (see WorkflowBuilderV2Component.removeChainStep's __autoAdded rule). */
+  chainNodeId?: string;
 }
 
 export interface MergeEvent {
@@ -996,6 +999,7 @@ export class NodeLibraryDialogComponent {
             ...e,
             editNodeId: editNode.id,
             chainLabel: this.chainLabelForTab(this.destWizardTab()),
+            chainNodeId: this.editNodeId() ?? undefined,
           });
         }
       }
