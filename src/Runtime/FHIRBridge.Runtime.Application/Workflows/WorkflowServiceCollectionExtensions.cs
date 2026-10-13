@@ -14,6 +14,7 @@ public static class WorkflowServiceCollectionExtensions
         services.AddScoped<IWorkflowGraphValidator, WorkflowGraphValidator>();
         services.AddScoped<IWorkflowNodeExecutorRegistry, WorkflowNodeExecutorRegistry>();
         services.AddScoped<IRankedWorkflowOrchestrator, RankedWorkflowOrchestrator>();
+        services.AddScoped<IPausedBulkExportRunCloser, PausedBulkExportRunCloser>();
         services.AddSingleton<IWorkflowDefinitionStore, InMemoryWorkflowDefinitionStore>();
         services.AddSingleton<IWorkflowRunStore, InMemoryWorkflowRunStore>();
         services.AddSingleton<IWorkflowNodeResourceHistoryRecorder, InMemoryWorkflowNodeResourceHistoryRecorder>();

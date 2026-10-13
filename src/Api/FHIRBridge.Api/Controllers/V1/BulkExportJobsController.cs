@@ -3,6 +3,7 @@ using FHIRBridge.Application.Security;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.Abstractions.Sources;
+using FHIRBridge.Runtime.Application.Workflows;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,15 +23,18 @@ public sealed class BulkExportJobsController : ControllerBase
     private readonly IBulkExportJobRepository _jobRepository;
     private readonly IFhirBulkExportClient _bulkExportClient;
     private readonly ISourceConnectionRuntimeResolver _sourceResolver;
+    private readonly IPausedBulkExportRunCloser _pausedRunCloser;
 
     public BulkExportJobsController(
         IBulkExportJobRepository jobRepository,
         IFhirBulkExportClient bulkExportClient,
-        ISourceConnectionRuntimeResolver sourceResolver)
+        ISourceConnectionRuntimeResolver sourceResolver,
+        IPausedBulkExportRunCloser pausedRunCloser)
     {
         _jobRepository = jobRepository;
         _bulkExportClient = bulkExportClient;
         _sourceResolver = sourceResolver;
+        _pausedRunCloser = pausedRunCloser;
     }
 
     [HttpGet("{id:guid}")]
@@ -81,6 +85,14 @@ public sealed class BulkExportJobsController : ControllerBase
 
         job.MarkCancelled(DateTime.UtcNow);
         await _jobRepository.UpdateAsync(job, cancellationToken);
+
+        // A cancelled job is never polled again, so the workflow run paused on it would otherwise stay
+        // AwaitingBulkExport ("Running") for ever. Closed after the job, and announced once saved.
+        if (job.SourcePath == BulkExportJobSourcePath.WorkflowNode && job.WorkflowRunId is { } workflowRunId)
+        {
+            await _pausedRunCloser.CancelAsync(
+                workflowRunId, "Cancelled: the bulk export was cancelled before it completed.", cancellationToken);
+        }
 
         return NoContent();
     }

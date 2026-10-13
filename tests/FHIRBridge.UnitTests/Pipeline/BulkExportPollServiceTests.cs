@@ -33,7 +33,10 @@ public sealed class BulkExportPollServiceTests
         return job;
     }
 
-    private static (Mock<IBulkExportJobRepository> Repository, Mock<IFhirBulkExportClient> Client,
+    /// <summary>Closes the workflow run paused on a job that failed — see BulkExportPollService.FailJobAsync.</summary>
+    private readonly Mock<IPausedBulkExportRunCloser> _runCloser = new();
+
+    private (Mock<IBulkExportJobRepository> Repository, Mock<IFhirBulkExportClient> Client,
         Mock<ISourceConnectionRuntimeResolver> Resolver, Mock<IRankedWorkflowOrchestrator> Orchestrator, BulkExportPollService Service)
         CreateSut()
     {
@@ -42,7 +45,7 @@ public sealed class BulkExportPollServiceTests
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         var orchestrator = new Mock<IRankedWorkflowOrchestrator>();
         var service = new BulkExportPollService(
-            repository.Object, client.Object, resolver.Object, orchestrator.Object, NullLogger<BulkExportPollService>.Instance);
+            repository.Object, client.Object, resolver.Object, orchestrator.Object, _runCloser.Object, NullLogger<BulkExportPollService>.Instance);
 
         return (repository, client, resolver, orchestrator, service);
     }
@@ -74,7 +77,7 @@ public sealed class BulkExportPollServiceTests
     public async Task InProgress_result_marks_the_job_failed_once_the_attempt_cap_is_reached()
     {
         var job = CreateJob(Guid.NewGuid());
-        var (repository, client, resolver, _, service) = CreateSut();
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
         repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([job]);
         resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
@@ -85,13 +88,16 @@ public sealed class BulkExportPollServiceTests
         await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 1, CancellationToken.None);
 
         job.Status.Should().Be(BulkExportJobStatus.Failed);
+        _runCloser.Verify(c => c.FailAsync(
+            job.WorkflowRunId!.Value, "Bulk export failed: Bulk export did not complete after 1 status polls.", It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
     public async Task Failed_result_marks_the_job_failed_with_the_returned_message()
     {
         var job = CreateJob(Guid.NewGuid());
-        var (repository, client, resolver, _, service) = CreateSut();
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
         repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([job]);
         resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
@@ -103,6 +109,145 @@ public sealed class BulkExportPollServiceTests
 
         job.Status.Should().Be(BulkExportJobStatus.Failed);
         job.ErrorMessage.Should().Be("500 Internal Server Error");
+        _runCloser.Verify(c => c.FailAsync(
+            job.WorkflowRunId!.Value, "Bulk export failed: 500 Internal Server Error", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task A_failed_job_is_saved_before_its_paused_workflow_run_is_closed()
+    {
+        // Without the close, a failed job's run stayed AwaitingBulkExport for ever: nothing polls a failed job again.
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync((FhirSourceConfiguration?)null);
+        var order = new List<string>();
+        repository.Setup(r => r.UpdateAsync(job, It.IsAny<CancellationToken>()))
+            .Callback(() => order.Add($"job {job.Status}"))
+            .Returns(Task.CompletedTask);
+        _runCloser.Setup(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback(() => order.Add("run closed"))
+            .ReturnsAsync(true);
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        order.Should().Equal($"job {BulkExportJobStatus.Failed}", "run closed");
+    }
+
+    // A poll that THROWS (token request refused — revoked/expired credentials, a disabled client — or the network/VPN
+    // down) used to leave the job untouched: no attempt counted, polled again every tick for ever, and its run shown
+    // Running for ever. It now counts as an attempt, so the attempt cap ends it like any other export that never
+    // completes, and the run is closed.
+    [Theory]
+    [InlineData(RuntimeSourceType.Epic)]
+    [InlineData(RuntimeSourceType.Healow)]
+    [InlineData(RuntimeSourceType.Athenahealth)]
+    [InlineData(RuntimeSourceType.GenericFhir)]
+    public async Task A_poll_that_throws_counts_as_an_attempt_and_the_cap_closes_the_run(RuntimeSourceType vendor)
+    {
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        var source = Source with { SourceType = vendor };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, source, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Token request failed: invalid_client"));
+
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 2, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Polling);
+        job.PollAttemptCount.Should().Be(1);
+        job.NextPollNotBeforeUtc.Should().BeAfter(DateTime.UtcNow);
+        repository.Verify(r => r.UpdateAsync(job, It.IsAny<CancellationToken>()), Times.Once);
+        _runCloser.Verify(c => c.FailAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 2, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        job.ErrorMessage.Should().Contain("could not be read after 2 attempts").And.Contain("invalid_client");
+        _runCloser.Verify(c => c.FailAsync(
+            job.WorkflowRunId!.Value,
+            It.Is<string>(reason => reason.Contains("invalid_client")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_download_that_throws_counts_as_an_attempt()
+    {
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
+        var files = new[] { new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson") };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files));
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("file link expired"));
+
+        await service.PollDueJobsAsync(50, 5, maxPollAttempts: 1, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        _runCloser.Verify(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        orchestrator.Verify(o => o.ResumeAfterBulkExportAsync(
+            It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(),
+            It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_resume_that_throws_closes_the_still_paused_run_and_leaves_the_job_completed()
+    {
+        // The resume failed before the run restarted (here: its workflow was deleted), so nothing would ever close the
+        // run. The job itself did complete and must stay Completed, not count a poll attempt. The closer only acts on
+        // a run still AwaitingBulkExport, so a run the orchestrator already closed itself is left as it is.
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
+        var files = new[] { new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson") };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files));
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ResourceEnvelope("Patient", "p1", "{}", null, null)]);
+        orchestrator.Setup(o => o.ResumeAfterBulkExportAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(),
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Workflow definition was not found."));
+
+        await service.PollDueJobsAsync(50, 5, maxPollAttempts: 1, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Completed);
+        job.PollAttemptCount.Should().Be(0);
+        _runCloser.Verify(c => c.FailAsync(
+            job.WorkflowRunId!.Value,
+            It.Is<string>(reason => reason.Contains("Workflow definition was not found.")),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_failed_job_that_belongs_to_no_workflow_run_closes_nothing()
+    {
+        var job = CreateJob(Guid.NewGuid(), sourcePath: BulkExportJobSourcePath.ConfiguredPipeline);
+        var (repository, client, resolver, orchestrator, service) = CreateSut();
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Failed, ErrorMessage: "boom"));
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        _runCloser.Verify(c => c.FailAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -294,7 +439,7 @@ public sealed class BulkExportPollServiceTests
         definitionStore.Setup(s => s.GetAsync(workflow.Id, It.IsAny<CancellationToken>())).ReturnsAsync(workflow);
 
         var service = new BulkExportPollService(
-            repository.Object, client.Object, resolver.Object, orchestrator.Object, NullLogger<BulkExportPollService>.Instance,
+            repository.Object, client.Object, resolver.Object, orchestrator.Object, _runCloser.Object, NullLogger<BulkExportPollService>.Instance,
             runStore: runStore.Object, definitionStore: definitionStore.Object);
 
         var manifest = new[]

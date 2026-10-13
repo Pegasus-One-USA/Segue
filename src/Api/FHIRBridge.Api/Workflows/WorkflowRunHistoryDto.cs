@@ -75,7 +75,8 @@ public sealed record WorkflowRunHistoryPageDto(
 /// </summary>
 public sealed record BulkExportStatusDto(
     string? BulkRequestId,
-    /// <summary>InProgress, Completed or Failed — the live read, not <c>BulkExportJob.Status</c>.</summary>
+    /// <summary>InProgress, Completed or Failed from the live read; or the stored <c>BulkExportJob.Status</c>
+    /// (Failed or Cancelled) once the job has ended that way, since nothing polls it after that.</summary>
     string Status,
     /// <summary>The <c>X-Progress</c> header verbatim, e.g. "Searched 0 of 2 patients". Null on servers that
     /// don't send it (it is optional in the spec) and on a completed job.</summary>
@@ -92,7 +93,11 @@ public sealed record BulkExportStatusDto(
     /// tried and refused even though the job as a whole succeeded.</summary>
     IReadOnlyList<string> Errors,
     int? RetryAfterSeconds,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    /// <summary>When this system recorded the job's end (<c>BulkExportJob.CompletedOnUtc</c>): completed, failed or
+    /// cancelled. Null while it runs. The popup's Elapsed ends here when the source gave no <c>transactionTime</c> —
+    /// always the case for a failed or cancelled export.</summary>
+    DateTime? CompletedOnUtc = null);
 
 /// <summary>One resource type's state within an export. <paramref name="FileCount"/> is the number of NDJSON FILES
 /// the server produced, never a record count — a single file may hold one resource or fifty thousand, and the real
@@ -100,7 +105,8 @@ public sealed record BulkExportStatusDto(
 public sealed record BulkExportResourceTypeStatusDto(
     string ResourceType,
     int? FileCount,
-    /// <summary><c>Pending</c> or <c>Ready</c>.</summary>
+    /// <summary><c>Pending</c> or <c>Ready</c>; <c>Failed</c> or <c>Cancelled</c> (nothing delivered) when the whole
+    /// job ended that way.</summary>
     string State);
 
 /// <summary>All-time run count per <see cref="FHIRBridge.Runtime.Domain.Workflows.WorkflowRunStatus"/>, across
