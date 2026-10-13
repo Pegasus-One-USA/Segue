@@ -47,7 +47,8 @@ export interface RouteExecution {
 export interface BulkExportResourceTypeStatus {
   resourceType: string;
   fileCount: number | null;
-  state: 'Pending' | 'Ready';
+  /** Failed / Cancelled: the whole job ended that way and nothing was delivered for this type. */
+  state: 'Pending' | 'Ready' | 'Failed' | 'Cancelled';
 }
 
 /** Matches the backend's BulkExportStatusDto — a live, server-proxied read of one run's $export job.
@@ -61,7 +62,8 @@ export interface BulkExportResourceTypeStatus {
  *  PHI, and the server groups them into counts so they never reach the browser. */
 export interface BulkExportStatus {
   bulkRequestId: string | null;
-  status: 'InProgress' | 'Completed' | 'Failed';
+  /** The live read; Failed or Cancelled from the stored job once it has ended that way. */
+  status: 'InProgress' | 'Completed' | 'Failed' | 'Cancelled';
   /** e.g. "Searched 0 of 2 patients". Null on servers that don't send X-Progress (it is optional in the
    *  Bulk Data spec — Epic populates it reliably, others may not) and on a completed job. */
   progress: string | null;
@@ -78,6 +80,9 @@ export interface BulkExportStatus {
   errors: string[];
   retryAfterSeconds: number | null;
   errorMessage: string | null;
+  /** When FHIRBridge recorded the job's end (completed, failed or cancelled); null while it runs. Elapsed ends
+   *  here when the source gave no transactionTime — always so for a failed or cancelled export. */
+  completedOnUtc?: string | null;
 }
 
 export interface PagedResult<T> {

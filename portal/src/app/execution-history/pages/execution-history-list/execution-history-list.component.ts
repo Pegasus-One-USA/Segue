@@ -1,12 +1,13 @@
-﻿import { Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+﻿import { Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { Observable, Subject, catchError, debounceTime, distinctUntilChanged, filter, of, switchMap } from 'rxjs';
+import { EMPTY, Observable, Subject, catchError, debounceTime, distinctUntilChanged, filter, map, of, switchMap } from 'rxjs';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
+import { formatDuration } from '../../utils/format-duration.util';
 import { BulkExportStatus, PagedResult, RouteExecution, RouteExecutionFilter, RouteExecutionPage } from '../../models/execution-history.model';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
 import { ModalOverlayComponent } from '../../../components/shared/modal-overlay/modal-overlay.component';
@@ -24,6 +25,22 @@ import { RunStatusHubService } from '../../../services/run-status-hub.service';
 /** Several runs settling within the same moment collapse into one refetch instead of one per event — same value
  *  the Dashboard uses. */
 const RUN_STATUS_REFRESH_DEBOUNCE_MS = 300;
+
+const BULK_STATUS_READ_FAILED =
+  'Could not read the export status from the source system. The job may have expired or been removed by the source server.';
+const BULK_STATUS_NO_JOB =
+  'No bulk export job is recorded for this run yet. If it was just started, try again in a moment.';
+
+/** The popup's statuses after which an export no longer changes (see BulkExportStatus.status). Anything else —
+ *  InProgress, or a stored job status such as Polling when the source can no longer be read — is still running. */
+const BULK_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['Completed', 'Failed', 'Cancelled']);
+
+/** How often a running export's Elapsed is redrawn. Each tick re-derives it from the timestamps (see bulkElapsed),
+ *  so a delayed tick shows the right figure late rather than a drifted one. */
+const BULK_ELAPSED_TICK_MS = 1000;
+
+/** One read of the Bulk Data Status popup: the click that opened it (shows the loader) or a refresh (silent). */
+interface BulkStatusRequest { runId: string; silent: boolean }
 
 type SortColumn = 'pipeline' | 'source' | 'status' | 'duration' | 'lastRun' | 'triggeredBy';
 type SortDirection = 'asc' | 'desc';
@@ -67,6 +84,10 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
    *  filters/page could land last and replace newer results: e.g. a refresh fired on page 1, the user moved
    *  to page 2, page 2 arrived first, then page 1's rows overwrote it under a "page 2" pager. */
   private readonly loadRequests$ = new Subject<{ filter: RouteExecutionFilter; silent: boolean }>();
+  /** Every read of the Bulk Data Status popup — the open click and each refresh — goes through this one stream, for
+   *  the same reason as loadRequests$: a newer read cancels an older one still in flight. null (on close) cancels
+   *  without starting another. */
+  private readonly bulkStatusRequests$ = new Subject<BulkStatusRequest | null>();
 
   constructor() {
     this.loadRequests$
@@ -105,7 +126,42 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     // Reconciles whatever was missed while the hub was disconnected (the first connect included).
     this.runStatusHub.reconnected$
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.refreshInBackground());
+      .subscribe(() => {
+        this.refreshInBackground();
+        this.refreshBulkStatus();
+      });
+
+    // The Bulk Data Status popup is a read taken when it opened. Without this it kept that read for as long as it
+    // stayed open: an export that finished meanwhile still showed "In Progress" with every type "Pending", while the
+    // list behind it already said Succeeded. A status change of the run it shows (and only that run) re-reads it.
+    this.bulkStatusRequests$
+      .pipe(
+        switchMap(request => request === null
+          ? EMPTY
+          : this.api.bulkExportStatus(request.runId, { silent: request.silent }).pipe(
+              map(status => ({ request, status, failed: false })),
+              catchError(() => of({ request, status: null, failed: true })))),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(({ request, status, failed }) => this.applyBulkStatus(request, status, failed));
+
+    // One-second tick for a running export's Elapsed. The effect re-runs only when bulkTicking flips, and its cleanup
+    // clears the interval when it does — a final status, the popup closing or moving to another run — and when the
+    // component is destroyed, so there is never more than one interval and none outlives the popup.
+    effect(onCleanup => {
+      if (!this.bulkTicking()) return;
+      this.bulkNow.set(Date.now());
+      const handle = setInterval(() => this.bulkNow.set(Date.now()), BULK_ELAPSED_TICK_MS);
+      onCleanup(() => clearInterval(handle));
+    });
+
+    this.runStatusHub.runStatusChanged$
+      .pipe(
+        filter(event => this.bulkStatusOpen() && event.workflowRunId === this.bulkStatusRun()?.id),
+        debounceTime(RUN_STATUS_REFRESH_DEBOUNCE_MS),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => this.refreshBulkStatus());
   }
 
   // ── Multi-select facets ───────────────────────────────────────────────────
@@ -192,6 +248,23 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   readonly bulkStatus        = signal<BulkExportStatus | null>(null);
   readonly bulkStatusLoading = signal(false);
   readonly bulkStatusError   = signal<string | null>(null);
+  /** Set when a refresh of the open popup failed; the last successful read stays on screen beneath it. */
+  readonly bulkStatusRefreshError = signal<string | null>(null);
+
+  /** "Now" for a running export's Elapsed — advanced by the one-second tick below, read by bulkElapsedText. */
+  private readonly bulkNow = signal(Date.now());
+  /** True only while the popup is open on an export that is still running: the one condition the tick runs under.
+   *  A boolean, so a refresh that returns another still-running read does not restart the tick. */
+  private readonly bulkTicking = computed(() => {
+    const status = this.bulkStatus();
+    return this.bulkStatusOpen() && status !== null && !BULK_TERMINAL_STATUSES.has(status.status);
+  });
+  /** The popup's Elapsed. Recomputed from the timestamps whenever the read or the tick changes — a final status
+   *  freezes it at once, since bulkElapsed then ignores "now". */
+  readonly bulkElapsedText = computed(() => {
+    const status = this.bulkStatus();
+    return status ? this.bulkElapsed(status, this.bulkNow()) : '—';
+  });
   /** The row the popup was opened from — its bulkRequestId is shown while the live read is still in flight,
    *  so the header isn't empty for the duration of the request. */
   readonly bulkStatusRun     = signal<RouteExecution | null>(null);
@@ -428,36 +501,58 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     this.bulkStatusRun.set(execution);
     this.bulkStatus.set(null);
     this.bulkStatusError.set(null);
+    this.bulkStatusRefreshError.set(null);
     this.bulkStatusLoading.set(true);
     this.bulkStatusOpen.set(true);
 
-    this.api.bulkExportStatus(execution.id).subscribe({
-      next: status => {
-        this.bulkStatusLoading.set(false);
-        if (status) {
-          this.bulkStatus.set(status);
-        } else {
-          // 404 → the run has no bulk-export job, or one with no status URL yet. Expected, not an error.
-          this.bulkStatusError.set(
-            'No bulk export job is recorded for this run yet. If it was just started, try again in a moment.');
-        }
-      },
-      error: () => {
-        this.bulkStatusLoading.set(false);
-        // The source server is the thing that failed here, and its own message is deliberately not
-        // surfaced (it can be a full HTML error page). An expired or purged job is the common case.
-        this.bulkStatusError.set(
-          'Could not read the export status from the source system. The job may have expired or been '
-          + 'removed by the source server.');
-      },
-    });
+    this.bulkStatusRequests$.next({ runId: execution.id, silent: false });
   }
 
   closeBulkStatus(): void {
+    this.bulkStatusRequests$.next(null);
     this.bulkStatusOpen.set(false);
     this.bulkStatus.set(null);
     this.bulkStatusRun.set(null);
     this.bulkStatusError.set(null);
+    this.bulkStatusRefreshError.set(null);
+    this.bulkStatusLoading.set(false);
+  }
+
+  /** Re-reads the open popup's status in the background. No-op while it is closed. */
+  private refreshBulkStatus(): void {
+    const run = this.bulkStatusRun();
+    if (this.bulkStatusOpen() && run) {
+      this.bulkStatusRequests$.next({ runId: run.id, silent: true });
+    }
+  }
+
+  private applyBulkStatus(request: BulkStatusRequest, status: BulkExportStatus | null, failed: boolean): void {
+    // Closed meanwhile, or reopened on another run: this answer is for a popup that is no longer on screen.
+    if (!this.bulkStatusOpen() || this.bulkStatusRun()?.id !== request.runId) return;
+
+    this.bulkStatusLoading.set(false);
+    const showing = this.bulkStatus() !== null;
+
+    if (failed) {
+      // The source server is the thing that failed here, and its own message is deliberately not surfaced (it can
+      // be a full HTML error page). A failed refresh keeps the last good read on screen rather than blanking it.
+      if (showing) {
+        this.bulkStatusRefreshError.set('Could not refresh the status from the source system. Showing the last read.');
+      } else {
+        this.bulkStatusError.set(BULK_STATUS_READ_FAILED);
+      }
+      return;
+    }
+
+    if (!status) {
+      // 404 → the run has no bulk-export job, or one with no status URL yet. Expected, not an error.
+      if (!showing) this.bulkStatusError.set(BULK_STATUS_NO_JOB);
+      return;
+    }
+
+    this.bulkStatus.set(status);
+    this.bulkStatusError.set(null);
+    this.bulkStatusRefreshError.set(null);
   }
 
   /** Badge class for the popup's live status, reusing the same badge vocabulary the Status column uses. */
@@ -469,12 +564,40 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
     }[status] ?? 'badge-inactive';
   }
 
-  /** How long the export has been running, from kick-off to now — context the X-Progress line alone
-   *  doesn't give ("Searched 0 of 2 patients" reads very differently at 30s than at 90 minutes). */
-  bulkElapsed(kickedOffOnUtc: string): string {
-    const started = new Date(kickedOffOnUtc).getTime();
+  /** Badge class for one resource type's state in the popup. */
+  resourceStateClass(state: string): string {
+    return {
+      Ready: 'badge-completed',
+      Failed: 'badge-failed',
+      Cancelled: 'badge-inactive',
+    }[state] ?? 'badge-queued';
+  }
+
+  /** How long the export ran — context the X-Progress line alone doesn't give ("Searched 0 of 2 patients" reads
+   *  very differently at 30s than at 90 minutes). While it runs, kick-off to now. Once it has ended, kick-off to its
+   *  end, so the figure stops growing: the source's transactionTime when it gave one (a completed manifest), else
+   *  the end FHIRBridge recorded (always so for a failed or cancelled export). An end that is missing, unreadable or
+   *  earlier than the kick-off (clock skew) is skipped; with no usable end the value is '—', never a negative or
+   *  still-growing figure. Every timestamp carries its own offset (UTC 'Z' from FHIRBridge, the source's own offset
+   *  on transactionTime), so Date.parse compares them as instants regardless of the browser's time zone. */
+  bulkElapsed(status: BulkExportStatus, now: number = Date.now()): string {
+    const started = Date.parse(status.kickedOffOnUtc);
     if (Number.isNaN(started)) return '—';
-    return this.formatDuration(Date.now() - started);
+
+    if (!BULK_TERMINAL_STATUSES.has(status.status)) {
+      return this.formatDuration(Math.max(0, now - started));
+    }
+
+    for (const end of [status.transactionTime, status.completedOnUtc]) {
+      const ended = end ? Date.parse(end) : Number.NaN;
+      if (!Number.isNaN(ended) && ended >= started) return this.formatDuration(ended - started);
+    }
+    return '—';
+  }
+
+  /** The end FHIRBridge recorded, shown beside Elapsed when the source gave no transactionTime to show instead. */
+  bulkEndedAt(status: BulkExportStatus): string | null {
+    return BULK_TERMINAL_STATUSES.has(status.status) && !status.transactionTime ? status.completedOnUtc ?? null : null;
   }
 
   statusLabel(status: string): string {
@@ -542,8 +665,6 @@ export class ExecutionHistoryListComponent implements OnInit, OnDestroy {
   }
 
   formatDuration(ms: number | null): string {
-    if (ms === null) return '—';
-    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-    return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+    return formatDuration(ms);
   }
 }
