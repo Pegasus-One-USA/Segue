@@ -1,0 +1,33 @@
+src/Api/FHIRBridge.Api/Controllers/V1/BulkExportJobsController.cs
+  s_b1e7fcc7fc9bab::t_7947b23fd2ec9d 70-76,93-97,101-111,116-120
+src/FHIRBridge.Infrastructure/Workflows/RedisRunStatusRelay.cs
+  s_b1e7fcc7fc9bab::t_0b509eb80ada72 26-28,41,69-81
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_b1e7fcc7fc9bab::t_7947b23fd2ec9d 15-25,180-192
+tests/FHIRBridge.UnitTests/Workflows/RunStatusRedisRelayTests.cs
+  s_b1e7fcc7fc9bab::t_acca5b7bed31d4 172-224
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_b1e7fcc7fc9bab::t_7947b23fd2ec9d 213-220,227-229,253-268
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_b1e7fcc7fc9bab::t_1c084de208c3d2 475-518
+tests/FHIRBridge.Api.IntegrationTests/Tests/BulkExportStatusLifecycleTests.cs
+  s_b1e7fcc7fc9bab::t_a1549e05e337d2 68-83
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_b1e7fcc7fc9bab::t_2c5b05a5a5a86d 118,120-122,134,139-206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "19a4b29ac6f44dd57220d433b5d0c846a8a296e0",
+  "prompts": {},
+  "sessions": {
+    "s_b1e7fcc7fc9bab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339ebaf9-b31a-49e1-b147-e7b3f8c890e8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
