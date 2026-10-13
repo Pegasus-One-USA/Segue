@@ -169,6 +169,59 @@ public sealed class RunStatusRedisRelayTests
         await publish.Should().ThrowAsync<RedisConnectionException>();
     }
 
+    [Fact]
+    public async Task Relay_forwards_messages_one_at_a_time_in_the_order_they_arrived()
+    {
+        // PR #247 review: each message was forwarded on its own fire-and-forget task, so a slow "Running" push could
+        // land after the "Succeeded" that followed it, and the Workflows list (which patches the row from the event)
+        // would end on Running. The second forward must not start before the first has finished.
+        var redis = new FakeRedis();
+        var hub = new GatedNotifier();
+        var relay = new RedisRunStatusRelay(redis.Multiplexer.Object, hub, NullLogger<RedisRunStatusRelay>.Instance);
+        await relay.StartAsync(CancellationToken.None);
+        var running = SucceededEvent with { Status = "Running" };
+
+        redis.Deliver(RunStatusChannel.Name, RunStatusChannel.Serialize(running));
+        redis.Deliver(RunStatusChannel.Name, RunStatusChannel.Serialize(SucceededEvent));
+
+        hub.Started.Should().Equal("Running");     // "Succeeded" waits while "Running" is still being pushed
+        hub.Release();
+        await hub.Drained;
+
+        hub.Started.Should().Equal("Running", "Succeeded");
+        hub.Completed.Should().Equal("Running", "Succeeded");
+    }
+
+    /// <summary>Holds the first push open until <see cref="Release"/>; records the order pushes start and finish in.</summary>
+    private sealed class GatedNotifier : IRunStatusNotifier
+    {
+        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public List<string> Started { get; } = [];
+
+        public List<string> Completed { get; } = [];
+
+        public Task Drained => _drained.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        public void Release() => _gate.TrySetResult();
+
+        public async Task NotifyAsync(RunStatusChangedEvent statusEvent, CancellationToken cancellationToken)
+        {
+            lock (Started) Started.Add(statusEvent.Status);
+            if (Started.Count == 1)
+            {
+                await _gate.Task;
+            }
+
+            lock (Completed) Completed.Add(statusEvent.Status);
+            if (Completed.Count == 2)
+            {
+                _drained.TrySetResult();
+            }
+        }
+    }
+
     private sealed class RecordingNotifier : IRunStatusNotifier
     {
         public List<RunStatusChangedEvent> Received { get; } = [];

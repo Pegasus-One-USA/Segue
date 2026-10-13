@@ -472,6 +472,50 @@ public sealed class RankedWorkflowOrchestratorTests
         persisted!.Status.Should().Be(WorkflowRunStatus.Succeeded);
     }
 
+    [Theory]
+    [InlineData(WorkflowRunStatus.Failed)]
+    [InlineData(WorkflowRunStatus.Cancelled)]
+    [InlineData(WorkflowRunStatus.Succeeded)]
+    public async Task ResumeAfterBulkExportAsync_runs_nothing_for_a_run_that_is_no_longer_paused(WorkflowRunStatus closedAs)
+    {
+        // A run is closed while its export is still out — the export failed and the job's own save then failed, or it
+        // was cancelled — and the source later reports the export Completed after all. Resuming would write that data
+        // for a run already closed; it must do nothing.
+        var workflow = BuildValidSourceToSqlWorkflow("resume-closed");
+        var sourceNodeId = workflow.Nodes.Single(n => n.NodeType == WorkflowNodeTypes.EpicSource).Id;
+        var runStore = new SaveRecordingRunStore();
+        var notifier = new StoreCheckingNotifier(runStore);
+        var calls = new List<string>();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new IWorkflowNodeExecutor[]
+            {
+                new RecordingExecutor(WorkflowNodeTypes.EpicSource, calls, WorkflowDataContract.ResourceBatch),
+                new RecordingExecutor(WorkflowNodeTypes.DeIdentification, calls, WorkflowDataContract.DeIdentifiedBatch),
+                new RecordingExecutor(WorkflowNodeTypes.Mapping, calls, WorkflowDataContract.MappedRecordBatch),
+                new RecordingExecutor(WorkflowNodeTypes.SqlServerDestination, calls, WorkflowDataContract.DestinationWriteResult)
+            }),
+            auditRecorder: null,
+            runStore: runStore,
+            runStatusNotifier: notifier,
+            workflowDefinitionStore: new StubWorkflowDefinitionStore(workflow));
+        var run = new WorkflowRun(Guid.NewGuid(), workflow.Id, DateTimeOffset.UtcNow, correlationId: "resume-closed");
+        run.AwaitBulkExport();
+        if (closedAs == WorkflowRunStatus.Failed) run.Fail("Bulk export failed: 500", DateTimeOffset.UtcNow);
+        if (closedAs == WorkflowRunStatus.Cancelled) run.Cancel("Cancelled", DateTimeOffset.UtcNow);
+        if (closedAs == WorkflowRunStatus.Succeeded) run.Succeed(DateTimeOffset.UtcNow);
+        await runStore.SaveAsync(run, CancellationToken.None);
+
+        var result = await orchestrator.ResumeAfterBulkExportAsync(
+            run.Id, sourceNodeId, priorNodeOutputsJson: null, contextJson: null, SingleResource(),
+            skippedResourceTypeReasons: null, cancellationToken: CancellationToken.None);
+
+        calls.Should().BeEmpty();
+        result.WorkflowRun.Status.Should().Be(closedAs);
+        runStore.LastSavedStatus(run.Id).Should().Be(closedAs);
+        notifier.Events.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task ResumeAfterBulkExportAsync_notifies_Succeeded_only_once_the_run_is_saved_as_Succeeded()
     {

@@ -23,6 +23,9 @@ public sealed class RedisRunStatusRelay : IHostedService
     private readonly ILogger<RedisRunStatusRelay> _logger;
     private readonly EventHandler<ConnectionFailedEventArgs> _onConnectionRestored;
     private readonly Action<RedisChannel, RedisValue> _onMessage;
+    private readonly object _forwardGate = new();
+    /// <summary>The last forward queued. Each message chains onto it, so pushes go out one at a time in arrival order.</summary>
+    private Task _forwardTail = Task.CompletedTask;
     private int _subscribeState; // 0 = not subscribed, 1 = subscribing, 2 = subscribed
     private volatile bool _stopped;
 
@@ -35,7 +38,7 @@ public sealed class RedisRunStatusRelay : IHostedService
         _notifier = notifier;
         _logger = logger;
         _onConnectionRestored = (_, _) => TrySubscribe();
-        _onMessage = (channel, message) => { _ = ForwardAsync(message); };
+        _onMessage = (channel, message) => EnqueueForward(message);
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -62,6 +65,19 @@ public sealed class RedisRunStatusRelay : IHostedService
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>Queues a message behind the one before it. Forwarding each on its own task let a slow "Running" push
+    /// land after the "Succeeded" that followed it, and the Workflows list (which patches its row from the event) ended
+    /// on Running. ForwardAsync never throws, so one failed push never stalls the queue.</summary>
+    private void EnqueueForward(RedisValue message)
+    {
+        lock (_forwardGate)
+        {
+            _forwardTail = _forwardTail
+                .ContinueWith(_ => ForwardAsync(message), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default)
+                .Unwrap();
+        }
     }
 
     /// <summary>Forwards one channel message. Never throws: a bad message or a failed push is logged and dropped, and

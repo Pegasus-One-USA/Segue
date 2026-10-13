@@ -65,6 +65,22 @@ public sealed class BulkExportStatusLifecycleTests(ApiFixture f)
         Assert.NotNull(body.GetProperty("completedOnUtc").GetString());
     }
 
+    [Fact]
+    public async Task Cancelling_an_already_cancelled_job_still_closes_a_run_left_paused()
+    {
+        // PR #247 review: a cancel whose run close failed returned 500 after the job was already saved Cancelled; a retry
+        // then hit "already cancelled" and the run stayed paused for ever. The retry now closes it.
+        var (run, job) = await SeedPausedRunAsync();
+        job.MarkCancelled(DateTime.UtcNow);
+        await Jobs.UpdateAsync(job, CancellationToken.None);
+
+        var cancel = await f.AdminClient.PostAsync($"/api/v1/bulk-export-jobs/{job.Id}/cancel", content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, cancel.StatusCode);
+        var saved = await Runs.GetAsync(run.Id, CancellationToken.None);
+        Assert.Equal(WorkflowRunStatus.Cancelled, saved!.Status);
+    }
+
     private IWorkflowRunStore Runs => f.Services.GetRequiredService<IWorkflowRunStore>();
 
     private IBulkExportJobRepository Jobs => f.Services.GetRequiredService<IBulkExportJobRepository>();

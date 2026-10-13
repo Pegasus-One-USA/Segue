@@ -210,19 +210,23 @@ public sealed class BulkExportPollService : IBulkExportPollService
         }
     }
 
-    /// <summary>Marks the job failed, then closes the workflow run paused on it. A failed job is never polled again,
-    /// so without the second step its run stayed AwaitingBulkExport for ever — "Running" on Execution History and in
-    /// the Bulk Data Status popup, with no event to update either. Job first: if closing the run then throws, the
-    /// exception reaches PollDueJobsAsync's per-job capture rather than being swallowed here.</summary>
+    /// <summary>Closes the workflow run paused on the job, then marks the job failed. A failed job is never polled
+    /// again, so without the first step its run stayed AwaitingBulkExport for ever — "Running" on Execution History and
+    /// in the Bulk Data Status popup, with no event to update either.
+    /// <para>Run first, so the sequence can be retried: if closing the run throws (a transient store error), the job is
+    /// still Polling, PollDueJobsAsync counts the attempt, and the next tick does both again. The other way round, a
+    /// terminal job with a still-paused run was never revisited. If the run closes but the job's save then fails, the
+    /// next tick re-polls, closing the run is a no-op, and the job is saved; should the source report the export
+    /// completed after all by then, ResumeAfterBulkExportAsync leaves the closed run alone.</para></summary>
     private async Task FailJobAsync(BulkExportJob job, string errorMessage, CancellationToken cancellationToken)
     {
-        job.MarkFailed(errorMessage, DateTime.UtcNow);
-        await _jobRepository.UpdateAsync(job, cancellationToken);
-
         if (job.SourcePath == BulkExportJobSourcePath.WorkflowNode && job.WorkflowRunId is { } workflowRunId)
         {
             await _pausedRunCloser.FailAsync(workflowRunId, $"Bulk export failed: {errorMessage}", cancellationToken);
         }
+
+        job.MarkFailed(errorMessage, DateTime.UtcNow);
+        await _jobRepository.UpdateAsync(job, cancellationToken);
     }
 
     private async Task RunContinuationAsync(
@@ -246,10 +250,22 @@ public sealed class BulkExportPollService : IBulkExportPollService
                     // it restarted (its workflow deleted, its saved context unreadable) was left AwaitingBulkExport for
                     // ever: the job is Completed, so nothing polls it again. The closer acts only on a run still
                     // AwaitingBulkExport, so the first case is left as the orchestrator saved it.
-                    await _pausedRunCloser.FailAsync(
-                        job.WorkflowRunId!.Value,
-                        $"The bulk export completed, but the run could not be resumed: {Snippet(exception.Message)}",
-                        CancellationToken.None);
+                    try
+                    {
+                        await _pausedRunCloser.FailAsync(
+                            job.WorkflowRunId!.Value,
+                            $"The bulk export completed, but the run could not be resumed: {Snippet(exception.Message)}",
+                            CancellationToken.None);
+                    }
+                    catch (Exception closeException) when (closeException is not OperationCanceledException)
+                    {
+                        // Logged here and NOT thrown: the resume's own exception (rethrown below) is the one that says
+                        // what went wrong, and replacing it with this one recorded the wrong error.
+                        _logger.LogError(closeException,
+                            "Could not close workflow run {WorkflowRunId} after its resume failed; it stays AwaitingBulkExport.",
+                            job.WorkflowRunId);
+                    }
+
                     throw;
                 }
 

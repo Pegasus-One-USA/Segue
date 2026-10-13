@@ -67,6 +67,13 @@ public sealed class BulkExportJobsController : ControllerBase
 
         if (job.Status is BulkExportJobStatus.Completed or BulkExportJobStatus.Failed or BulkExportJobStatus.Cancelled)
         {
+            // A job that ended Failed or Cancelled must not leave its run paused — e.g. an earlier cancel whose run close
+            // failed. Closing is a no-op for a run already closed, so retrying the request repairs it.
+            if (job.Status != BulkExportJobStatus.Completed)
+            {
+                await CloseRunAsync(job, cancel: job.Status == BulkExportJobStatus.Cancelled, cancellationToken);
+            }
+
             return Conflict(new { message = $"Bulk export job is already {job.Status.ToLowerInvariant()}." });
         }
 
@@ -83,17 +90,33 @@ public sealed class BulkExportJobsController : ControllerBase
             }
         }
 
+        // A cancelled job is never polled again, so the workflow run paused on it would otherwise stay
+        // AwaitingBulkExport ("Running") for ever. Run first: if closing it fails, the job is not yet Cancelled, so the
+        // request can simply be retried (and the poller keeps polling meanwhile).
+        await CloseRunAsync(job, cancel: true, cancellationToken);
+
         job.MarkCancelled(DateTime.UtcNow);
         await _jobRepository.UpdateAsync(job, cancellationToken);
 
-        // A cancelled job is never polled again, so the workflow run paused on it would otherwise stay
-        // AwaitingBulkExport ("Running") for ever. Closed after the job, and announced once saved.
-        if (job.SourcePath == BulkExportJobSourcePath.WorkflowNode && job.WorkflowRunId is { } workflowRunId)
+        return NoContent();
+    }
+
+    private async Task CloseRunAsync(BulkExportJob job, bool cancel, CancellationToken cancellationToken)
+    {
+        if (job.SourcePath != BulkExportJobSourcePath.WorkflowNode || job.WorkflowRunId is not { } workflowRunId)
+        {
+            return;
+        }
+
+        if (cancel)
         {
             await _pausedRunCloser.CancelAsync(
                 workflowRunId, "Cancelled: the bulk export was cancelled before it completed.", cancellationToken);
         }
-
-        return NoContent();
+        else
+        {
+            await _pausedRunCloser.FailAsync(
+                workflowRunId, $"Bulk export failed: {job.ErrorMessage ?? "the export did not complete."}", cancellationToken);
+        }
     }
 }

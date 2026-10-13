@@ -12,6 +12,17 @@ namespace FHIRBridge.Runtime.Application.Workflows;
 
 public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 {
+    /// <summary>Statuses a run never leaves — a bulk export resume skips a run in any of them.</summary>
+    private static readonly HashSet<WorkflowRunStatus> ClosedRunStatuses =
+    [
+        WorkflowRunStatus.Succeeded,
+        WorkflowRunStatus.PartialSuccess,
+        WorkflowRunStatus.Failed,
+        WorkflowRunStatus.Cancelled,
+        WorkflowRunStatus.Expired,
+        WorkflowRunStatus.ValidationFailed,
+    ];
+
     private readonly IWorkflowGraphValidator _graphValidator;
     private readonly IWorkflowNodeExecutorRegistry _executorRegistry;
     private readonly IWorkflowAuditRecorder _auditRecorder;
@@ -166,6 +177,19 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
         var workflowRun = await _runStore.GetAsync(workflowRunId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow run '{workflowRunId}' was not found.");
+
+        // A run can be closed while its export is still out: the export failed and the job's own save then failed (the
+        // poller closes the run first and retries the job), or the export was cancelled. If the source then reports it
+        // completed after all, resuming would write its data for a run already closed. A run still in progress — paused,
+        // or Running when saving the pause itself failed — resumes as before.
+        if (ClosedRunStatuses.Contains(workflowRun.Status))
+        {
+            _logger.LogWarning(
+                "Workflow run {WorkflowRunId} was not resumed after its bulk export completed: it is already {Status}.",
+                workflowRun.Id, workflowRun.Status);
+            return new WorkflowRunResult(workflowRun, new Dictionary<Guid, WorkflowNodeOutput>());
+        }
+
         var workflowDefinition = await _workflowDefinitionStore.GetAsync(workflowRun.WorkflowDefinitionId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow definition '{workflowRun.WorkflowDefinitionId}' was not found.");
 

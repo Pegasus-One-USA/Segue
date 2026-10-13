@@ -115,9 +115,11 @@ public sealed class BulkExportPollServiceTests
     }
 
     [Fact]
-    public async Task A_failed_job_is_saved_before_its_paused_workflow_run_is_closed()
+    public async Task A_failed_job_closes_its_run_before_the_job_is_saved_as_Failed()
     {
-        // Without the close, a failed job's run stayed AwaitingBulkExport for ever: nothing polls a failed job again.
+        // PR #247 review: saving the job Failed first meant a closer failure (a transient store error) left a terminal
+        // job — never polled again — and a run AwaitingBulkExport for ever. The run is closed first now; the job is
+        // saved Failed only once that has worked.
         var job = CreateJob(Guid.NewGuid());
         var (repository, client, resolver, orchestrator, service) = CreateSut();
         repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -129,12 +131,79 @@ public sealed class BulkExportPollServiceTests
             .Callback(() => order.Add($"job {job.Status}"))
             .Returns(Task.CompletedTask);
         _runCloser.Setup(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Callback(() => order.Add("run closed"))
+            .Callback(() => order.Add($"run closed (job {job.Status})"))
             .ReturnsAsync(true);
 
         await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
 
-        order.Should().Equal($"job {BulkExportJobStatus.Failed}", "run closed");
+        order.Should().Equal($"run closed (job {BulkExportJobStatus.Polling})", $"job {BulkExportJobStatus.Failed}");
+    }
+
+    [Fact]
+    public async Task A_run_that_cannot_be_closed_leaves_the_job_polling_so_the_next_tick_retries()
+    {
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Failed, ErrorMessage: "500 Internal Server Error"));
+        _runCloser.SetupSequence(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("The run store is unavailable."))
+            .ReturnsAsync(true);
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Polling); // not terminal, so it is polled again
+        job.PollAttemptCount.Should().Be(1);
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        job.ErrorMessage.Should().Be("500 Internal Server Error");
+        _runCloser.Verify(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task A_resume_failure_is_reported_as_itself_even_when_closing_the_run_also_fails()
+    {
+        // PR #247 review: the closer's own exception replaced the resume's, so the wrong error was recorded.
+        var job = CreateJob(Guid.NewGuid());
+        var repository = new Mock<IBulkExportJobRepository>();
+        var client = new Mock<IFhirBulkExportClient>();
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        var orchestrator = new Mock<IRankedWorkflowOrchestrator>();
+        var exceptionManager = new Mock<FHIRBridge.Governance.IGlobalExceptionManager>();
+        var captured = new List<Exception>();
+        exceptionManager
+            .Setup(m => m.CaptureAsync(It.IsAny<Exception>(), It.IsAny<FHIRBridge.Governance.ExceptionContext>(), It.IsAny<CancellationToken>()))
+            .Callback<Exception, FHIRBridge.Governance.ExceptionContext, CancellationToken>((exception, _, _) => captured.Add(exception))
+            .ReturnsAsync(new FHIRBridge.Governance.ErrorReport("ERR-TEST-000001", FHIRBridge.Governance.ErrorCategory.Unknown, "x", null));
+        var service = new BulkExportPollService(
+            repository.Object, client.Object, resolver.Object, orchestrator.Object, _runCloser.Object,
+            NullLogger<BulkExportPollService>.Instance, exceptionManager: exceptionManager.Object);
+        var files = new[] { new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson") };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files));
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ResourceEnvelope("Patient", "p1", "{}", null, null)]);
+        orchestrator.Setup(o => o.ResumeAfterBulkExportAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(),
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Workflow definition was not found."));
+        _runCloser.Setup(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("The run store is unavailable."));
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        captured.Should().ContainSingle().Which.Message.Should().Be("Workflow definition was not found.");
+        job.Status.Should().Be(BulkExportJobStatus.Completed);
     }
 
     // A poll that THROWS (token request refused — revoked/expired credentials, a disabled client — or the network/VPN
