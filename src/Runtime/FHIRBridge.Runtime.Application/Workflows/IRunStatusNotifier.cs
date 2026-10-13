@@ -4,9 +4,10 @@ namespace FHIRBridge.Runtime.Application.Workflows;
 /// Best-effort live push of a <see cref="FHIRBridge.Runtime.Domain.Workflows.WorkflowRun"/>'s status
 /// transition, for real-time UI updates (Dashboard, Workflow List). Optional (constructor-injected as
 /// nullable, same pattern as <c>IWorkflowAuditRecorder</c>/<c>IGlobalExceptionManager</c> on
-/// <see cref="RankedWorkflowOrchestrator"/>) — a host that never registers an implementation (e.g. the
-/// Worker process, which has no SignalR hub of its own to push into) simply resolves this as null, and
-/// those runs still persist normally; only the live push is skipped, not the run itself.
+/// <see cref="RankedWorkflowOrchestrator"/>) — a host that never registers an implementation simply resolves
+/// this as null, and those runs still persist normally; only the live push is skipped, not the run itself.
+/// The API pushes over SignalR; the Worker, which has no hub, publishes over Redis for the API to relay
+/// (<c>RedisRunStatusPublisher</c> / <c>RedisRunStatusRelay</c>), and has no notifier when Redis isn't configured.
 /// </summary>
 public interface IRunStatusNotifier
 {

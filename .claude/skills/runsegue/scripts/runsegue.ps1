@@ -28,6 +28,13 @@ param(
     [string] $DbPassword,
     [int]    $DbPort,
 
+    # Redis for both hosts (ConnectionStrings__Redis). Default: an existing ConnectionStrings__Redis in this shell,
+    # else the docker-compose 'fhirbridge-redis' container on whatever host port it publishes. Redis carries the
+    # Worker's run status changes to the browser; without it a Worker-finished run (bulk export, scheduled) shows
+    # "Running" until a refresh. -NoRedis runs both hosts without it.
+    [string] $RedisConnectionString,
+    [switch] $NoRedis,
+
     [switch] $SkipPortal,
     [switch] $SkipWorker,
     [switch] $NoClean,
@@ -258,6 +265,32 @@ if ($Provider -eq 'PostgreSql') {
 Write-Ok "database '$DatabaseName' present"
 
 # ---------------------------------------------------------------------------
+# 2b. Redis (optional) - shared by the API and the Worker
+# ---------------------------------------------------------------------------
+Write-Step 'Resolving Redis'
+$RedisContainer = 'fhirbridge-redis'
+if ($NoRedis) {
+    $RedisConnectionString = $null
+    Write-Warn2 'Redis disabled (-NoRedis): Worker-finished runs will not update the portal live'
+} elseif ($RedisConnectionString) {
+    Write-Ok 'using -RedisConnectionString'
+} elseif ($env:ConnectionStrings__Redis) {
+    # Already in this shell's environment, so both hosts inherit it unchanged.
+    Write-Ok 'using ConnectionStrings__Redis from the current environment'
+} elseif ($runningNames -contains $RedisContainer) {
+    # The published host port, e.g. '0.0.0.0:6379' -> 6379, so a REDIS_PORT override in compose is honoured.
+    $published = @(& docker port $RedisContainer 6379 2>$null) | Select-Object -First 1
+    if ($published -match ':(\d+)\s*$') {
+        $RedisConnectionString = "localhost:$($Matches[1])"
+        Write-Ok "Redis container '$RedisContainer' on $RedisConnectionString"
+    } else {
+        Write-Warn2 "container '$RedisContainer' publishes no host port for 6379 - running without Redis"
+    }
+} else {
+    Write-Warn2 "Redis container '$RedisContainer' is not running - running without Redis (docker compose up -d redis to enable)"
+}
+
+# ---------------------------------------------------------------------------
 # 3. Clean
 # ---------------------------------------------------------------------------
 if ($NoClean) {
@@ -388,6 +421,9 @@ $HostEnv = @{
     'ConnectionStrings__FHIRBridgeDb'  = $ConnectionString
     'Database__Provider'               = $Provider
 }
+if ($RedisConnectionString) { $HostEnv['ConnectionStrings__Redis'] = $RedisConnectionString }
+# An empty value removes the variable for the child, so -NoRedis wins over one set in this shell.
+elseif ($NoRedis)          { $HostEnv['ConnectionStrings__Redis'] = '' }
 
 $launched = @{}
 

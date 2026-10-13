@@ -99,6 +99,15 @@ builder.Services
     .AddWorkflowInfrastructure()
     .AddWorkflowSqlPersistence(builder.Configuration);
 
+// Live status for the runs this host finishes (resumed after a bulk export, or scheduled). The Worker has no SignalR
+// hub, so it publishes each status change on Redis and the API's RedisRunStatusRelay pushes it to the browser —
+// without this, Execution History showed such a run "Running" until a manual refresh. Needs the Redis connection
+// AddFHIRBridgeInfrastructure registers; with no Redis the orchestrator resolves no notifier, exactly as before.
+if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Redis")))
+{
+    builder.Services.AddSingleton<IRunStatusNotifier, FHIRBridge.Infrastructure.Workflows.RedisRunStatusPublisher>();
+}
+
 builder.Services.Configure<RuntimeWorkerOptions>(builder.Configuration.GetSection("RuntimeWorker"));
 // Registered first so it runs before anything here can start a run: fails the Worker's own workflow runs (scheduled,
 // or resumed after a bulk export) left "Running" by the previous Worker process, never the API's.

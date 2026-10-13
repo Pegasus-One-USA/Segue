@@ -236,8 +236,7 @@ builder.Services.AddHostedService<LineageCaptureProcessor>();
 
 // Backs RunStatusHub — pushes workflow-run status changes (Running/Succeeded/Failed) to the Dashboard and
 // Workflow List live, instead of those screens only ever finding out on their next REST poll. See IRunStatusNotifier's
-// remarks: only registered in this host, so RankedWorkflowOrchestrator resolves it as null (and simply skips the
-// live push) wherever it isn't — e.g. the Worker process, which has no hub of its own to push into.
+// remarks: the hub lives in this host only; the Worker's runs reach it through RedisRunStatusRelay below.
 //
 // Multi-instance: SignalRRunStatusNotifier pushes via Clients.All, which — without a backplane — only reaches
 // clients connected to the SAME process instance that made the call. On a deployment that scales this
@@ -273,6 +272,13 @@ if (!string.IsNullOrWhiteSpace(signalRRedisConnectionString))
     });
 }
 builder.Services.AddSingleton<IRunStatusNotifier, SignalRRunStatusNotifier>();
+// The Worker's runs (resumed after a bulk export, or scheduled) reach the hub through Redis: the Worker publishes
+// each status change (RedisRunStatusPublisher) and this relays it to the notifier above. Same Redis condition as
+// the backplane; without Redis, Worker runs show on the next fetch only, as before.
+if (!string.IsNullOrWhiteSpace(signalRRedisConnectionString))
+{
+    builder.Services.AddHostedService<FHIRBridge.Infrastructure.Workflows.RedisRunStatusRelay>();
+}
 // Backs TerminologyStatusHub — same arrangement, for the Terminology Server table's per-row sync status.
 // Also API-host-only: HapiTerminologyConfigurationService takes this as an optional dependency, so the
 // Worker (where the scheduled syncs run) resolves null and simply records history without a live push.

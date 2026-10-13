@@ -5,10 +5,9 @@ namespace FHIRBridge.Api.Hubs;
 
 /// <summary>
 /// The API-hosted implementation of <see cref="IRunStatusNotifier"/> — relays a run's status transition to every
-/// connected <see cref="RunStatusHub"/> client. Registered only in this host's DI container (see Program.cs);
-/// the Worker process never registers one, so a run it triggers directly (see Worker.cs's RunDueWorkflowsAsync)
-/// still gets its Running/terminal rows persisted via IWorkflowRunStore, just without a live push — those clients
-/// pick it up on their next REST fetch instead.
+/// connected <see cref="RunStatusHub"/> client. Registered only in this host's DI container (see Program.cs).
+/// The Worker's runs arrive here too: it publishes them over Redis and RedisRunStatusRelay forwards them to this
+/// notifier. Without Redis they get no live push and clients pick them up on their next REST fetch instead.
 /// </summary>
 public sealed class SignalRRunStatusNotifier : IRunStatusNotifier
 {
