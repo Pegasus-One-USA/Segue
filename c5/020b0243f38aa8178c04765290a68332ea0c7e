@@ -1,0 +1,71 @@
+tests/FHIRBridge.UnitTests/Workflows/TransformBeforeDeIdentificationTests.cs
+  s_0302d221bf5ca2::t_3af0448cdcf068 817-881
+  s_0302d221bf5ca2::t_6c957635a14a7c 891-892
+  s_0302d221bf5ca2::t_b6e073c36cae82 70-72
+  s_0302d221bf5ca2::t_c279db1bc01c9d 241-242,244-245
+src/FHIRBridge.Infrastructure/Persistence/EfDeIdentificationProfileRepository.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 28,31-39,42,44-51,53-82,88-98
+src/FHIRBridge.Application/Services/IWorkflowConfigurationCleanupService.cs
+  s_0302d221bf5ca2::t_980266bb5f5679 8-9,28-29,34,38-40,44-47,51-53
+src/FHIRBridge.Application/Services/WorkflowConfigurationCleanupService.cs
+  s_0302d221bf5ca2::t_980266bb5f5679 6,9-10,20-21,26-28,33-34,40,48-61,72,88-172
+src/FHIRBridge.Application/Services/DeIdentificationProfileService.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 88-89,91,95-100
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_0302d221bf5ca2::t_980266bb5f5679 484,1256
+portal/src/app/services/node-delete-plan-v2.util.ts
+  s_0302d221bf5ca2::t_e72f649d1e9aef 76-78,82-83,289-290,322-323
+src/FHIRBridge.Application/Services/IDeIdentificationProfileService.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 19-21
+src/FHIRBridge.Application/Abstractions/Governance/IDeIdentificationService.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 20-26
+src/FHIRBridge.Infrastructure/Persistence/InMemoryNoDatabaseRepositories.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 31,33-37
+src/FHIRBridge.Application/Abstractions/Persistence/IDeIdentificationProfileRepository.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 13-26,28-32
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 233-240
+portal/src/app/components/canvas-v2/canvas.component.html
+  s_0302d221bf5ca2::t_e72f649d1e9aef 183-185
+portal/src/app/components/canvas-v2/canvas.component.ts
+  s_0302d221bf5ca2::t_e72f649d1e9aef 232,234-237,305,318-319,342-348,350-354
+portal/src/app/components/canvas-v2/canvas.delete-deidentification-rules.spec.ts
+  s_0302d221bf5ca2::t_c0190f3fe9e8a1 2-4,13-18,27,30,36-37,44,55,59,61-62,64,66,71-72,75-76,83-84,87
+portal/src/app/components/canvas-v2/canvas.delete-transformation-rules.spec.ts
+  s_0302d221bf5ca2::t_bbe70d1be6d17b 2,11-15,26,32,43,58,64-65,69,78,84,87,93-94,97
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_0302d221bf5ca2::t_6c957635a14a7c 269-271
+portal/src/app/destination-connections/services/deidentification-profile.service.ts
+  s_0302d221bf5ca2::t_e72f649d1e9aef 17-18
+src/FHIRBridge.Application/Services/PassThroughDeIdentificationService.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 19-21
+src/FHIRBridge.Infrastructure/Governance/SafeHarborDeIdentificationService.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 455-457
+tests/FHIRBridge.UnitTests/Governance/WorkflowSaveRuleCleanupTests.cs
+  s_0302d221bf5ca2::t_e5ae1281529ea6 193
+  s_0302d221bf5ca2::t_0783656cd7c004 1-192,194-279
+tests/FHIRBridge.UnitTests/Configuration/WorkflowConfigurationCleanupServiceTests.cs
+  s_0302d221bf5ca2::t_980266bb5f5679 31,46,66,87,102,114,121-124,245-247
+src/FHIRBridge.Application/Abstractions/Persistence/ITransformationRuleRepository.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 133-136
+src/FHIRBridge.Infrastructure/Persistence/InMemoryTransformationRuleRepository.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 143-148
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/ComplianceNodeExecutors.cs
+  s_0302d221bf5ca2::t_c17a290f29f71b 215-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c5020b0243f38aa8178c04765290a68332ea0c7e",
+  "prompts": {},
+  "sessions": {
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+src/FHIRBridge.Application/Services/WorkflowConfigurationCleanupService.cs
+  s_0302d221bf5ca2::t_46ace4299df80f 162-167
+src/FHIRBridge.Application/Services/IDeIdentificationProfileService.cs
+  s_0302d221bf5ca2::t_46ace4299df80f 28-29,31
+src/FHIRBridge.Application/Services/DeIdentificationProfileService.cs
+  s_0302d221bf5ca2::t_46ace4299df80f 75,88
+tests/FHIRBridge.UnitTests/Governance/WorkflowSaveRuleCleanupTests.cs
+  s_011cb6636799ac::t_b2098449541a1a 141
+  s_0302d221bf5ca2::t_93f66e73e5e0b6 142-178
+src/FHIRBridge.Infrastructure/Persistence/EfDeIdentificationProfileRepository.cs
+  s_0302d221bf5ca2::t_46ace4299df80f 29,47-52
+src/FHIRBridge.Application/Abstractions/Persistence/IDeIdentificationProfileRepository.cs
+  s_0302d221bf5ca2::t_46ace4299df80f 17-22,24-28
+src/FHIRBridge.Infrastructure/Persistence/InMemoryNoDatabaseRepositories.cs
+  s_0302d221bf5ca2::t_46ace4299df80f 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "14cd76e8687af50b89ddd168453e18f3083406b3",
+  "prompts": {},
+  "sessions": {
+    "s_011cb6636799ac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ed6a70c-c139-4263-8286-e58846ee76c7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    },
+    "s_0302d221bf5ca2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd474ba3-7268-4bb0-bdc3-ec93bfa43dd8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

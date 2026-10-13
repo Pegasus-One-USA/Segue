@@ -1,0 +1,24 @@
+tests/FHIRBridge.Runtime.UnitTests/Workflows/VendorEhrWriteChannelTests.cs
+  s_0121045dc9abeb::t_aeb28848d27701 124-125,239
+  s_0121045dc9abeb::t_52eb1e7fe4c12c 240-294
+  s_0121045dc9abeb::t_1dc7386c460e58 295
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/EhrWrite/AthenaOneEhrWriteChannel.cs
+  s_0121045dc9abeb::t_07f81d37d4070d 21-22,162-167,253,262-267,381-385,406,429-435,447-452
+  s_0121045dc9abeb::t_81658108da96f5 453
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b60c6c9f12f04eb94f830ca9234a3ffa06a7e215",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

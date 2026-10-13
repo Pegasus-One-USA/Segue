@@ -1,0 +1,19 @@
+src/BuildingBlocks/FHIRBridge.Governance/AmbientErrorCaptureService.cs
+  s_d1b985c75f92bc::t_a0cd474b1b0c1a 130-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7c5152ff6f1ce6cfe693eb39b6c751ef3396e9e3",
+  "prompts": {},
+  "sessions": {
+    "s_d1b985c75f92bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cae275-7a1d-4a2f-a13e-b5ab900e4328",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

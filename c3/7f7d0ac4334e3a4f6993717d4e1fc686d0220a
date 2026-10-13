@@ -1,0 +1,57 @@
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SaveRecordingRunStore.cs
+  s_b1e7fcc7fc9bab::t_eb533a7746b456 16-18,21-25
+  s_b1e7fcc7fc9bab::t_2725d17d9d21ac 1-15,19-20,26-51
+.claude/skills/runsegue/scripts/runsegue.ps1
+  s_b1e7fcc7fc9bab::t_66b16424715ec9 268-292
+  s_b1e7fcc7fc9bab::t_464ec9ad5b94a4 424
+  s_b1e7fcc7fc9bab::t_ae4a5e758bb2d7 31-37,267
+  s_b1e7fcc7fc9bab::t_85ae0aecfc8d32 425-426
+portal/src/app/pages/workflow-list/workflow-list.live-status.spec.ts
+  s_b1e7fcc7fc9bab::t_4a8fdd00102dec 1-70
+portal/src/app/dashboard/pages/dashboard/dashboard.live-status.spec.ts
+  s_b1e7fcc7fc9bab::t_77c305eac3e0e5 1-62
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/IRunStatusNotifier.cs
+  s_b1e7fcc7fc9bab::t_f34dc20700a018 7-10
+src/Worker/FHIRBridge.Worker/Program.cs
+  s_b1e7fcc7fc9bab::t_8d755994b7c4f9 102-110
+src/FHIRBridge.Infrastructure/Workflows/RunStatusChannel.cs
+  s_b1e7fcc7fc9bab::t_612af334391f5d 1-66
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RunStatusNotificationTests.cs
+  s_b1e7fcc7fc9bab::t_490f4cd6637937 16-17,28-33,109
+  s_b1e7fcc7fc9bab::t_f440da67f49fd2 1-15,18-27,34-108,110-178
+tests/FHIRBridge.UnitTests/Workflows/RunStatusRedisRelayTests.cs
+  s_b1e7fcc7fc9bab::t_0e9639a00399bc 1-273
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_b1e7fcc7fc9bab::t_a7426f852f1cf2 513-514,518
+  s_b1e7fcc7fc9bab::t_c29ab837334379 547,549,556,558-560
+  s_b1e7fcc7fc9bab::t_0547657d7381ac 475-507,509-512,515-517,519-546,548,550-555,557,561-573
+  s_b1e7fcc7fc9bab::t_d9c0d69193ee98 508
+src/FHIRBridge.Infrastructure/Workflows/RedisRunStatusPublisher.cs
+  s_b1e7fcc7fc9bab::t_759d798e2f08a4 1-27
+src/Api/FHIRBridge.Api/Program.cs
+  s_b1e7fcc7fc9bab::t_0fbc65ffccb7d8 239
+  s_b1e7fcc7fc9bab::t_7f02d73b8bc839 275-281
+src/Api/FHIRBridge.Api/Hubs/SignalRRunStatusNotifier.cs
+  s_b1e7fcc7fc9bab::t_fd59c7a0afa068 8-10
+src/FHIRBridge.Infrastructure/Workflows/RedisRunStatusRelay.cs
+  s_b1e7fcc7fc9bab::t_d901120d17fa76 1-117
+.claude/skills/runsegue/SKILL.md
+  s_b1e7fcc7fc9bab::t_ba1547e93d1180 66-73
+  s_b1e7fcc7fc9bab::t_f2884d3d0aec98 87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c37f7d0ac4334e3a4f6993717d4e1fc686d0220a",
+  "prompts": {},
+  "sessions": {
+    "s_b1e7fcc7fc9bab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339ebaf9-b31a-49e1-b147-e7b3f8c890e8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

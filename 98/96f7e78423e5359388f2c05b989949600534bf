@@ -1,0 +1,52 @@
+src/Api/FHIRBridge.Api/Workflows/WorkflowRunHistoryDto.cs
+  s_b1e7fcc7fc9bab::t_74810d757b1779 96-100
+  s_b1e7fcc7fc9bab::t_227b9d75fdc204 78-79,108-109
+src/Api/FHIRBridge.Api/Controllers/V1/BulkExportJobsController.cs
+  s_b1e7fcc7fc9bab::t_cef24f566f18e0 6,31,89-92,94-95
+  s_b1e7fcc7fc9bab::t_d5128b98db8ade 26,32,37,93
+  s_b1e7fcc7fc9bab::t_b81b0b1e46baa7 96
+tests/FHIRBridge.Api.IntegrationTests/ApiFixture.cs
+  s_b1e7fcc7fc9bab::t_e66e87cd6474b4 21-23
+tests/FHIRBridge.Api.IntegrationTests/Tests/BulkExportStatusLifecycleTests.cs
+  s_b1e7fcc7fc9bab::t_de676b4a8c5d87 34-38
+  s_b1e7fcc7fc9bab::t_ea9febd19458f7 1-33,39-48,51,53-58,66-85
+  s_b1e7fcc7fc9bab::t_3ff42fd9058998 49-50,52,59-65
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_b1e7fcc7fc9bab::t_eef270a950238c 48,80,91-93,100,112-139,235-250,442
+  s_b1e7fcc7fc9bab::t_25fe43844d6e24 204,206-208
+  s_b1e7fcc7fc9bab::t_b489842258ad4e 36-39
+  s_b1e7fcc7fc9bab::t_0fd070ee507844 140-203,205,209-228,233-234
+  s_b1e7fcc7fc9bab::t_731696593ea032 229-232
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowServiceCollectionExtensions.cs
+  s_b1e7fcc7fc9bab::t_d5128b98db8ade 17
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_b1e7fcc7fc9bab::t_bd735a08c0d572 89-122,124-125,127-129,133-135,226,237-255
+  s_b1e7fcc7fc9bab::t_83c77e5629183f 126,144,225
+  s_b1e7fcc7fc9bab::t_83d7e706400deb 213-223
+  s_b1e7fcc7fc9bab::t_422723406c6113 156-157,164
+  s_b1e7fcc7fc9bab::t_d5128b98db8ade 21,33,44,224
+  s_b1e7fcc7fc9bab::t_11a3a9177f12c4 136,227
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/PausedBulkExportRunCloser.cs
+  s_b1e7fcc7fc9bab::t_b0384e357e0ef6 1-125
+tests/FHIRBridge.Runtime.UnitTests/Workflows/PausedBulkExportRunCloserTests.cs
+  s_b1e7fcc7fc9bab::t_0901d67ceeaa2e 1-151
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_b1e7fcc7fc9bab::t_d901120d17fa76 2560-2579,2582-2583
+  s_b1e7fcc7fc9bab::t_8f62782d759282 2580-2581,2604-2605,2623-2624
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9896f7e78423e5359388f2c05b989949600534bf",
+  "prompts": {},
+  "sessions": {
+    "s_b1e7fcc7fc9bab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339ebaf9-b31a-49e1-b147-e7b3f8c890e8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

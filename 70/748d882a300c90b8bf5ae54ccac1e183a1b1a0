@@ -1,0 +1,50 @@
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.ts
+  s_b1e7fcc7fc9bab::t_e31cc47910c6cb 15,490
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_b1e7fcc7fc9bab::t_e9d339ca623aab 50-51,65-66
+  s_b1e7fcc7fc9bab::t_3129de81b87f95 83-85
+portal/src/app/execution-history/services/execution-history-api.service.ts
+  s_b1e7fcc7fc9bab::t_25440f3f1a2cba 110
+  s_b1e7fcc7fc9bab::t_e9d339ca623aab 111-113
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_b1e7fcc7fc9bab::t_72bda6e65066c8 8,29-33,42-44,87-90,129-147,158-164,251-252,504,508,512,517-555,567-575
+  s_b1e7fcc7fc9bab::t_3129de81b87f95 34-37,576-584,586-600
+  s_b1e7fcc7fc9bab::t_7279cd3a14c1bd 1,38-41,148-157,253-267
+  s_b1e7fcc7fc9bab::t_e31cc47910c6cb 10,668
+portal/src/app/execution-history/utils/format-duration.util.spec.ts
+  s_b1e7fcc7fc9bab::t_89919d645e683c 1-29
+portal/src/app/execution-history/utils/format-duration.util.ts
+  s_b1e7fcc7fc9bab::t_e31cc47910c6cb 1-12
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.bulk-status.spec.ts
+  s_b1e7fcc7fc9bab::t_b373e7370a2aed 305-317,320-331,333-459,522-523
+  s_b1e7fcc7fc9bab::t_89919d645e683c 226,460-521
+  s_b1e7fcc7fc9bab::t_0d1df09626bb98 332
+  s_b1e7fcc7fc9bab::t_f77e53a6910957 318-319
+  s_b1e7fcc7fc9bab::t_31c7bd965eb07e 1-219,524-545
+  s_b1e7fcc7fc9bab::t_2f48e3d59d0be4 220-225,227-304
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.scss
+  s_b1e7fcc7fc9bab::t_fdb929f1a8f0e4 243-248
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_b1e7fcc7fc9bab::t_f469c84a56a726 376-377
+  s_b1e7fcc7fc9bab::t_4e2410ee210a77 346-348,351,355,379,384-387
+  s_b1e7fcc7fc9bab::t_e6ed190063753c 337-345,415
+  s_b1e7fcc7fc9bab::t_3129de81b87f95 378,380
+  s_b1e7fcc7fc9bab::t_7279cd3a14c1bd 356
+  s_b1e7fcc7fc9bab::t_40c0e94a9a30d7 381-382
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "70748d882a300c90b8bf5ae54ccac1e183a1b1a0",
+  "prompts": {},
+  "sessions": {
+    "s_b1e7fcc7fc9bab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339ebaf9-b31a-49e1-b147-e7b3f8c890e8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
