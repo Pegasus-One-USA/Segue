@@ -1,4 +1,4 @@
-using FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
+using FHIRBridge.Runtime.Application.Workflows;
 using FluentAssertions;
 using ResourceEnvelope = FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope;
 
@@ -79,6 +79,19 @@ public sealed class SearchCriteriaPostFilterTests
 
         kept.Should().HaveCount(Observations.Count);
         enforced.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Patient", "gender=female", null, "gender=female")]
+    [InlineData("Patient", "gender=female&birthdate=ge1990-01-01", "gender=male", "gender=male&birthdate=ge1990-01-01")]
+    [InlineData("Patient", null, "identifier=MRN-1", "identifier=MRN-1")]
+    [InlineData("Observation", "status=final", "gender=male", "status=final")]
+    [InlineData("Observation", "date=ge2024-01-01&date=le2024-12-31", null, "date=ge2024-01-01&date=le2024-12-31")]
+    [InlineData("Observation", null, null, null)]
+    public void Bulk_export_criteria_combine_api_and_resource_criteria_with_the_api_winning_a_shared_parameter(
+        string resourceType, string? resourceCriteria, string? apiCriteria, string? expected)
+    {
+        SearchCriteriaPostFilter.BulkExportCriteria(resourceType, resourceCriteria, apiCriteria).Should().Be(expected);
     }
 
     private static ResourceEnvelope Observation(string id, string status) =>

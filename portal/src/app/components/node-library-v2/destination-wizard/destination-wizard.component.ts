@@ -130,6 +130,7 @@ import { WorkflowApiService, ResourceTypeCriteriaDto } from '../../../services/w
 import { WorkflowGraphMapperServiceV2 } from '../../../services/workflow-graph-mapper-v2.service';
 import { EpicDiscoveryService } from '../../../services/epic-discovery.service';
 import { ISourceConnectionService } from '../../../source-connections/services/i-source-connection.service';
+import { SourceConnectionModel } from '../../../source-connections/models/source-connection.model';
 
 // Matches Guid.Empty's JSON form — MappingImportService returns this as mappingProfileId when a resource's
 // import fails (see ImportResourceMappingAsync's catch branch), alongside a warning explaining why.
@@ -141,7 +142,7 @@ const CRITERIA_RESULT_PARAMETERS = new Set([
   '_count', '_sort', '_include', '_revinclude', '_summary', '_elements', '_contained', '_containedtype', '_total', '_format',
 ]);
 
-// Mirrors SearchCriteriaPostFilter.EnforceableParameters (Runtime.Infrastructure): code filters the run re-applies to
+// Mirrors SearchCriteriaPostFilter.EnforceableParameters (Runtime.Application): code filters the run re-applies to
 // the fetched records when the source ignored them, so the Criteria editor can say they'll still take effect.
 const LOCALLY_ENFORCED_CRITERIA = new Set(['status', 'intent', 'priority', 'gender']);
 
@@ -623,6 +624,8 @@ export class DestinationWizardComponent implements OnInit {
    *  available even before the source has a real sourceConnectionId. Empty when Discover hasn't run this
    *  session, in which case the sourceConnectionId effect below falls back to a live re-probe. */
   readonly sourceDiscoveredResourceTypes = input<string[]>([]);
+  /** The launch source node's own retrieval method key, when it sets one — see NodeLibraryDialogComponent. */
+  readonly sourceRetrievalMethod = input<string | null>(null);
   /** The persisted ResourcePipelineRoute/workflow GUID when editing an already-saved workflow — null while
    *  still building a brand-new one (see WorkflowBuilderComponent.currentWorkflowId). Threaded through so a
    *  transform-rule-conflict override can be scoped to just this workflow (see validateRuleConflictsForSave /
@@ -2463,6 +2466,22 @@ export class DestinationWizardComponent implements OnInit {
     // loadResourceTypeCriteria fetches once per workflow id, so the re-runs this effect gets from canvas node
     // changes (findLaunchSourceNodeId reads the store) are no-ops after the first load.
     effect(() => this.loadResourceTypeCriteria());
+
+    // The launch source's saved connection, for athenaPatientNeedsCriteria's vendor/audience check.
+    effect(() => {
+      const connectionId = this.sourceConnectionId();
+      untracked(() => {
+        if (!connectionId) {
+          this.sourceConnection.set(null);
+          return;
+        }
+        if (this.sourceConnection()?.id === connectionId) return;
+        this.sourceConnectionSvc
+          .getById(connectionId)
+          .pipe(catchError(() => of(null)))
+          .subscribe(connection => this.sourceConnection.set(connection));
+      });
+    });
   }
 
   /** Flushes a queued patchFrom() (see _populateFromNode()/selectExisting()) onto the Step 1 form component.
@@ -2886,6 +2905,21 @@ export class DestinationWizardComponent implements OnInit {
    *  connection yet, /metadata unreachable): the editor then just shows no warnings. */
   private readonly sourceSearchParameters = signal<Record<string, string[]> | null>(null);
   private sourceSearchParametersRequestedFor: string | null = null;
+  /** The launch source's saved connection — read for its vendor and application type, which the sourceVendor()
+   *  input can't be trusted for (it follows whichever source form was last open, and is still the 'Epic' default
+   *  when a saved workflow's destination is opened directly). Null while loading, or when the source isn't saved. */
+  private readonly sourceConnection = signal<SourceConnectionModel | null>(null);
+  /** athenahealth rejects a Patient search with no identifying criterion ("open enumeration forbidden"), and the
+   *  source form's own Search Criteria — which used to be required for exactly this — is gone. So a Backend System
+   *  athenahealth workflow fetching Patient needs Patient criteria here, unless every run supplies its own through
+   *  the API; hence a warning, not a block. Interactive audiences are scoped by the launch's patient context. */
+  readonly athenaPatientNeedsCriteria = computed(() => {
+    const connection = this.sourceConnection();
+    return connection?.sourceSystemType === 'Athenahealth'
+      && connection.applicationType === 'Backend'
+      && this.resourceKeys().includes('Patient')
+      && !this.criteriaFor('Patient');
+  });
   /** Parameters in the box the source doesn't declare for the open resource type, so it will ignore them —
    *  each flagged with whether the run still enforces it on the fetched records (see LOCALLY_ENFORCED_CRITERIA).
    *  Empty when the source declares nothing for the type, since then there's nothing to check against. */
@@ -2908,6 +2942,30 @@ export class DestinationWizardComponent implements OnInit {
     }
     return [...ignored].map(([name, enforced]) => ({ name, enforced }));
   });
+  /** The source fetches with Bulk Export ($export), which takes no search criteria: the node's own retrieval method
+   *  when it sets one (the run reads that first), else its saved connection's. */
+  readonly isBulkExportSource = computed(() =>
+    (this.sourceRetrievalMethod() ?? this.sourceConnection()?.retrieval?.retrievalMethod) === 'bulk-export');
+  /** For a bulk-export source, every parameter in the box, flagged with whether the run can still apply it to the
+   *  exported records (a plain or :not code filter in LOCALLY_ENFORCED_CRITERIA) — anything else can't affect an
+   *  export at all. Empty for any other retrieval method. */
+  readonly criteriaBulkExportParameters = computed(() => {
+    if (!this.isBulkExportSource()) return [];
+
+    const parameters = new Map<string, boolean>();
+    for (const segment of this.criteriaDraft().split('&')) {
+      const parameter = segment.trim().replace(/^\?+/, '');
+      const equals = parameter.indexOf('=');
+      if (equals <= 0) continue;
+      const key = parameter.slice(0, equals).trim();
+      if (!key || parameters.has(key)) continue;
+      const [name, modifier] = key.toLowerCase().split(':');
+      parameters.set(key, LOCALLY_ENFORCED_CRITERIA.has(name) && !name.includes('.') && (!modifier || modifier === 'not'));
+    }
+    return [...parameters].map(([name, applied]) => ({ name, applied }));
+  });
+  readonly criteriaBulkExportApplied = computed(() => this.criteriaBulkExportParameters().filter(p => p.applied));
+  readonly criteriaBulkExportIgnored = computed(() => this.criteriaBulkExportParameters().filter(p => !p.applied));
   readonly criteriaError = signal<string | null>(null);
   /** Non-null while the "save anyway?" confirm dialog is up — see saveGroupMapping/buildParentReferenceWarnings. */
   readonly pendingSaveWarnings = signal<PendingParentReferenceWarning[] | null>(null);
@@ -3997,8 +4055,8 @@ export class DestinationWizardComponent implements OnInit {
     if (!connectionId || this.sourceSearchParametersRequestedFor === connectionId) return;
 
     this.sourceSearchParametersRequestedFor = connectionId;
-    this.sourceConnectionSvc
-      .getById(connectionId)
+    const loaded = this.sourceConnection();
+    (loaded?.id === connectionId ? of(loaded) : this.sourceConnectionSvc.getById(connectionId))
       .pipe(
         switchMap(connection => this.discoverySvc.discover(connection.baseUrl, undefined, connectionId)),
         catchError(() => of(null)),

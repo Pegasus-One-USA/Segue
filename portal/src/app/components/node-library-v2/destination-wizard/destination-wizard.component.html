@@ -854,6 +854,19 @@
             }
           </tbody>
         </table>
+        <!-- athenahealth rejects a Patient search without an identifying criterion; the source form's Search
+             Criteria that used to cover this is gone, so Patient criteria have to (see athenaPatientNeedsCriteria). -->
+        @if (athenaPatientNeedsCriteria()) {
+          <div class="dw-criteria-warning" role="status">
+            <p>
+              athenahealth rejects a Patient search without an identifying criterion — e.g.
+              <code>identifier=…</code>, <code>name=…</code>, or <code>family=…&amp;birthdate=…</code>. Add Patient
+              criteria, or every run that isn't started from the API with its own criteria will fail on Patient.
+            </p>
+            <button type="button" class="btn btn-sm btn-secondary dw-criteria-warning-action"
+                    (click)="openResourceCriteria('Patient')">Add Patient criteria</button>
+          </div>
+        }
       } @else {
         <!-- ── Mapping canvas, scoped to the one selected group ── the outer Node Library header
              shows "Map fields — {group}" in place of its own title, so no title repeats here. ── -->
@@ -1265,9 +1278,30 @@
             is valid.
           </p>
 
-          <!-- Parameters the source's CapabilityStatement doesn't declare for this type: a FHIR server ignores
-               those silently, so say so — and whether the run still enforces it on the fetched records. -->
-          @if (criteriaIgnoredParameters().length) {
+          <!-- A bulk-export source sends no search criteria at all ($export doesn't take them), so the per-parameter
+               search warning below doesn't apply; instead, say which parameters the run applies to the exported
+               records after download and which can't affect the export. -->
+          @if (isBulkExportSource()) {
+            @if (criteriaBulkExportParameters().length) {
+              <div class="dw-criteria-warning" role="status">
+                <p>This source fetches with Bulk Export ($export), which doesn't take search criteria.</p>
+                @if (criteriaBulkExportApplied().length) {
+                  <p>Applied to the exported records after download:
+                    @for (parameter of criteriaBulkExportApplied(); track parameter.name; let last = $last) {
+                      <code>{{ parameter.name }}</code>@if (!last) {, }
+                    }
+                  </p>
+                }
+                @if (criteriaBulkExportIgnored().length) {
+                  <p>Can't be applied to a bulk export, so they'll be ignored:
+                    @for (parameter of criteriaBulkExportIgnored(); track parameter.name; let last = $last) {
+                      <code>{{ parameter.name }}</code>@if (!last) {, }
+                    }
+                  </p>
+                }
+              </div>
+            }
+          } @else if (criteriaIgnoredParameters().length) {
             <div class="dw-criteria-warning" role="status">
               <p>The source doesn't list these as search parameters for {{ criteriaResource }}, so it will ignore them:</p>
               <ul>

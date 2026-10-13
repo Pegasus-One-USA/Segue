@@ -22,6 +22,7 @@ public sealed class BulkExportPollService : IBulkExportPollService
     private readonly IAmbientActorContext? _ambientActorContext;
     private readonly FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowRunStore? _runStore;
     private readonly FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore? _definitionStore;
+    private readonly IResourceTypeCriteriaRepository? _criteriaRepository;
     private readonly ILogger<BulkExportPollService> _logger;
 
     public BulkExportPollService(
@@ -33,7 +34,8 @@ public sealed class BulkExportPollService : IBulkExportPollService
         IGlobalExceptionManager? exceptionManager = null,
         IAmbientActorContext? ambientActorContext = null,
         FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowRunStore? runStore = null,
-        FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore? definitionStore = null)
+        FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore? definitionStore = null,
+        IResourceTypeCriteriaRepository? criteriaRepository = null)
     {
         _jobRepository = jobRepository;
         _bulkExportClient = bulkExportClient;
@@ -44,6 +46,7 @@ public sealed class BulkExportPollService : IBulkExportPollService
         _ambientActorContext = ambientActorContext;
         _runStore = runStore;
         _definitionStore = definitionStore;
+        _criteriaRepository = criteriaRepository;
     }
 
     public async Task PollDueJobsAsync(
@@ -173,6 +176,7 @@ public sealed class BulkExportPollService : IBulkExportPollService
         switch (job.SourcePath)
         {
             case BulkExportJobSourcePath.WorkflowNode:
+                resources = await ApplyResourceCriteriaAsync(job, resources, cancellationToken);
                 await _workflowOrchestrator.ResumeAfterBulkExportAsync(
                     job.WorkflowRunId!.Value, job.WorkflowNodeId!.Value, job.PriorNodeOutputsJson, job.ContextJson,
                     resources, skippedResourceTypeReasons, cancellationToken);
@@ -191,6 +195,115 @@ public sealed class BulkExportPollService : IBulkExportPollService
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Applies the paused source node's Criteria rows (and, for Patient, an API run's own criteria) to the exported
+    /// records before the run resumes — the deferred twin of SourceNodeExecutor.EnforceBulkExportCriteria. A
+    /// <c>$export</c> request carries no search criteria, so this is the only place they can take effect; only the
+    /// simple code filters <see cref="SearchCriteriaPostFilter"/> enforces apply. Rows are read now, not at kick-off,
+    /// so criteria edited while the export ran are the ones applied. Returns <paramref name="resources"/> unchanged
+    /// when the node can't be found (the resume then fails on it anyway), carries no stamped canvas id, or has no
+    /// criteria. Lookup failures propagate rather than letting unfiltered records through.
+    /// </summary>
+    private async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> ApplyResourceCriteriaAsync(
+        BulkExportJob job,
+        IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> resources,
+        CancellationToken cancellationToken)
+    {
+        if (_criteriaRepository is null
+            || _runStore is null
+            || _definitionStore is null
+            || resources.Count == 0
+            || job.WorkflowRunId is not { } runId
+            || job.WorkflowNodeId is not { } nodeId)
+        {
+            return resources;
+        }
+
+        var run = await _runStore.GetAsync(runId, cancellationToken);
+        var workflow = run is null ? null : await _definitionStore.GetAsync(run.WorkflowDefinitionId, cancellationToken);
+        var node = workflow?.Nodes.FirstOrDefault(candidate => candidate.Id == nodeId);
+        if (workflow is null || ReadCanvasNodeId(node?.ConfigurationJson) is not { } canvasNodeId)
+        {
+            return resources;
+        }
+
+        var criteriaByResourceType = (await _criteriaRepository.ListForWorkflowAsync(workflow.Id, cancellationToken))
+            .Where(row => string.Equals(row.SourceNodeId, canvasNodeId, StringComparison.OrdinalIgnoreCase))
+            .Where(row => !string.IsNullOrWhiteSpace(row.Criteria))
+            .GroupBy(row => row.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Criteria, StringComparer.OrdinalIgnoreCase);
+        var apiCriteria = ReadPatientSearchCriteria(job.ContextJson);
+
+        var kept = new HashSet<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>();
+        foreach (var group in resources.GroupBy(resource => resource.ResourceType, StringComparer.OrdinalIgnoreCase))
+        {
+            var records = group.ToList();
+            var criteria = SearchCriteriaPostFilter.BulkExportCriteria(
+                group.Key, criteriaByResourceType.GetValueOrDefault(group.Key), apiCriteria);
+            var (matching, enforcedParameters) = SearchCriteriaPostFilter.Apply(records, criteria);
+            kept.UnionWith(matching);
+
+            if (matching.Count < records.Count)
+            {
+                // Parameter names only — criteria values can carry patient identifiers.
+                _logger.LogInformation(
+                    FHIRBridge.Observability.Logging.LogEvents.SearchCriteriaEnforcedLocally,
+                    "Bulk export job {JobId} returned {RemovedCount} of {ReturnedCount} {ResourceType} record(s) not " +
+                    "matching [{Parameters}] — $export takes no search criteria, so they were filtered out after download.",
+                    job.Id, records.Count - matching.Count, records.Count, group.Key, string.Join(", ", enforcedParameters));
+            }
+        }
+
+        return kept.Count == resources.Count ? resources : resources.Where(kept.Contains).ToList();
+    }
+
+    /// <summary>The node's stamped canvas id — what ResourceTypeCriteria rows are keyed by (see StampNodeIdentity).</summary>
+    private static string? ReadCanvasNodeId(string? configurationJson)
+    {
+        if (string.IsNullOrWhiteSpace(configurationJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(configurationJson);
+            return FHIRBridge.Runtime.Domain.Workflows.WorkflowNodeConfigurationEnvelope.TryGetSettings(document, out var settings)
+                && settings.TryGetProperty("canvasNodeId", out var value)
+                && value.ValueKind == JsonValueKind.String
+                && value.GetString() is { Length: > 0 } canvasNodeId
+                    ? canvasNodeId
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The paused run's own API criteria, from the WorkflowExecutionContext serialized at kick-off.</summary>
+    private static string? ReadPatientSearchCriteria(string? contextJson)
+    {
+        if (string.IsNullOrWhiteSpace(contextJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(contextJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("PatientSearchCriteria", out var value)
+                && value.ValueKind == JsonValueKind.String
+                    ? value.GetString()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 

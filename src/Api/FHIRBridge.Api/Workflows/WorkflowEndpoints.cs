@@ -1272,6 +1272,7 @@ public static class WorkflowEndpoints
             Guid workflowId,
             CopyWorkflowRequest request,
             IWorkflowDefinitionStore store,
+            IResourceTypeCriteriaRepository criteriaRepository,
             IConfigurationRepository configurationRepository,
             IConfigurationService configurationService,
             ISecretProvider secretProvider,
@@ -1490,8 +1491,18 @@ public static class WorkflowEndpoints
             var copy = BuildWorkflow(Guid.NewGuid(), definitionRequest);
             await store.SaveAsync(copy, cancellationToken);
 
-            // Everything above (cloned source/destination/mapping entities, the workflow definition itself) is
-            // durable only from this point on — nothing before here survives if any step failed or threw.
+            // Per-resource-type search criteria are keyed by workflow id, so without this the copy would start with
+            // none. Each copied node keeps its stamped canvasNodeId (StampNodeIdentity never overwrites one), so the
+            // rows carry over under the same source-node keys — only the workflow id changes.
+            foreach (var row in await criteriaRepository.ListForWorkflowAsync(workflowId, cancellationToken))
+            {
+                await criteriaRepository.AddAsync(
+                    new FHIRBridge.Domain.Entities.ResourceTypeCriteria(copy.Id, row.SourceNodeId, row.ResourceType, row.Criteria),
+                    cancellationToken);
+            }
+
+            // Everything above (cloned source/destination/mapping entities, the workflow definition itself, its
+            // search criteria) is durable only from this point on — nothing before here survives if any step failed.
             await transaction.CommitAsync(cancellationToken);
 
             return Results.Created($"/api/v1/workflows/{copy.Id}", copy);

@@ -1,14 +1,16 @@
 using System.Text.Json;
 using FHIRBridge.Runtime.Domain.ValueObjects;
 
-namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
+namespace FHIRBridge.Runtime.Application.Workflows;
 
 /// <summary>
 /// Re-applies the simple code-valued filters of a search's criteria to the records the source returned, dropping
 /// those that don't match. A FHIR server ignores a search parameter it doesn't support and still answers 200
 /// (lenient handling, the spec default) — athenahealth's Observation search, for one, has no <c>status</c>
 /// parameter, so <c>status=final</c> came back with every status. Enforcing the filter here makes the criteria mean
-/// the same thing on every source. Against a server that did apply it, this removes nothing.
+/// the same thing on every source. Against a server that did apply it, this removes nothing. A bulk export
+/// (<c>$export</c>) takes no search criteria at all, so for it this is the only way criteria take effect — see
+/// <see cref="BulkExportCriteria"/>.
 /// <para>
 /// Deliberately narrow: only parameters named in <see cref="EnforceableParameters"/>, each a token search on the
 /// top-level <c>code</c> element of the same name (Observation.status, MedicationRequest.intent, Patient.gender,
@@ -59,6 +61,37 @@ public static class SearchCriteriaPostFilter
         return (kept, enforced.Select(filter => filter.Parameter).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
 
+    /// <summary>
+    /// The criteria a bulk-exported resource type's records are filtered by. A <c>$export</c> request carries no
+    /// search criteria, so they can only take effect on what comes back: the type's own Criteria row
+    /// (<paramref name="resourceCriteria"/>) and, for Patient on an API run, the request's own criteria
+    /// (<paramref name="apiCriteria"/>) — the API winning a parameter both set, the same precedence a search run uses.
+    /// Null when there is nothing to filter by.
+    /// </summary>
+    public static string? BulkExportCriteria(string resourceType, string? resourceCriteria, string? apiCriteria)
+    {
+        var api = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase)
+            ? SplitParameters(apiCriteria).ToList()
+            : [];
+        var apiKeys = api.Select(ParameterKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var combined = api
+            .Concat(SplitParameters(resourceCriteria).Where(segment => !apiKeys.Contains(ParameterKey(segment))))
+            .ToList();
+
+        return combined.Count == 0 ? null : string.Join('&', combined);
+    }
+
+    private static IEnumerable<string> SplitParameters(string? criteria) =>
+        string.IsNullOrWhiteSpace(criteria)
+            ? []
+            : criteria.Trim().TrimStart('?').Trim('&').Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static string ParameterKey(string segment)
+    {
+        var equals = segment.IndexOf('=');
+        return equals < 0 ? segment : segment[..equals];
+    }
+
     private static List<CodeFilter> ParseFilters(string? searchParameters)
     {
         var filters = new List<CodeFilter>();
@@ -67,7 +100,7 @@ public static class SearchCriteriaPostFilter
             return filters;
         }
 
-        foreach (var segment in searchParameters.Trim().TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var segment in SplitParameters(searchParameters))
         {
             var equals = segment.IndexOf('=');
             if (equals <= 0)

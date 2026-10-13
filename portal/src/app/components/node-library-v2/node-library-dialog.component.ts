@@ -331,6 +331,11 @@ export class NodeLibraryDialogComponent {
     return Array.from(new Set(fromNodes));
   });
 
+  // The launch source node's own retrieval method key ('search-rest', 'bulk-export', ...) — the same node field the
+  // run reads first (SourceNodeExecutor's "Retrieval method key" override). Null when the node doesn't set one.
+  readonly sourceRetrievalMethod = computed(() =>
+    this.store.nodes().find(isSourceNode)?.fields?.['Retrieval method key'] || null);
+
   // Mirrors the open destination wizard's own step/progress so the sidebar can
   // lock the other destination type out mid-wizard and warn before discarding.
   readonly destWizardStep         = signal(1);

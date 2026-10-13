@@ -14,76 +14,121 @@ using ResourceEnvelope = FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope
 
 namespace FHIRBridge.Runtime.UnitTests.Workflows;
 
-// Covers which ONE criteria a search filters by: API criteria (the run request's Patient search criteria) first,
-// then the resource type's own Criteria row, then the source node / connection "Search criteria". The winner
-// replaces the lower tiers; Advanced Search Options (_sort/_include/_revinclude) survive whichever tier wins.
+// Covers which search criteria a workflow run filters by. The source's own Search criteria is never read any more:
+// the resource type's Criteria row applies, winning per parameter over anything else in SearchParameters; on an API
+// run the API's Patient criteria are combined with the resource's (API wins where both set a parameter) and nothing
+// else from the source is kept. Advanced Search Options (_sort/_include/_revinclude) survive in every case.
 public sealed class SourceNodeExecutorCriteriaPrecedenceTests
 {
     private const string CanvasNodeId = "n-source-1";
     private static readonly Guid WorkflowId = Guid.NewGuid();
 
     [Fact]
-    public async Task Resource_criteria_replaces_the_source_criteria_and_keeps_result_shaping_parameters()
+    public async Task Resource_criteria_win_per_parameter_and_result_shaping_parameters_are_kept()
     {
+        // "identifier=HAND-1&active=true" stands in for a hand-authored / route-projected node "searchParameters".
         var calls = await RunAsync(
             resources: "Patient",
-            sourceSearchParameters: "identifier=SRC-1&_include=Patient:general-practitioner&_sort=-_lastUpdated",
+            sourceSearchParameters: "identifier=HAND-1&active=true&_include=Patient:general-practitioner&_sort=-_lastUpdated",
             criteriaRows: [("Patient", "identifier=RES-1")]);
 
         calls["Patient"].SearchParameters.Should()
-            .Be("identifier=RES-1&_include=Patient:general-practitioner&_sort=-_lastUpdated");
+            .Be("identifier=RES-1&active=true&_include=Patient:general-practitioner&_sort=-_lastUpdated");
     }
 
     [Fact]
-    public async Task Api_criteria_outranks_both_resource_and_source_criteria()
+    public async Task Api_run_combines_api_and_resource_criteria_with_the_api_winning_a_shared_parameter()
     {
         var calls = await RunAsync(
             resources: "Patient",
-            sourceSearchParameters: "identifier=SRC-1&_sort=-_lastUpdated",
-            criteriaRows: [("Patient", "identifier=RES-1")],
+            sourceSearchParameters: "identifier=HAND-1&_sort=-_lastUpdated",
+            criteriaRows: [("Patient", "identifier=RES-1&gender=female")],
             apiCriteria: "identifier=API-1");
 
-        // The connector appends PatientSearchCriteria to the query itself; neither lower tier may ride along.
+        // The connector appends PatientSearchCriteria itself, so SearchParameters carries only the resource
+        // parameters the API doesn't set (gender), plus the result-shaping ones. identifier=RES-1 and the
+        // hand-authored identifier=HAND-1 are both gone.
         var patientCall = calls["Patient"];
         patientCall.PatientSearchCriteria.Should().Be("identifier=API-1");
-        patientCall.SearchParameters.Should().Be("_sort=-_lastUpdated");
+        patientCall.SearchParameters.Should().Be("gender=female&_sort=-_lastUpdated");
     }
 
     [Fact]
-    public async Task Source_criteria_applies_unchanged_when_there_is_no_api_or_resource_criteria()
+    public async Task Api_run_without_resource_criteria_drops_everything_but_result_shaping_parameters()
     {
         var calls = await RunAsync(
             resources: "Patient",
-            sourceSearchParameters: "identifier=SRC-1&_sort=-_lastUpdated",
-            criteriaRows: [("Observation", "category=laboratory")]);
+            sourceSearchParameters: "identifier=HAND-1&_sort=-_lastUpdated",
+            criteriaRows: [],
+            apiCriteria: "family=Smith");
 
-        calls["Patient"].SearchParameters.Should().Be("identifier=SRC-1&_sort=-_lastUpdated");
+        calls["Patient"].PatientSearchCriteria.Should().Be("family=Smith");
+        calls["Patient"].SearchParameters.Should().Be("_sort=-_lastUpdated");
     }
 
     [Fact]
-    public async Task Resource_criteria_replaces_the_source_criteria_for_a_compartment_type_fetched_without_a_cohort()
+    public async Task Search_parameters_apply_unchanged_when_there_is_no_api_or_resource_criteria()
+    {
+        var calls = await RunAsync(
+            resources: "Patient",
+            sourceSearchParameters: "identifier=HAND-1&_sort=-_lastUpdated",
+            criteriaRows: [("Observation", "category=laboratory")]);
+
+        calls["Patient"].SearchParameters.Should().Be("identifier=HAND-1&_sort=-_lastUpdated");
+    }
+
+    [Fact]
+    public async Task Resource_criteria_apply_to_a_compartment_type_fetched_without_a_cohort()
     {
         var calls = await RunAsync(
             resources: "Observation",
-            sourceSearchParameters: "identifier=SRC-1",
+            sourceSearchParameters: "_sort=-date",
             criteriaRows: [("Observation", "category=laboratory&date=ge2024-01-01&date=le2024-12-31")]);
 
-        // Repeated keys inside the winning criteria (a date range) are kept as authored.
-        calls["Observation"].SearchParameters.Should().Be("category=laboratory&date=ge2024-01-01&date=le2024-12-31");
+        // Repeated keys inside the criteria (a date range) are kept as authored.
+        calls["Observation"].SearchParameters.Should().Be("category=laboratory&date=ge2024-01-01&date=le2024-12-31&_sort=-date");
     }
 
     [Fact]
-    public async Task Cohort_scoped_sibling_still_gets_only_its_own_resource_criteria()
+    public async Task Cohort_scoped_sibling_gets_its_own_resource_criteria_with_a_date_range_intact()
     {
         var calls = await RunAsync(
             resources: "Patient, Observation",
-            sourceSearchParameters: "identifier=SRC-1",
-            criteriaRows: [("Observation", "category=laboratory")]);
+            sourceSearchParameters: "identifier=HAND-1",
+            criteriaRows: [("Observation", "category=laboratory&date=ge2024-01-01&date=le2024-12-31")]);
 
-        calls["Patient"].SearchParameters.Should().Be("identifier=SRC-1");
+        calls["Patient"].SearchParameters.Should().Be("identifier=HAND-1");
         var observationCall = calls["Observation"];
-        observationCall.SearchParameters.Should().Be("category=laboratory");
+        observationCall.SearchParameters.Should().Be("category=laboratory&date=ge2024-01-01&date=le2024-12-31");
         observationCall.PatientIds.Should().BeEquivalentTo(["p1"]);
+    }
+
+    [Fact]
+    public async Task The_source_forms_own_search_criteria_field_is_not_read()
+    {
+        string? resolvedWith = "not-called";
+        await RunAsync(
+            resources: "Patient",
+            sourceSearchParameters: "",
+            criteriaRows: [],
+            extraNodeConfig: "\"Search criteria\":\"identifier=OLD-1\"",
+            onResolve: searchParameters => resolvedWith = searchParameters);
+
+        resolvedWith.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Criteria_are_read_for_the_workflow_the_node_belongs_to_not_a_stale_stamped_id()
+    {
+        // A copied workflow's nodes keep the ORIGINAL workflow's id stamped in "workflowId"; the copy's own rows
+        // (keyed by its real id) must be the ones applied.
+        var calls = await RunAsync(
+            resources: "Patient",
+            sourceSearchParameters: "",
+            criteriaRows: [("Patient", "identifier=COPY-1")],
+            stampedWorkflowId: Guid.NewGuid());
+
+        calls["Patient"].SearchParameters.Should().Be("identifier=COPY-1");
     }
 
     [Fact]
@@ -93,7 +138,7 @@ public sealed class SourceNodeExecutorCriteriaPrecedenceTests
         WorkflowNodeOutput? output = null;
         await RunAsync(
             resources: "Observation",
-            sourceSearchParameters: "identifier=SRC-1",
+            sourceSearchParameters: "",
             criteriaRows: [("Observation", "status=final")],
             respond: type =>
             [
@@ -113,18 +158,22 @@ public sealed class SourceNodeExecutorCriteriaPrecedenceTests
         IReadOnlyList<(string ResourceType, string Criteria)> criteriaRows,
         string? apiCriteria = null,
         Func<string, IReadOnlyList<ResourceEnvelope>>? respond = null,
-        Action<WorkflowNodeOutput>? onOutput = null)
+        Action<WorkflowNodeOutput>? onOutput = null,
+        string? extraNodeConfig = null,
+        Action<string?>? onResolve = null,
+        Guid? stampedWorkflowId = null)
     {
         var sourceConnectionId = Guid.NewGuid();
         var source = new FhirSourceConfiguration(
             RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
             SourceConnectionId: sourceConnectionId,
-            SearchParameters: sourceSearchParameters,
+            SearchParameters: string.IsNullOrEmpty(sourceSearchParameters) ? null : sourceSearchParameters,
             PatientSearchCriteria: apiCriteria);
 
         var resolver = new Mock<ISourceConnectionRuntimeResolver>();
         resolver
             .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Callback((Guid _, string? searchParameters, string? _, CancellationToken _, string? _, string? _) => onResolve?.Invoke(searchParameters))
             .ReturnsAsync(source);
 
         var calls = new Dictionary<string, FhirSourceConfiguration>(StringComparer.OrdinalIgnoreCase);
@@ -158,7 +207,7 @@ public sealed class SourceNodeExecutorCriteriaPrecedenceTests
             WorkflowNodeTypes.EpicSource,
             WorkflowNodeCategory.Source,
             rank: 0,
-            configurationJson: $$"""{"sourceConnectionId":"{{sourceConnectionId}}","Resources":"{{resources}}","canvasNodeId":"{{CanvasNodeId}}","workflowId":"{{WorkflowId}}"}""");
+            configurationJson: $$"""{"sourceConnectionId":"{{sourceConnectionId}}","Resources":"{{resources}}","canvasNodeId":"{{CanvasNodeId}}","workflowId":"{{stampedWorkflowId ?? WorkflowId}}"{{(extraNodeConfig is null ? "" : "," + extraNodeConfig)}}}""");
 
         var executor = new EpicSourceNodeExecutor(
             clientFactory.Object, resolver.Object, resourceTypeCriteriaRepository: criteriaRepository.Object);

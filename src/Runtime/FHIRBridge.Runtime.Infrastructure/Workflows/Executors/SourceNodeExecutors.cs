@@ -269,12 +269,11 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         CancellationToken cancellationToken)
     {
         var configuredResourceType = ReadStringConfiguration(node, "resourceType");
-        // "searchParameters" is the canonical key for a hand-authored/route-projected node config; the Epic wizard
-        // (epic-audience-form.component.ts save(), Search REST's "Search Criteria" field) instead writes its own
-        // human-readable field bag under "Search criteria" — without this fallback, anything typed into that field
-        // was silently never read, so a wizard-configured Search Criteria had zero effect on the outbound request.
-        var searchParameters = ReadStringConfiguration(node, "searchParameters")
-            ?? ReadStringConfiguration(node, "Search criteria");
+        // "searchParameters" is the canonical key for a hand-authored/route-projected node config. The source form's
+        // own "Search criteria" field is deliberately NOT read: search criteria are authored per resource type
+        // (ResourceTypeCriteria, the Map-fields Criteria button) and, on an API run, by the caller — the source form
+        // no longer shows that field, and a value saved before it was removed must not keep filtering invisibly.
+        var searchParameters = ReadStringConfiguration(node, "searchParameters");
 
         // The wizard-authored, human-readable "Resources" field (e.g. "Patient, Observation, Condition") is this
         // node's own, per-workflow declaration of what it fetches — two workflows can share one SourceConnection
@@ -325,14 +324,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             FHIRBridge.Governance.WorkflowDebug.Stage(FHIRBridge.Runtime.Infrastructure.Workflows.WorkflowDebugConfig.DescribeSource(source));
         }
 
-        // Per-resource-type criteria authored in the destination wizard's Map-fields step, keyed by workflow +
-        // canvas node id (both stamped onto every node's configuration by the API's StampNodeIdentity — the
-        // persisted WorkflowNode.Id is regenerated on every save and so cannot key durable rows). Where a search
-        // would otherwise filter by the source's own criteria, a type's row REPLACES it (and the run request's own
-        // Patient criteria outranks both) — see ApplyCriteriaPrecedence; on every other search path it's applied on
-        // top of that path's own scope in SearchWithPolicyAsync. A resource type with no row keeps the
-        // connection-wide SearchCriteria fallback that SourceConnectionRuntimeResolver already composed into
-        // SearchParameters.
+        // Per-resource-type criteria authored in the destination wizard's Map-fields step, keyed by workflow + canvas
+        // node id (stamped onto every node's configuration by the API's StampNodeIdentity — the persisted
+        // WorkflowNode.Id is regenerated on every save and so cannot key durable rows). These, plus the run request's
+        // own Patient criteria on an API run, are the only search criteria a workflow run applies — the source's
+        // own Search criteria is no longer read. See ApplyCriteriaPrecedence for how API and resource criteria
+        // combine; on every other search path a row is applied on top of that path's own scope in
+        // SearchWithPolicyAsync.
         source = await ApplyResourceTypeCriteriaAsync(source, node, cancellationToken);
 
         // See TrustResolverSourceType's own remarks — trust the resolver's real SourceType for a vendor whose
@@ -803,6 +801,13 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 continue;
             }
 
+            // A search applies criteria per request (SearchWithPolicyAsync); an export can only apply them here. Before
+            // the cohort below is taken, so Patient criteria also narrow which patients every sibling is scoped to.
+            if (useBulkExport)
+            {
+                page = EnforceBulkExportCriteria(type, source, page);
+            }
+
             resources.AddRange(page.Select(resource => new ResourceEnvelope(
                 resource.ResourceType,
                 resource.ResourceId ?? string.Empty,
@@ -977,9 +982,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var results = new List<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>();
         foreach (var batch in cohortPatientIds.Chunk(CohortBatchSize))
         {
-            // This node's connection-wide SearchParameters (e.g. an "identifier=<MRN list>" criteria the wizard's
-            // "Search criteria" field used to find the Patient cohort in the first place — see the ExecuteAsync
-            // comment on the "Search criteria" fallback) identified WHICH patients to fetch; it does not describe a
+            // This node's SearchParameters (e.g. an "identifier=<MRN list>" Patient criteria used to find the Patient
+            // cohort in the first place) identified WHICH patients to fetch; it does not describe a
             // valid filter for any other resource type. Once a patient cohort exists, siblings are scoped purely by
             // patient={id} (plus their own category/status defaults from ApplyDefaultSearchParameters) — carrying
             // the raw criteria forward made every cohort-scoped sibling search additionally (and meaninglessly)
@@ -1010,57 +1014,50 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             : $"{searchParameters.TrimEnd('&', '?')}&{parameter}";
 
     /// <summary>
-    /// Merges <paramref name="additional"/>'s FHIR search parameters into <paramref name="searchParameters"/>,
-    /// skipping any whose key is already present. Key-aware (unlike <see cref="AppendSearchParameter"/>, which
-    /// appends unconditionally) because the same parameter sent twice is not additive filtering: Epic rejects a
-    /// repeated identifier outright ("Don't support searching by IDENTIFIER AND IDENTIFIER"), and an existing
-    /// value here is either the caller's own connection-wide criteria or a patient scope the connector
-    /// established — both of which should win over a per-resource-type default of the same key. Mirrors
-    /// SourceConnectionRuntimeResolver.ComposeSearchParameters, which dedupes the same way for the same reason.
+    /// Adds <paramref name="additional"/>'s FHIR search parameters to <paramref name="searchParameters"/>, skipping
+    /// any whose key <paramref name="searchParameters"/> already has. Key-aware (unlike
+    /// <see cref="AppendSearchParameter"/>, which appends unconditionally) because the same parameter sent twice is
+    /// not additive filtering: Epic rejects a repeated identifier outright ("Don't support searching by IDENTIFIER
+    /// AND IDENTIFIER"), and an existing value here is a scope the search path established (e.g. PractitionerRole's
+    /// practitioner=) that a per-resource-type criteria must not override. Only collisions with
+    /// <paramref name="searchParameters"/> are dropped: a key repeated within either string itself is kept as
+    /// authored, since that's how FHIR expresses a range (date=ge2024-01-01&amp;date=le2024-12-31).
     /// </summary>
     private static string MergeSearchParameters(string? searchParameters, string? additional)
     {
-        var merged = new List<string>();
-        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var existing = SplitSearchParameters(searchParameters).ToList();
+        var existingKeys = existing.Select(ParameterKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var segment in SplitSearchParameters(searchParameters).Concat(SplitSearchParameters(additional)))
-        {
-            var equals = segment.IndexOf('=');
-            var key = equals < 0 ? segment : segment[..equals];
-            if (seenKeys.Add(key))
-            {
-                merged.Add(segment);
-            }
-        }
-
-        return string.Join('&', merged);
+        return string.Join('&', existing.Concat(
+            SplitSearchParameters(additional).Where(segment => !existingKeys.Contains(ParameterKey(segment)))));
     }
 
     /// <summary>
-    /// Result-shaping parameters the retrieval config's Advanced Search Options compose into SearchParameters
-    /// alongside the source's criteria (see SourceConnectionRuntimeResolver.ComposeSearchParameters). They choose
-    /// how results come back, not which records match, so they survive when a higher-precedence criteria replaces
-    /// the source's own. Matched on the key with any modifier stripped (<c>_include:iterate</c> → <c>_include</c>).
+    /// Result-shaping parameters the retrieval config's Advanced Search Options compose into SearchParameters (see
+    /// SourceConnectionRuntimeResolver.ComposeSearchParameters). They choose how results come back, not which
+    /// records match, so they're kept whichever criteria apply. Matched on the key with any modifier stripped
+    /// (<c>_include:iterate</c> → <c>_include</c>).
     /// </summary>
     private static readonly HashSet<string> ResultShapingParameterKeys =
         new(StringComparer.OrdinalIgnoreCase) { "_sort", "_include", "_revinclude" };
 
     /// <summary>
-    /// Picks which ONE criteria a direct search for <paramref name="resourceType"/> filters by, highest first:
-    /// <list type="number">
-    /// <item>API criteria — the run request's own <see cref="FhirSourceConfiguration.PatientSearchCriteria"/>
-    /// (Patient only; the connector appends it to the query itself).</item>
-    /// <item>Resource criteria — this resource type's <c>ResourceTypeCriteria</c> row (the Criteria button on the
-    /// destination wizard's Map-fields step).</item>
-    /// <item>Source criteria — the source node / connection "Search criteria", already in SearchParameters.</item>
+    /// Composes the criteria a direct search for <paramref name="resourceType"/> filters by:
+    /// <list type="bullet">
+    /// <item>API run (Patient, with the run request's own <see cref="FhirSourceConfiguration.PatientSearchCriteria"/>):
+    /// anything already in SearchParameters other than result-shaping parameters is dropped, and the resource type's
+    /// criteria are combined with the API's — where both set the same parameter, the API's value wins. The connector
+    /// appends PatientSearchCriteria to the query itself, so only the resource parameters the API doesn't set go
+    /// into SearchParameters here.</item>
+    /// <item>Any other run: the resource type's criteria, winning per parameter over anything already in
+    /// SearchParameters.</item>
     /// </list>
-    /// The winner replaces the lower tiers outright rather than merging key by key: merging let the source's
-    /// <c>identifier=A</c> silently beat a resource-level <c>identifier=B</c> (the existing key won), and combining
-    /// two different filters is not what either author asked for. Result-shaping parameters (see
-    /// <see cref="ResultShapingParameterKeys"/>) are kept whichever tier wins. With neither API nor resource
-    /// criteria, <paramref name="source"/> is returned untouched — the source criteria applies exactly as before.
+    /// "Already in SearchParameters" is a hand-authored or route-projected node "searchParameters" plus the Advanced
+    /// Search Options. The source form's own Search criteria never gets this far — neither the node field nor the
+    /// connection's saved value is read any more (see ExecuteAsync / SourceConnectionRuntimeResolver). With neither
+    /// API nor resource criteria, <paramref name="source"/> is returned untouched.
     /// <para>
-    /// Only for the search path whose SearchParameters still IS the source's own criteria (Patient, and
+    /// Only for the search path whose SearchParameters still carries the source's own parameters (Patient, and
     /// patient-compartment types fetched without a cohort). Every other path already replaces SearchParameters
     /// with its own scope (cohort siblings, PractitionerRole, non-compartment types) and keeps applying resource
     /// criteria on top of that scope in <see cref="SearchWithPolicyAsync"/>, unchanged.
@@ -1079,25 +1076,41 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             return source;
         }
 
-        var resultShaping = SplitSearchParameters(source.SearchParameters)
-            .Where(segment => ResultShapingParameterKeys.Contains(ParameterBaseKey(segment)))
-            .ToList();
-
-        List<string> winningCriteria = hasApiCriteria ? [] : SplitSearchParameters(resourceCriteria).ToList();
-        var winningKeys = winningCriteria.Select(ParameterKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var searchParameters = string.Join('&', winningCriteria.Concat(
-            resultShaping.Where(segment => !winningKeys.Contains(ParameterKey(segment)))));
+        var existing = SplitSearchParameters(source.SearchParameters).ToList();
+        var resourceParameters = SplitSearchParameters(resourceCriteria).ToList();
+        List<string> parameters;
+        if (hasApiCriteria)
+        {
+            var apiKeys = SplitSearchParameters(source.PatientSearchCriteria)
+                .Select(ParameterKey)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var combinedResource = resourceParameters.Where(segment => !apiKeys.Contains(ParameterKey(segment))).ToList();
+            var combinedKeys = combinedResource.Select(ParameterKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            parameters = combinedResource
+                .Concat(existing.Where(segment =>
+                    ResultShapingParameterKeys.Contains(ParameterBaseKey(segment))
+                    && !apiKeys.Contains(ParameterKey(segment))
+                    && !combinedKeys.Contains(ParameterKey(segment))))
+                .ToList();
+        }
+        else
+        {
+            var resourceKeys = resourceParameters.Select(ParameterKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            parameters = resourceParameters
+                .Concat(existing.Where(segment => !resourceKeys.Contains(ParameterKey(segment))))
+                .ToList();
+        }
 
         // Values deliberately not logged: criteria routinely carry patient identifiers.
         _logger.LogDebug(
-            "{ResourceType} search for {SourceName} filters by its {CriteriaTier} criteria; lower-precedence criteria are not applied.",
-            resourceType, source.Name, hasApiCriteria ? "API" : "resource");
+            "{ResourceType} search for {SourceName} filters by {CriteriaTiers} criteria.",
+            resourceType, source.Name,
+            hasApiCriteria ? (hasResourceCriteria ? "API + resource" : "API") : "resource");
 
         return source with
         {
-            SearchParameters = searchParameters.Length == 0 ? null : searchParameters,
-            // Already applied above (or deliberately outranked by the API criteria) — cleared on this per-call copy
-            // so SearchWithPolicyAsync doesn't merge it in a second time.
+            SearchParameters = parameters.Count == 0 ? null : string.Join('&', parameters),
+            // Already applied above — cleared on this per-call copy so SearchWithPolicyAsync doesn't merge it again.
             SearchCriteriaByResourceType = null,
         };
     }
@@ -1117,9 +1130,15 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
 
     /// <summary>
     /// Loads this node's <c>ResourceTypeCriteria</c> rows into
-    /// <see cref="FhirSourceConfiguration.SearchCriteriaByResourceType"/>. A node with no stamped identity (a
+    /// <see cref="FhirSourceConfiguration.SearchCriteriaByResourceType"/>. A node with no stamped canvas identity (a
     /// hand-authored config, or the route→graph projection), no configured repository (test constructions), or no
-    /// rows at all is returned unchanged — the connection-wide fallback then applies exactly as before.
+    /// rows at all is returned unchanged.
+    /// <para>
+    /// Rows are looked up by the workflow this node actually belongs to (<see cref="WorkflowNode.WorkflowDefinitionId"/>),
+    /// NOT the "workflowId" stamped into its configuration: StampNodeIdentity never overwrites an existing stamp, so a
+    /// copied workflow's nodes still carry the ORIGINAL's id there — reading it made a copy silently run with the
+    /// original's criteria while its own Criteria editor (keyed by the copy's real id) showed and saved different ones.
+    /// </para>
     /// </summary>
     private async Task<FhirSourceConfiguration> ApplyResourceTypeCriteriaAsync(
         FhirSourceConfiguration source,
@@ -1132,13 +1151,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         }
 
         var canvasNodeId = ReadStringConfiguration(node, "canvasNodeId");
-        if (string.IsNullOrWhiteSpace(canvasNodeId)
-            || !Guid.TryParse(ReadStringConfiguration(node, "workflowId"), out var workflowId))
+        if (string.IsNullOrWhiteSpace(canvasNodeId))
         {
             return source;
         }
 
-        var rows = await _resourceTypeCriteriaRepository.ListForWorkflowAsync(workflowId, cancellationToken);
+        var rows = await _resourceTypeCriteriaRepository.ListForWorkflowAsync(node.WorkflowDefinitionId, cancellationToken);
         var criteriaByResourceType = rows
             .Where(row => string.Equals(row.SourceNodeId, canvasNodeId, StringComparison.OrdinalIgnoreCase))
             .Where(row => !string.IsNullOrWhiteSpace(row.Criteria))
@@ -1421,6 +1439,36 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 LogEvents.SearchCriteriaEnforcedLocally,
                 "{SourceName} returned {RemovedCount} of {ReturnedCount} {ResourceType} record(s) not matching " +
                 "[{Parameters}] — it did not apply those search parameters, so they were filtered out after fetching.",
+                source.Name, removed, records.Count, resourceType, string.Join(", ", enforcedParameters));
+        }
+
+        return kept;
+    }
+
+    /// <summary>
+    /// The bulk-export counterpart of <see cref="EnforceCriteriaLocally"/>: a <c>$export</c> request carries no
+    /// search criteria, so a type's Criteria row (and, for Patient, an API run's own criteria) can only take effect
+    /// on the exported records — see <see cref="SearchCriteriaPostFilter.BulkExportCriteria"/>. Only the simple code
+    /// filters SearchCriteriaPostFilter enforces apply; anything else in the criteria can't affect a bulk export.
+    /// </summary>
+    private IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> EnforceBulkExportCriteria(
+        string resourceType,
+        FhirSourceConfiguration source,
+        IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> records)
+    {
+        string? resourceCriteria = null;
+        source.SearchCriteriaByResourceType?.TryGetValue(resourceType, out resourceCriteria);
+        var criteria = SearchCriteriaPostFilter.BulkExportCriteria(resourceType, resourceCriteria, source.PatientSearchCriteria);
+
+        var (kept, enforcedParameters) = SearchCriteriaPostFilter.Apply(records, criteria);
+        var removed = records.Count - kept.Count;
+        if (removed > 0)
+        {
+            // Parameter names only — criteria values can carry patient identifiers.
+            _logger.LogInformation(
+                LogEvents.SearchCriteriaEnforcedLocally,
+                "Bulk export from {SourceName} returned {RemovedCount} of {ReturnedCount} {ResourceType} record(s) not " +
+                "matching [{Parameters}] — $export takes no search criteria, so they were filtered out after download.",
                 source.Name, removed, records.Count, resourceType, string.Join(", ", enforcedParameters));
         }
 

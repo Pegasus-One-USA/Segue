@@ -359,7 +359,17 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         return EClinicalWorksSupportedResourceTypes.Contains(resourceType);
     }
 
-    private static string? ComposeSearchParameters(string? baseSearchParameters, SourceRetrievalConfiguration? retrieval)
+    /// <summary>
+    /// Layers the retrieval configuration's sort and include/revinclude settings (Advanced Search Options) onto the
+    /// node-config search-parameters string. Returns the original string unchanged when there is no retrieval config.
+    /// <para>
+    /// The retrieval config's own <see cref="SourceRetrievalConfiguration.SearchCriteria"/> is deliberately NOT
+    /// applied: search criteria are now authored per resource type (ResourceTypeCriteria, the destination wizard's
+    /// Criteria button) and, on an API run, by the caller. The source form no longer shows that field, so a value
+    /// saved before it was removed is kept on the row but must not keep filtering every run invisibly.
+    /// </para>
+    /// </summary>
+    internal static string? ComposeSearchParameters(string? baseSearchParameters, SourceRetrievalConfiguration? retrieval)
     {
         if (retrieval is null)
         {
@@ -367,35 +377,10 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         var parts = new List<string>();
-        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (!string.IsNullOrWhiteSpace(baseSearchParameters))
         {
-            var trimmed = baseSearchParameters.Trim('&');
-            parts.Add(trimmed);
-            foreach (var segment in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
-            {
-                seenKeys.Add(ExtractParameterKey(segment));
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(retrieval.SearchCriteria))
-        {
-            // The node-level "Search criteria" field is frequently a wizard-authored snapshot of this same
-            // connection's SearchCriteria (see epic-audience-form.component.ts save()), not an independently
-            // chosen addition — concatenating both unconditionally then re-sends the identical parameter twice
-            // (e.g. "identifier=A,B&identifier=A,B"), which Epic rejects outright for identifier ("Don't support
-            // searching by IDENTIFIER AND IDENTIFIER"). Only carry over parameters whose key isn't already present
-            // in baseSearchParameters.
-            var additional = retrieval.SearchCriteria.Trim('&')
-                .Split('&', StringSplitOptions.RemoveEmptyEntries)
-                .Where(segment => seenKeys.Add(ExtractParameterKey(segment)))
-                .ToList();
-
-            if (additional.Count > 0)
-            {
-                parts.Add(string.Join('&', additional));
-            }
+            parts.Add(baseSearchParameters.Trim('&'));
         }
 
         // _lastUpdated is intentionally NOT added here: each resource type is fetched via its own independent
@@ -422,11 +407,5 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         return parts.Count == 0 ? null : string.Join('&', parts);
-    }
-
-    private static string ExtractParameterKey(string segment)
-    {
-        var equalsIndex = segment.IndexOf('=');
-        return equalsIndex < 0 ? segment : segment[..equalsIndex];
     }
 }
