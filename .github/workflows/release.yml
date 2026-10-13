@@ -24,18 +24,23 @@ on:
 
 permissions:
   contents: write   # create the GitHub Release
-  packages: write   # push images to GHCR
+  id-token: write   # OIDC login to Azure — no stored Azure secret
 
+# Images go to the vendor ACR (seguebuilds), with anonymous pull enabled so customer deployments
+# need no registry credentials. Pushing needs an Entra app registration with AcrPush on that
+# registry and a federated credential for this repo's `release` environment, whose variables are:
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, ACR_NAME (seguebuilds)
+# and secrets:
+#   REDIS_TLS_CRT, REDIS_TLS_KEY — the PEM contents of one long-lived redis.crt/redis.key pair
+#   (see the Redis certificate step below for why it must not change between releases).
 env:
-  # GHCR is the default because GITHUB_TOKEN can already push to it — no extra secret to configure.
-  # To publish to ACR/ECR instead, point REGISTRY at it and swap the login step below for
-  # azure/docker-login (or aws-actions/amazon-ecr-login).
-  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  REGISTRY: ${{ vars.ACR_NAME }}.azurecr.io
 
 jobs:
   release:
     name: build-and-publish
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - uses: actions/checkout@v4
 
@@ -90,19 +95,59 @@ jobs:
           dotnet test tests/FHIRBridge.Runtime.UnitTests --configuration Release --no-build --verbosity normal
           dotnet test tests/FHIRBridge.ArchitectureTests --configuration Release --no-build --verbosity normal
 
-      - name: Log in to registry
-        uses: docker/login-action@v3
+      - name: Log in to Azure
+        if: github.event_name == 'push'
+        uses: azure/login@v2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # redis.crt/redis.key are gitignored (never commit a private key) so segue-redis's Dockerfile has
-      # nothing to COPY on a fresh checkout — generate a fresh pair here before the image build needs them.
-      - name: Generate the redis-tls certificate for this build
+      - name: Log in to registry
+        if: github.event_name == 'push'
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      # A published version is immutable (see the push step below) — refuse to overwrite one rather
+      # than silently re-point a tag that customer deployments already reference.
+      - name: Refuse to overwrite a published version
+        if: github.event_name == 'push'
         run: |
-          chmod +x containerization/docker/redis-tls/generate-cert.sh
-          ./containerization/docker/redis-tls/generate-cert.sh
+          VERSION="${{ steps.version.outputs.version }}"
+          for image in segue-app segue-worker segue-redis segue-postgres segue-postgres-backup; do
+            # A never-pushed-to repository errors with "not found" — that just means no tags yet.
+            if az acr repository show-tags --name "${{ vars.ACR_NAME }}" --repository "$image" \
+                 --query "[?@=='$VERSION']" -o tsv --only-show-errors 2>/dev/null | grep -qx "$VERSION"; then
+              echo "::error::$image:$VERSION is already published. Ship the fix as the next version instead."
+              exit 1
+            fi
+          done
+
+      # redis.crt/redis.key are gitignored (never commit a private key), so segue-redis's Dockerfile
+      # has nothing to COPY on a fresh checkout. A release restores the ONE long-lived pair from
+      # secrets: every deployment trusts the cert by thumbprint (redisTrustedCertificateThumbprint),
+      # so a new pair per release would make an upgraded app refuse its own Redis. A dry run has no
+      # secrets to rely on and pushes nothing, so it builds with a throwaway pair instead.
+      - name: Restore the redis-tls certificate
+        id: redis-cert
+        env:
+          REDIS_TLS_CRT: ${{ secrets.REDIS_TLS_CRT }}
+          REDIS_TLS_KEY: ${{ secrets.REDIS_TLS_KEY }}
+        run: |
+          CERT_DIR=containerization/docker/redis-tls
+          if [ "${{ github.event_name }}" = "push" ]; then
+            if [ -z "$REDIS_TLS_CRT" ] || [ -z "$REDIS_TLS_KEY" ]; then
+              echo "::error::REDIS_TLS_CRT / REDIS_TLS_KEY are not set on the release environment."
+              exit 1
+            fi
+            printf '%s\n' "$REDIS_TLS_CRT" > "$CERT_DIR/redis.crt"
+            printf '%s\n' "$REDIS_TLS_KEY" > "$CERT_DIR/redis.key"
+            chmod 600 "$CERT_DIR/redis.key"
+          else
+            chmod +x "$CERT_DIR/generate-cert.sh"
+            "$CERT_DIR/generate-cert.sh"
+          fi
+          THUMBPRINT="$(openssl x509 -in "$CERT_DIR/redis.crt" -noout -fingerprint -sha1 | sed -E 's/^.*=//; s/://g')"
+          echo "thumbprint=$THUMBPRINT" >> "$GITHUB_OUTPUT"
 
       # Images are tagged with the exact version and pushed. The tag is immutable by convention:
       # a published version is never rebuilt or overwritten — if it is wrong, the fix ships as the
@@ -168,6 +213,9 @@ jobs:
             `segue-app` · `segue-worker` · `segue-redis` · `segue-postgres` · `segue-postgres-backup`
 
             Published to `${{ env.REGISTRY }}`, built from commit ${{ github.sha }}.
+
+            **Redis TLS certificate thumbprint** (`redisTrustedCertificateThumbprint`, containerized Redis only):
+            `${{ steps.redis-cert.outputs.thumbprint }}`
 
             Upgrading an existing deployment: see [UPGRADE.md](../blob/v${{ steps.version.outputs.version }}/docs/UPGRADE.md).
             **Back up the database before upgrading** — migrations run automatically on startup.

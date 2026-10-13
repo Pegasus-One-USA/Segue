@@ -220,7 +220,7 @@
       "redisTrustedCertificateThumbprint": "[if(equals(steps('currentConfig').redisMode, 'Containerized'), steps('currentConfig').redisTrustedCertificateThumbprint, '')]",
       "enableTenantSecretsKeyVault": "[equals(steps('currentConfig').secretsMode, 'Azure Key Vault')]",
       "imageTag": "[steps('versionStep').imageTag]",
-      "imageRegistryServer": "ghcr.io/pegasus-one-usa",
+      "imageRegistryServer": "seguebuilds.azurecr.io",
       "imageRegistryUsername": "",
       "imageRegistryPassword": ""
     }

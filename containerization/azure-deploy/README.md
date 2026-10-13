@@ -32,39 +32,22 @@ cd ../../scripts
 Docker builds locally here — source never leaves your machine, only the compiled image gets
 pushed.
 
-### Wiring up registry access (`createUiDefinition.json`) — do this before hosting the file
+### Registry access (`createUiDefinition.json`)
 
-`createUiDefinition.json` no longer asks the customer for a registry at all — the "Container
-Images" step only has a version field now. Registry access is fixed, not customer-editable, using
-a **read-only ACR token** on the vendor registry:
+`createUiDefinition.json` doesn't ask the customer for a registry — the "Container Images" step
+only has a version field. Images are pulled from the vendor ACR, `seguebuilds.azurecr.io`, which
+has **anonymous pull** enabled (requires the Standard tier or above), so the `outputs` section
+passes `imageRegistryServer: "seguebuilds.azurecr.io"` with an empty `imageRegistryUsername` /
+`imageRegistryPassword` — `main.bicep` treats empty credentials as "no registry auth".
+
+No registry credential is embedded anywhere: the setup form is hosted in a publicly-readable
+storage container, so anything placed in it is effectively public. The trade-off is that the
+images themselves are publicly downloadable; pushing still requires AcrPush (see
+`.github/workflows/release.yml`). To enable anonymous pull on a new vendor registry:
 
 ```bash
-az acr token create --registry <vendor acr_name> --name one-click-pull --scope-map _repositories_pull
+az acr update --name <vendor acr_name> --sku Standard --anonymous-pull-enabled true
 ```
-
-This prints a username + password that can only pull images, nothing else, and can be individually
-revoked at any time without affecting anything else (`az acr token delete --registry <acr_name>
---name one-click-pull`, then create a new one). Replace the 3 placeholder strings in
-`createUiDefinition.json`'s `outputs` section with the real values before hosting it:
-
-| Placeholder | Replace with |
-|---|---|
-| `__VENDOR_ACR_LOGIN_SERVER__` | The vendor registry's login server (`terraform output acr_login_server` in `../terraform/vendor-registry`) |
-| `__VENDOR_ACR_PULL_TOKEN_USERNAME__` | The token name from the command above (`one-click-pull`) |
-| `__VENDOR_ACR_PULL_TOKEN_PASSWORD__` | The password the `az acr token create` command printed |
-
-**Trade-off worth knowing:** since `createUiDefinition.json` is hosted in a *publicly-readable*
-storage container (Tier 2 below) so the Deploy-to-Azure button can fetch it, embedding this token
-here means it's technically public too — anyone who downloads the JSON directly could read it out,
-not just people who click the button. The bounded mitigation is exactly why a read-only, scoped,
-revocable token is used here instead of an admin credential or a broader role: the worst case is
-someone can pull your images, and you can kill that specific token at any time. If that trade-off
-isn't acceptable for a given release, fall back to a public registry instead — no rework needed,
-`main.bicep` already treats `imageRegistryUsername`/`imageRegistryPassword` as optional (empty
-string skips registry auth entirely). Just set `__VENDOR_ACR_LOGIN_SERVER__` to the public
-registry's address and leave the other two placeholders as empty strings (`""`) instead of real
-credentials — the images become publicly downloadable in that case, so decide if that's acceptable
-for this product first.
 
 ## Tier 1 — one command, works today
 

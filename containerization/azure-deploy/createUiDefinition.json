@@ -588,7 +588,7 @@
       "seqSize": "[steps('containerSizing').seqSize]",
       "segueAppIntendedDomain": "[steps('customDomains').segueAppIntendedDomain]",
       "imageTag": "[steps('imageSettings').imageTag]",
-      "imageRegistryServer": "ghcr.io/pegasus-one-usa",
+      "imageRegistryServer": "seguebuilds.azurecr.io",
       "imageRegistryUsername": "",
       "imageRegistryPassword": ""
     }

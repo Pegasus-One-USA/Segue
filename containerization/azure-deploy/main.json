@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.45.15.27210",
-      "templateHash": "11569485454373132921"
+      "version": "0.48.1.52935",
+      "templateHash": "17097712565585532165"
     }
   },
   "parameters": {
@@ -46,7 +46,7 @@
     "imageRegistryServer": {
       "type": "string",
       "metadata": {
-        "description": "Registry every custom image this deployment references was published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package) — segue-app/-worker/-redis/-postgres always, plus segue-postgres-backup too if useAzurePostgresql is false."
+        "description": "Registry every custom image this deployment references was published to (e.g. seguebuilds.azurecr.io, the vendor ACR, which allows anonymous pull) — segue-app/-worker/-redis/-postgres always, plus segue-postgres-backup too if useAzurePostgresql is false."
       }
     },
     "imageTag": {

@@ -51,7 +51,7 @@ param postgresPassword string
 @minLength(32)
 param jwtSigningKey string
 
-@description('Registry every custom image this deployment references was published to (e.g. myregistry.azurecr.io, or ghcr.io/your-org for a public GHCR package) — segue-app/-worker/-redis/-postgres always, plus segue-postgres-backup too if useAzurePostgresql is false.')
+@description('Registry every custom image this deployment references was published to (e.g. seguebuilds.azurecr.io, the vendor ACR, which allows anonymous pull) — segue-app/-worker/-redis/-postgres always, plus segue-postgres-backup too if useAzurePostgresql is false.')
 param imageRegistryServer string
 
 @description('Tag every custom image this deployment references was published under. Pinned to a released version on purpose — NOT \'latest\'. A customer deploying this template months from now must get exactly the build that was tested and published as that version, not whatever happens to be sitting in the registry that day; \'latest\' also makes "which version is broken?" unanswerable on a support call. The release pipeline (.github/workflows/release.yml) rewrites this default to the version being released, so the published template always names its own build.')
