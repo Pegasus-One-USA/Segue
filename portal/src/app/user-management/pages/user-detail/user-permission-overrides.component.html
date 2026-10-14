@@ -91,6 +91,57 @@
             </thead>
             <tbody>
               @for (row of cat.rows; track row.id) {
+                @if (row.children) {
+                <!-- Accordion parent: no permission cells, no All toggle. Its children are design-only
+                     placeholders whose ticks stay local (see PERMISSION_ACCORDIONS). -->
+                <tr class="permission-grid__parent-row">
+                  <td class="permission-grid__group-name">
+                    <button
+                      type="button"
+                      class="permission-grid__accordion"
+                      [attr.aria-expanded]="isAccordionExpanded(row.id)"
+                      (click)="toggleAccordion(row.id)"
+                    >
+                      <mat-icon class="permission-grid__accordion-chevron" [class.permission-grid__accordion-chevron--collapsed]="!isAccordionExpanded(row.id)">
+                        expand_more
+                      </mat-icon>
+                      {{ row.displayName }}
+                    </button>
+                  </td>
+                  @for (action of cat.actions; track action) {
+                    <td class="permission-grid__cell"></td>
+                  }
+                  <td class="permission-grid__cell permission-grid__cell--all"></td>
+                </tr>
+                @if (isAccordionExpanded(row.id)) {
+                  @for (child of row.children; track child.id) {
+                    <tr class="permission-grid__child-row">
+                      <td class="permission-grid__group-name permission-grid__group-name--child">
+                        <span class="permission-grid__branch" aria-hidden="true"></span>
+                        {{ child.displayName }}
+                      </td>
+                      @for (action of cat.actions; track action) {
+                        <td class="permission-grid__cell">
+                          <mat-checkbox
+                            [attr.aria-label]="child.displayName + ': ' + action"
+                            [checked]="isPlaceholderChecked(child.id, action)"
+                            [disabled]="inheritFromRole() || saving() || !canEdit()"
+                            (change)="setPlaceholderChecked(child.id, action, $event.checked)"
+                          ></mat-checkbox>
+                        </td>
+                      }
+                      <td class="permission-grid__cell permission-grid__cell--all">
+                        <app-tri-state-toggle
+                          [value]="placeholderRowState(child.id, cat.actions)"
+                          [disabled]="inheritFromRole() || saving() || !canEdit()"
+                          [ariaLabel]="'Set all ' + child.displayName + ' permissions'"
+                          (valueChange)="setPlaceholderRowState(child.id, cat.actions, $event)"
+                        ></app-tri-state-toggle>
+                      </td>
+                    </tr>
+                  }
+                }
+                } @else {
                 <tr>
                   <td class="permission-grid__group-name">{{ row.displayName }}</td>
                   @for (action of cat.actions; track action) {
@@ -116,6 +167,7 @@
                     ></app-tri-state-toggle>
                   </td>
                 </tr>
+                }
               }
             </tbody>
           </table>

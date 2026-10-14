@@ -56,7 +56,38 @@ interface GridRow {
   displayName: string;
   cells: Map<string, Permission>;
   permissionIds: string[];
+  /** Set only on an accordion parent row (see PERMISSION_ACCORDIONS): the rows nested beneath it. */
+  children?: PlaceholderRow[];
 }
+
+// A design-only child row of an accordion parent. Backed by no permission: its checkboxes are local
+// placeholder state that never reaches overrides, Set all, the override count or Save.
+interface PlaceholderRow {
+  id: string;
+  displayName: string;
+}
+
+// Groups drawn as an expandable parent row instead of a row of checkboxes, keyed by the group's
+// backend name. The parent's own permissions are left out of the grid entirely (no cells, no All,
+// not touched by Set all), and its children are placeholders until real permissions exist for them.
+const PERMISSION_ACCORDIONS: ReadonlyMap<string, readonly PlaceholderRow[]> = new Map([
+  ['WorkflowConfiguration', [
+    { id: 'workflow-configuration.source-connection', displayName: 'Source connection' },
+    { id: 'workflow-configuration.destination-connection', displayName: 'Destination connection' },
+    { id: 'workflow-configuration.mapping-profile', displayName: 'Mapping Profile' },
+  ]],
+  ['SystemSettings', [
+    'Decrypt Provisioned Secret', 'Terminology Server', 'License', 'EHR Endpoints', 'Allowed Origins',
+    'Email', 'Security', 'SSO Configurations', 'Error Log Handling', 'Alert Evaluation',
+    'Anomaly Detection', 'Audit Chain Verification', 'Authentication', 'Caching', 'Compliance',
+    'Ehr Write Back', 'Endpoint Health Check', 'Generated File Download', 'Incremental Sync', 'Local Auth',
+    'Mfa', 'OAuth', 'Rate Limiting', 'Runtime Worker', 'Schedule Dispatcher',
+    'Transformation Rules', 'Webhook Ingestion', 'Workflow Setting', 'Workflow Numbering',
+  ].map((displayName) => ({
+    id: `system-settings.${displayName.toLowerCase().replace(/\s+/g, '-')}`,
+    displayName,
+  }))],
+]);
 
 // One table — a Permission Category. `actions` is the sorted union of action labels across this
 // category's rows, i.e. the table's columns; different categories can and do have different columns.
@@ -66,6 +97,16 @@ interface GridCategory {
   displayName: string;
   actions: string[];
   rows: GridRow[];
+}
+
+// Display order for rows the catalog's own order doesn't place as designed, keyed by group backend
+// name. Listed rows come first, in this order; every other row keeps its catalog order after them.
+// Only the Settings table holds these groups, so no other table is reordered.
+const PERMISSION_ROW_ORDER: readonly string[] = ['Branding', 'WorkflowConfiguration', 'SystemSettings'];
+
+function rowRank(name: string): number {
+  const index = PERMISSION_ROW_ORDER.indexOf(name);
+  return index === -1 ? PERMISSION_ROW_ORDER.length : index;
 }
 
 function capitalize(value: string): string {
@@ -162,6 +203,18 @@ export class UserPermissionOverridesComponent
           && isNodePermissionPrefixVisible(g.permissions[0].resource, this.phaseCfg),
       );
       const rows: GridRow[] = visibleGroups.map((g) => {
+        const accordionChildren = PERMISSION_ACCORDIONS.get(g.name);
+        if (accordionChildren) {
+          return {
+            id: g.id,
+            name: g.name,
+            displayName: g.displayName,
+            cells: new Map<string, Permission>(),
+            permissionIds: [],
+            children: [...accordionChildren],
+          };
+        }
+
         const cells = new Map<string, Permission>();
         for (const p of g.permissions) {
           cells.set(capitalize(p.action), p);
@@ -174,6 +227,8 @@ export class UserPermissionOverridesComponent
           permissionIds: g.permissions.map((p) => p.id),
         };
       });
+      // Stable sort: rows absent from PERMISSION_ROW_ORDER share one rank and keep catalog order.
+      rows.sort((a, b) => rowRank(a.name) - rowRank(b.name));
 
       const actions = new Set<string>();
       for (const row of rows)
@@ -201,13 +256,18 @@ export class UserPermissionOverridesComponent
         const categoryMatches = cat.displayName.toLowerCase().includes(q);
         const rows = categoryMatches
           ? cat.rows
-          : cat.rows.filter((row) => {
-              if (row.displayName.toLowerCase().includes(q)) return true;
+          : cat.rows.flatMap((row) => {
+              if (row.displayName.toLowerCase().includes(q)) return [row];
+              // An accordion parent stays visible with just the children whose label matches.
+              if (row.children) {
+                const children = row.children.filter((c) => c.displayName.toLowerCase().includes(q));
+                return children.length > 0 ? [{ ...row, children }] : [];
+              }
               return [...row.cells.values()].some(
                 (p) =>
                   p.displayName.toLowerCase().includes(q) ||
                   (p.description ?? '').toLowerCase().includes(q),
-              );
+              ) ? [row] : [];
             });
         return { ...cat, rows };
       })
@@ -262,6 +322,50 @@ export class UserPermissionOverridesComponent
     if (next.has(categoryId)) next.delete(categoryId);
     else next.add(categoryId);
     this.collapsedCategoryIds.set(next);
+  }
+
+  // ─── Accordion parent rows (design only) ───────────────────────────────────
+  // Expanded by default; ids in this set render with their children hidden.
+  readonly collapsedAccordionRowIds = signal<Set<string>>(new Set());
+
+  isAccordionExpanded(rowId: string): boolean {
+    return !this.collapsedAccordionRowIds().has(rowId);
+  }
+
+  toggleAccordion(rowId: string): void {
+    const next = new Set(this.collapsedAccordionRowIds());
+    if (next.has(rowId)) next.delete(rowId);
+    else next.add(rowId);
+    this.collapsedAccordionRowIds.set(next);
+  }
+
+  // Local-only state for the placeholder child rows: placeholder id -> actions left unticked. Every
+  // box starts ticked. Never read by overrides, dirty tracking or save().
+  private readonly placeholderUnchecked = signal<Map<string, Set<string>>>(new Map());
+
+  isPlaceholderChecked(childId: string, action: string): boolean {
+    return !this.placeholderUnchecked().get(childId)?.has(action);
+  }
+
+  setPlaceholderChecked(childId: string, action: string, checked: boolean): void {
+    const map = new Map(this.placeholderUnchecked());
+    const unchecked = new Set(map.get(childId) ?? []);
+    if (checked) unchecked.delete(action);
+    else unchecked.add(action);
+    map.set(childId, unchecked);
+    this.placeholderUnchecked.set(map);
+  }
+
+  placeholderRowState(childId: string, actions: string[]): TriState | null {
+    const unchecked = this.placeholderUnchecked().get(childId);
+    if (!unchecked || unchecked.size === 0) return 'grant';
+    return actions.every((a) => unchecked.has(a)) ? 'inherit' : null;
+  }
+
+  setPlaceholderRowState(childId: string, actions: string[], next: TriState): void {
+    const map = new Map(this.placeholderUnchecked());
+    map.set(childId, next === 'grant' ? new Set() : new Set(actions));
+    this.placeholderUnchecked.set(map);
   }
 
   // ─── Per-cell override (staged, not yet saved) ─────────────────────────────

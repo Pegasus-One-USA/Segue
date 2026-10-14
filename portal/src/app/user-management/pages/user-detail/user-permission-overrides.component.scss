@@ -262,6 +262,61 @@
     }
   }
 
+  // ─── Accordion parent row + its indented child rows (design only) ───────────
+  &__accordion {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: -4px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font: inherit;
+    font-weight: 600;
+    color: inherit;
+    cursor: pointer;
+
+    &:hover { color: var(--color-ink); }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+  }
+
+  &__accordion-chevron {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    transition: transform var(--transition-base);
+
+    &--collapsed { transform: rotate(-90deg); }
+  }
+
+  // Parent rows keep the row height of their checkbox siblings even with every cell empty.
+  &__parent-row td { height: 24px; }
+
+  // Child labels may wrap (the group column's other labels stay nowrap); the hanging indent keeps a
+  // wrapped second line aligned under the first, clear of the branch mark.
+  &__group-name--child {
+    padding-left: 38px;
+    font-weight: 500;
+    white-space: normal;
+    max-width: 220px;
+  }
+
+  // Small "└" branch joining each child to the parent above it.
+  &__branch {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin: 0 6px 3px -16px;
+    border-left: 1.5px solid var(--color-primary-mid);
+    border-bottom: 1.5px solid var(--color-primary-mid);
+    vertical-align: middle;
+  }
+
   // Checkbox sizing/coloring for every mat-checkbox inside this table comes from the shared
   // _permission-checkbox.scss `@use`d at the top of this file — identical rule the Role
   // Permissions screen uses, so both permission grids read identically.
