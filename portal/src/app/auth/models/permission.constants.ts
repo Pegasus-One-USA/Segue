@@ -48,6 +48,9 @@ export enum PermissionGroup {
   AzureFhirService = 'azurefhirservice',
   EhrWriteBack = 'ehrwriteback',
   TabularSources = 'tabularsources',
+  Branding = 'branding',
+  WorkflowConfiguration = 'workflowconfiguration',
+  SystemSettings = 'systemsettings',
 }
 
 export enum PermissionAction {

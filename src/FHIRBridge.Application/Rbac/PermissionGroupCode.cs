@@ -192,4 +192,19 @@ public enum PermissionGroupCode
     // running a workflow that reads one. The rows are PHI, so it is not folded into a broader group.
     [PermissionGroup("30000000-0000-0000-0000-000000000042", PermissionCategoryCode.Pipelines, "CSV / SQL Table Sources")]
     TabularSources = 42,
+
+    // ── Settings category (design only) ─────────────────────────────────────────────────────────────────
+    // Each group seeds every PermissionActionCode except Invite/Assign (see RbacSeedData), so the User
+    // Management grid shows the same columns as the Platform table. Nothing authorizes against these yet —
+    // Branding is still gated by Configuration.Write, the Workflow Configuration tabs by their own
+    // Destination/Mapping/Transformation groups, and System Settings by SuperAdmin — so granting one
+    // changes no access until a later change wires it up.
+    [PermissionGroup("30000000-0000-0000-0000-000000000043", PermissionCategoryCode.Settings, "Branding")]
+    Branding = 43,
+
+    [PermissionGroup("30000000-0000-0000-0000-000000000044", PermissionCategoryCode.Settings, "Workflow Configuration")]
+    WorkflowConfiguration = 44,
+
+    [PermissionGroup("30000000-0000-0000-0000-000000000045", PermissionCategoryCode.Settings, "System Setting")]
+    SystemSettings = 45,
 }

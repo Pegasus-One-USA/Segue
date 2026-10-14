@@ -224,7 +224,41 @@ public static class RbacSeedData
             "Permanently delete error log entries (delete errors, purge old entries) and release the space.",
             PermissionGroupCode.Governance,
             PermissionActionCode.Delete),
+
+        // Settings category — design only, see the comment on PermissionGroupCode.Branding. Seeded here (not
+        // via [StandardPermission]) because no endpoint declares them yet, so they are never auto-deactivated.
+        .. SettingsDesignPermissions(PermissionGroupCode.Branding, "branding"),
+        .. SettingsDesignPermissions(PermissionGroupCode.WorkflowConfiguration, "workflow configuration"),
+        .. SettingsDesignPermissions(PermissionGroupCode.SystemSettings, "system settings"),
     ];
+
+    /// <summary>
+    /// One permission per Platform-table column (every action except Invite/Assign) for a Settings-category group.
+    /// The list is local, not a static property: <see cref="Permissions"/> is initialized before any static
+    /// declared below it.
+    /// </summary>
+    private static IEnumerable<PermissionSeed> SettingsDesignPermissions(PermissionGroupCode group, string subject)
+    {
+        PermissionActionCode[] actions =
+        [
+            PermissionActionCode.Create,
+            PermissionActionCode.Deactivate,
+            PermissionActionCode.Delete,
+            PermissionActionCode.Edit,
+            PermissionActionCode.Execute,
+            PermissionActionCode.Export,
+            PermissionActionCode.Read,
+            PermissionActionCode.Run,
+            PermissionActionCode.Test,
+            PermissionActionCode.View,
+            PermissionActionCode.Write,
+        ];
+
+        return actions.Select(action => new PermissionSeed(
+            $"{action.GetDisplayName()} {subject} (not enforced yet).",
+            group,
+            action));
+    }
 
     /// <summary>
     /// Looks up a built-in permission's seeded id by its (Group, Action) pair — the type-safe, typo-proof way

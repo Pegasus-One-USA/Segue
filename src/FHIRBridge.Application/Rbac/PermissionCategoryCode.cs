@@ -16,4 +16,9 @@ public enum PermissionCategoryCode
 
     [PermissionCategory("40000000-0000-0000-0000-000000000003", "Workflows")]
     Pipelines = 3,
+
+    // Design-only for now: owns the Branding / Workflow Configuration / System Setting groups, whose
+    // permissions show in the User Management grid but are not checked by any endpoint or route yet.
+    [PermissionCategory("40000000-0000-0000-0000-000000000004", "Settings")]
+    Settings = 4,
 }
