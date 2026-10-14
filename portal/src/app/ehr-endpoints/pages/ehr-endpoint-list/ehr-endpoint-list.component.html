@@ -163,6 +163,17 @@
                        Disabled, no click handler; same visibility/View pattern (including the .view
                        permission gate) as source-connection-list's own View menu item, just not wired to
                        anything yet. -->
+                  <!-- The id a caller sends as ehr_endpoint_code when triggering a workflow against this hospital. -->
+                  <button
+                    mat-menu-item
+                    data-testid="ehr-row-copy-code"
+                    *appHideWithoutPermission="'ehrendpoints.view'"
+                    [title]="'Copy EHR Endpoint code - ' + e.id"
+                    (click)="copyCode(e)"
+                  >
+                    <mat-icon>tag</mat-icon>
+                    Copy Code
+                  </button>
                   <button mat-menu-item disabled *appHideWithoutPermission="'ehrendpoints.view'">
                     <mat-icon>visibility</mat-icon>
                     View (Coming Soon)

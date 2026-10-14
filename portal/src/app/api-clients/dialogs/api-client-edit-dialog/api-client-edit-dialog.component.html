@@ -1,0 +1,56 @@
+<div class="dialog-container">
+
+  <div class="dialog-header">
+    <div class="dialog-header__icon">
+      <mat-icon>vpn_key</mat-icon>
+    </div>
+    <div class="dialog-header__text">
+      <h2>Edit API Client</h2>
+      <p>{{ data.client.clientId }}</p>
+    </div>
+  </div>
+
+  <mat-dialog-content>
+
+    @if (errorMessage()) {
+      <div class="notice error-notice">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    <form [formGroup]="form" novalidate class="dialog-form">
+      <div class="form-field" [class.form-field--error]="hasError('name', 'required') || hasError('name', 'maxlength')">
+        <label for="ace-name">Name <span class="req">*</span></label>
+        <input id="ace-name" formControlName="name" autocomplete="off" />
+      </div>
+
+      <mat-checkbox formControlName="isEnabled">Enabled</mat-checkbox>
+      <p class="hint">A disabled client immediately loses the ability to request new tokens; tokens it
+        already holds still expire naturally within their own (short) lifetime.</p>
+    </form>
+
+    <div class="return-urls-row">
+      <div class="return-urls-row__text">
+        <span class="return-urls-row__title">Allowed Caller URLs</span>
+        <span class="return-urls-row__count">
+          {{ client().returnUrls.length }} registered — required for the browser-redirect external-trigger flow
+        </span>
+      </div>
+      <button mat-stroked-button type="button" (click)="openReturnUrls()">Manage Allowed Caller URLs</button>
+    </div>
+
+  </mat-dialog-content>
+
+  <mat-dialog-actions>
+    <div class="dialog-actions">
+      <button mat-flat-button class="btn-save" [disabled]="saving()" (click)="save()">
+        @if (saving()) {
+          <mat-spinner diameter="16"></mat-spinner>
+        }
+        Save
+      </button>
+    </div>
+  </mat-dialog-actions>
+
+</div>

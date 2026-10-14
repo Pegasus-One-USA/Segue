@@ -155,8 +155,11 @@ public sealed class OAuth2ClientCredentialsTokenProvider : IFhirAccessTokenProvi
         return await _tokenCache.GetScopeAsync(BuildCacheKey(source, scopes), cancellationToken);
     }
 
-    private static string BuildCacheKey(FhirSourceConfiguration source, string scopes) =>
-        $"fhir-token:oauth2|{source.TokenEndpoint}|{source.ClientId}|{scopes}";
+    private static string BuildCacheKey(FhirSourceConfiguration source, string scopes)
+    {
+        var baseKey = $"fhir-token:oauth2|{source.TokenEndpoint}|{source.ClientId}|{scopes}";
+        return source.EhrEndpointId is { } ehrEndpointId ? $"{baseKey}|ehr:{ehrEndpointId:N}" : baseKey;
+    }
 
     private sealed class TokenResponse
     {

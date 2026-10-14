@@ -233,6 +233,7 @@ public static class DependencyInjection
             services.AddSingleton<ISourceCapabilityRepository, InMemorySourceCapabilityRepository>();
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
+            services.AddSingleton<IApiClientRepository, InMemoryApiClientRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<IEhrWriteLedgerRepository, InMemoryEhrWriteLedgerRepository>();
             services.AddSingleton<ITabularSourceFileRepository, InMemoryTabularSourceFileRepository>();
@@ -331,6 +332,7 @@ public static class DependencyInjection
             services.AddScoped<IEhrEndpointDirectorySeeder, EpicEndpointDirectorySeeder>();
             services.AddScoped<IEhrEndpointRepository, EfEhrEndpointRepository>();
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
+            services.AddScoped<IApiClientRepository, EfApiClientRepository>();
             services.AddScoped<IUserFhirContextBindingRepository, EfUserFhirContextBindingRepository>();
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
             services.AddScoped<ILicenseRequestRepository, EfLicenseRequestRepository>();
@@ -360,6 +362,7 @@ public static class DependencyInjection
             // RankedWorkflowOrchestrator.ResumeAfterBulkExportAsync (bulk export, in the Worker).
             services.AddSingleton<FHIRBridge.Runtime.Application.Workflows.EhrDataDumpWriter>();
             services.AddScoped<FHIRBridge.Runtime.Application.Workflows.Storage.IBulkExportPauseRecorder, FHIRBridge.Infrastructure.Workflows.BulkExportPauseRecorder>();
+            services.AddScoped<FHIRBridge.Runtime.Application.Abstractions.Sources.IEhrEndpointOverrideProvider, FHIRBridge.Infrastructure.Sources.EhrEndpointOverrideProvider>();
             services.AddScoped<IPipelineRunRouteExecutionRepository, EfPipelineRunRouteExecutionRepository>();
             services.AddScoped<EfExecutionResourceHistoryRecorder>();
             services.AddScoped<IExecutionResourceHistoryRecorder>(sp => sp.GetRequiredService<EfExecutionResourceHistoryRecorder>());

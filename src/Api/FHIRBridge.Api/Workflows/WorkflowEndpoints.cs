@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Api.Security;
 using FHIRBridge.Api.Workflows;
@@ -30,6 +30,7 @@ using FHIRBridge.Governance;
 using FHIRBridge.SharedKernel.Enums;
 using FHIRBridge.SharedKernel.Exceptions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -37,6 +38,10 @@ namespace FHIRBridge.Api.Workflows;
 
 public static class WorkflowEndpoints
 {
+    /// <summary>Data Protection purpose for the signed token carrying a validated Return URL from
+    /// /workflows/external/run-page to /workflows/external/return.</summary>
+    private const string ExternalRunReturnProtectorPurpose = "FHIRBridge.ExternalRunReturn.v1";
+
     // Node executors read config with JsonSerializerDefaults.Web (camelCase); serialize embedded fields the same way.
     private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -1634,15 +1639,24 @@ public static class WorkflowEndpoints
             IConfigurationRepository configurationRepository,
             IAuthorizationService authorizationService,
             ILicenseQuotaGuard licenseQuotaGuard,
+            IEhrEndpointOverrideProvider ehrEndpointOverrideProvider,
+            IDataProtectionProvider dataProtectionProvider,
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
-            // callerId is the interactive token-cache session key, and it arrives in the BODY here rather than on
-            // the query string — too late for the pipeline-level resolver to have seen it. Stamp it now, before
-            // the run (and everything it logs) is created, so this run shares the correlation id of the
-            // validate-run/token-status/sign-in legs that preceded it. No-op when the caller supplied an explicit
-            // X-Correlation-Id, or sent no callerId (a portal/scheduler run, which has no interactive session).
-            WorkflowCorrelationResolver.ApplyDerived(httpContext, workflowId, request?.CallerId);
+            // Every run gets its OWN correlation id. callerId is the interactive token-cache session key and is reused
+            // for every run in that session, so an id derived from it (WorkflowCorrelationResolver.ApplyDerived) came out
+            // identical for each execution of the same workflow — impossible to tell runs apart in Execution History or
+            // Correlation Search. A caller that wants several legs under one id still can: it passes CorrelationId in the
+            // body (the validate-run -> run flow does) or sends X-Correlation-Id, and that explicit value is honoured.
+            var requestedCorrelationId = request?.CorrelationId;
+            if (string.IsNullOrWhiteSpace(requestedCorrelationId)
+                && !string.IsNullOrWhiteSpace(request?.CallerId)
+                && string.IsNullOrWhiteSpace(httpContext.Request.Headers["X-Correlation-Id"].FirstOrDefault()))
+            {
+                requestedCorrelationId = $"{WorkflowCorrelationId.Prefix}{Guid.NewGuid():N}";
+                WorkflowCorrelationResolver.ApplyExplicit(httpContext, requestedCorrelationId);
+            }
 
             var workflow = await store.GetAsync(workflowId, cancellationToken);
             if (workflow is null)
@@ -1650,14 +1664,22 @@ public static class WorkflowEndpoints
                 return Results.NotFound();
             }
 
-            // Which credential is this caller presenting? The portal sends the session cookie (and is subject to
-            // the full RBAC below); a third-party standalone app sends neither cookie nor bearer token and is
-            // instead gated on the workflow's own public-launch opt-in. Deciding this ONCE here keeps the two
-            // paths from drifting apart, and makes the anonymous path's narrower checks explicit rather than
-            // implied by a policy that silently never ran.
+            // Which credential is this caller presenting? Three shapes: the portal's session cookie (subject to
+            // the full RBAC below); a third-party app's OAuth2 Client Credentials Grant token (see
+            // ClientCredentialsTokenController) — a tenant-wide grant, so no per-workflow opt-in or RBAC check
+            // applies to it; or a SMART Standalone launch caller sending neither, gated on the workflow's own
+            // public-launch opt-in instead. Deciding this ONCE here keeps the three paths from drifting apart,
+            // and makes each narrower path's checks explicit rather than implied by a policy that silently
+            // never ran. A client-credentials token DOES set httpContext.User.Identity.IsAuthenticated (it's a
+            // validly-signed JWT on the same "Local" bearer scheme — see ClientCredentialsAccessTokenIssuer's
+            // remarks) but carries no "uid" claim, so isPortalUserCaller below is what actually gates the
+            // human-only checks; isAuthenticatedCaller alone would wrongly send a machine client down the RBAC
+            // path, where it has no permissions and would always be refused.
             var isAuthenticatedCaller = httpContext.User.Identity?.IsAuthenticated == true;
+            var isClientCredentialCaller = httpContext.User.HasClaim("token_use", "client_credentials");
+            var isPortalUserCaller = isAuthenticatedCaller && !isClientCredentialCaller;
 
-            if (isAuthenticatedCaller)
+            if (isPortalUserCaller)
             {
                 // Unchanged portal behaviour: the workflow-module action gate that used to sit on the route as
                 // RequireAuthorization(HasPermission(workflow.run)). Moved in-handler (not weakened) so the route
@@ -1671,11 +1693,13 @@ public static class WorkflowEndpoints
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
                 }
             }
-            else if (!workflow.IsPubliclyLaunchable)
+            else if (!isClientCredentialCaller && !workflow.IsPubliclyLaunchable)
             {
                 // Same refusal shape and reasoning as /latest-launch-result: an un-opted-in workflow is reported
                 // as absent rather than forbidden, so the workflow id alone can't be used to probe which ids
                 // exist. The id is not a credential — it travels through URLs, configs and support tickets.
+                // A client-credentials caller skips this check entirely: its authorization is the tenant-wide
+                // token itself, independent of any single workflow's public-launch opt-in.
                 return Results.NotFound();
             }
             else if (workflow.Nodes.Any(n => IsEhrWriteBackNode(n.NodeType)))
@@ -1685,6 +1709,69 @@ public static class WorkflowEndpoints
                 // that writes back is therefore never publicly launchable, whatever its flag says; same refusal
                 // shape as above.
                 return Results.NotFound();
+            }
+
+            // Group ID / Search Criteria an external trigger chose for this run, carried through the EHR sign-in as a signed
+            // token (see ExternalRunOverridesToken). A valid token IS the authorization for exactly those two values and
+            // replaces whatever the body says; an invalid one is refused outright rather than silently ignored, so a run
+            // is never started with criteria the caller did not ask for.
+            var effectiveGroupIdOverride = request?.GroupIdOverride;
+            var effectiveSearchCriteriaOverride = request?.SearchCriteriaOverride;
+            IReadOnlyDictionary<string, string>? effectiveResourceCriteria = null;
+            if (!string.IsNullOrWhiteSpace(request?.ExternalOverridesToken))
+            {
+                if (!ExternalRunOverridesToken.TryRead(
+                        dataProtectionProvider, request.ExternalOverridesToken, workflowId,
+                        out var tokenGroupId, out var tokenSearchCriteria, out var tokenResourceCriteria))
+                {
+                    return Results.BadRequest(new { error = "invalid_overrides_token" });
+                }
+
+                effectiveGroupIdOverride = tokenGroupId;
+                effectiveSearchCriteriaOverride = tokenSearchCriteria;
+                // Only ever sourced from the signed token, never from the request body.
+                TryParseResourceCriteria(tokenResourceCriteria, out var tokenCriteriaMap);
+                effectiveResourceCriteria = tokenCriteriaMap;
+            }
+
+            // "Execute V2" per-run overrides (another EHR Endpoint, Group ID, Search Criteria) are an operator action:
+            // honored only for a signed-in portal user who already passed workflow.run above. A public-launch caller
+            // or a machine client must not be able to repoint a workflow at a different hospital or widen its criteria.
+            if (request is { } overrideRequest
+                && ((overrideRequest.TargetEhrEndpointId is { } requestedTarget && requestedTarget != Guid.Empty)
+                    || overrideRequest.GroupIdOverride is not null
+                    || overrideRequest.SearchCriteriaOverride is not null
+                    || overrideRequest.ResourceCriteriaOverrides is { Count: > 0 }))
+            {
+                if (!isPortalUserCaller)
+                {
+                    return Results.Json(new { error = "Per-run overrides are only available to signed-in portal users." },
+                        statusCode: StatusCodes.Status403Forbidden);
+                }
+
+                if (RunOverridesTooLong(overrideRequest.GroupIdOverride, overrideRequest.SearchCriteriaOverride))
+                {
+                    return Results.BadRequest(new { error = "Group ID must be at most 200 characters and search criteria at most 4000." });
+                }
+
+                if (overrideRequest.ResourceCriteriaOverrides is { Count: > 0 } requestedResourceCriteria)
+                {
+                    if (!TryParseResourceCriteria(JsonSerializer.Serialize(requestedResourceCriteria), out var parsedResourceCriteria))
+                    {
+                        return Results.BadRequest(new { error = ResourceCriteriaErrorDescription });
+                    }
+
+                    // The signed external token, when present, is the only other source and takes precedence below.
+                    effectiveResourceCriteria ??= parsedResourceCriteria;
+                }
+
+                var targetError = await ValidateEhrEndpointForRunAsync(
+                    workflow, overrideRequest.TargetEhrEndpointId?.ToString(), ehrEndpointOverrideProvider,
+                    configurationRepository, cancellationToken);
+                if (targetError is not null)
+                {
+                    return Results.BadRequest(new { error = targetError });
+                }
             }
 
             // This is the Runtime plane's real run-trigger point (IRankedWorkflowOrchestrator.ExecuteAsync below,
@@ -1734,19 +1821,21 @@ public static class WorkflowEndpoints
                 }
 
                 // Per-vendor RBAC applies to a USER's permissions, so it is meaningful only for the
-                // cookie-authenticated portal caller. For the anonymous standalone caller there is no principal to
-                // check — its authorization is the IsPubliclyLaunchable opt-in above plus its callerId, the same
-                // trust model /workflows/checkpoint/{token} uses (which likewise runs the license checks below
-                // while having no user permissions to test).
-                if (isAuthenticatedCaller
+                // cookie-authenticated portal caller. Neither the anonymous standalone caller nor a
+                // client-credentials caller has a principal to check against it — the standalone caller's
+                // authorization is the IsPubliclyLaunchable opt-in above plus its callerId, and the
+                // client-credentials caller's is possession of its tenant-wide token; the same trust model
+                // /workflows/checkpoint/{token} uses (which likewise runs the license checks below while having
+                // no user permissions to test).
+                if (isPortalUserCaller
                     && !await ControllerAuthorizationExtensions.HasPermissionAsync(
                         authorizationService, httpContext.User, source.SourceSystemType, PermissionActionCode.Execute))
                 {
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
                 }
 
-                // Deliberately OUTSIDE the isAuthenticatedCaller guard: the license allow-list is a property of
-                // the deployment, not of the caller, so a standalone run must satisfy it too.
+                // Deliberately OUTSIDE the isPortalUserCaller guard: the license allow-list is a property of
+                // the deployment, not of the caller, so a standalone or client-credentials run must satisfy it too.
                 await licenseQuotaGuard.EnsureSourceConnectionStillAllowedAsync(
                     source.SourceSystemType, source.BaseUrl, cancellationToken);
             }
@@ -1776,7 +1865,7 @@ public static class WorkflowEndpoints
 
                 // Same split as the source loop above: user-permission check for the portal caller only, license
                 // allow-list for every caller.
-                if (isAuthenticatedCaller
+                if (isPortalUserCaller
                     && !await ControllerAuthorizationExtensions.HasPermissionAsync(
                         authorizationService, httpContext.User, destination.DestinationType, PermissionActionCode.Execute))
                 {
@@ -1790,7 +1879,7 @@ public static class WorkflowEndpoints
             // ErrorLogs use) so this run's ErrorLogs, audit trail, and outbound API Requests can all be found via
             // the same id — see the checkpoint endpoint below for the matching pattern.
             var runCorrelationId =
-                request?.CorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N");
+                requestedCorrelationId ?? currentUserService.CurrentUser.CorrelationId ?? Guid.NewGuid().ToString("N");
 
             // Continue the row validate-run already created for this attempt, rather than opening a second one, so
             // one user action is one Execution History entry spanning validation → sign-in → execution. Returns
@@ -1806,10 +1895,20 @@ public static class WorkflowEndpoints
                 workflowRunId,
                 runCorrelationId,
                 triggeredBy: currentUserService.CurrentUser.AuditName,
-                triggerType: "Manual",
+                triggerType: string.Equals(request?.TriggerType, "ExternalTrigger", StringComparison.OrdinalIgnoreCase)
+                    ? "ExternalTrigger"
+                    : "Manual",
                 targetPatientId: request?.PatientId,
                 patientSearchCriteria: request?.PatientSearchCriteria,
-                callerId: request?.CallerId);
+                callerId: request?.CallerId,
+                ehrEndpointCode: request?.TargetEhrEndpointId is { } targetEhrEndpointId && targetEhrEndpointId != Guid.Empty
+                    ? targetEhrEndpointId.ToString()
+                    : null,
+                sourceOverrides: effectiveGroupIdOverride is not null || effectiveSearchCriteriaOverride is not null
+                    || effectiveResourceCriteria is not null
+                    ? new FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides(
+                        effectiveGroupIdOverride?.Trim(), effectiveSearchCriteriaOverride?.Trim(), effectiveResourceCriteria)
+                    : null);
 
             if (request?.Async == true)
             {
@@ -1884,6 +1983,708 @@ public static class WorkflowEndpoints
         // A blanket RequireAuthorization here would 401 that second caller before the handler ever ran.
         // [CsrfExempt] because the surviving credential is never the session cookie: see CsrfExemptAttribute.
         }).AllowAnonymous().WithMetadata(new CsrfExemptAttribute());
+
+        // Backs the portal's "Execute V2" dialog: what this workflow runs against by default (its source connection's
+        // saved values) and the EHR Endpoints it could be run against instead, so the dialog can show exactly which
+        // settings would change. Read-only; the run itself is POST /workflows/{id}/run with targetEhrEndpointId.
+        group.MapGet("/workflows/{workflowId:guid}/run-options", async (
+            Guid workflowId,
+            IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            IEhrEndpointRepository ehrEndpointRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.NotFound();
+            }
+
+            FHIRBridge.Domain.Entities.SourceConnection? source = null;
+            foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
+            {
+                if (TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
+                {
+                    source = await configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+                    if (source is not null)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            // The resource types mapped on the workflow's destination nodes: what the Execute V2 dialog offers in its
+            // per-resource criteria dropdown.
+            var resourceTypes = workflow.Nodes
+                .Where(node => node.Category == WorkflowNodeCategory.Destination)
+                .SelectMany(node => GetConfiguredResourceTypes(node.ConfigurationJson))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (source is null)
+            {
+                return Results.Ok(new
+                {
+                    resourceTypes,
+                    supportsHospitalSwitch = false,
+                    hospitalSwitchReason = "This workflow has no source connection.",
+                    supportsRunCriteria = false,
+                    vendor = (string?)null,
+                    sourceName = (string?)null,
+                    defaults = (object?)null,
+                    retrieval = (object?)null,
+                    matchedEhrEndpointId = (Guid?)null,
+                    endpoints = Array.Empty<object>(),
+                });
+            }
+
+            string? reason = null;
+            var interactive = source.ApplicationType is { } applicationType && applicationType != ApplicationType.Backend;
+            var isBulkExport = string.Equals(source.Retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase);
+            if (interactive)
+            {
+                reason = "Only Backend System workflows can be switched to another hospital; this one signs in interactively.";
+            }
+            else if (isBulkExport)
+            {
+                reason = "Bulk export workflows cannot be run against another EHR Endpoint yet.";
+            }
+
+            static string TrimUrl(string? url) => (url ?? string.Empty).Trim().TrimEnd('/');
+
+            var vendor = source.SourceSystemType;
+            var endpoints = (await ehrEndpointRepository.GetAllAsync(cancellationToken))
+                .Where(e => e.Vendor == vendor)
+                .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var matched = endpoints.FirstOrDefault(e =>
+                string.Equals(TrimUrl(e.FhirBaseUrl), TrimUrl(source.BaseUrl), StringComparison.OrdinalIgnoreCase));
+
+            return Results.Ok(new
+            {
+                resourceTypes,
+                supportsHospitalSwitch = reason is null,
+                hospitalSwitchReason = reason,
+                supportsRunCriteria = !interactive,
+                retrieval = new
+                {
+                    method = source.Retrieval?.RetrievalMethod,
+                    exportScope = source.Retrieval?.ExportScope,
+                    groupId = source.Retrieval?.GroupId,
+                    searchCriteria = source.Retrieval?.SearchCriteria,
+                },
+                vendor = vendor.ToString(),
+                sourceName = source.Name,
+                defaults = new
+                {
+                    baseUrl = source.BaseUrl,
+                    tokenEndpoint = source.Authentication.TokenEndpoint,
+                    clientId = source.Authentication.ClientId,
+                    keyId = source.Authentication.KeyId,
+                    practiceId = source.Authentication.PracticeId,
+                },
+                matchedEhrEndpointId = matched?.Id,
+                endpoints = endpoints.Select(e => new
+                {
+                    id = e.Id,
+                    name = e.Name,
+                    status = e.Status,
+                    baseUrl = e.FhirBaseUrl,
+                    tokenEndpoint = e.TokenEndpoint,
+                    clientId = e.ClientId,
+                    keyId = e.KeyId,
+                    jwksUrl = e.JwksUrl,
+                    practiceId = e.PracticeId,
+                }),
+            });
+        }).RequireAuthorization(AuthorizationPolicies.WorkflowModuleAccess);
+
+        // ── External (browser-redirect) trigger: Client ID/Secret + Return URL, no Bearer token round trip ──────
+        // A third-party page POSTs straight here (a real top-level navigation, e.g. an HTML <form method="post">)
+        // and is redirected back to its own Return URL once the workflow is triggered (async) or finishes (sync).
+        // See ExternalWorkflowTriggerService for the credential/Return-URL/Referer validation this depends on —
+        // this handler trusts validation.ValidatedReturnUrl completely once that call succeeds, and redirects to
+        // it even on a later failure (unknown workflow, execution error): that URL was already confirmed against
+        // the caller's own registered allow-list, so redirecting to it is no longer an open-redirect risk. Before
+        // that call succeeds, every failure is a plain error response — never a redirect, since an unvalidated
+        // caller-supplied Return URL is exactly the open-redirect shape this whole design avoids.
+        group.MapPost("/workflows/external/run", async (
+            HttpContext httpContext,
+            IExternalWorkflowTriggerService triggerService,
+            IWorkflowDefinitionStore store,
+            IRankedWorkflowOrchestrator orchestrator,
+            IWorkflowRunTracker runTracker,
+            ILicenseQuotaGuard licenseQuotaGuard,
+            IConfigurationRepository configurationRepository,
+            IEhrEndpointOverrideProvider ehrEndpointOverrideProvider,
+            IServiceScopeFactory scopeFactory,
+            ILoggerFactory loggerFactory,
+            CancellationToken cancellationToken) =>
+        {
+            var fields = await ReadExternalTriggerFieldsAsync(httpContext.Request);
+            if (string.IsNullOrWhiteSpace(fields.ClientId) || string.IsNullOrWhiteSpace(fields.ClientSecret)
+                || string.IsNullOrWhiteSpace(fields.WorkflowId) || string.IsNullOrWhiteSpace(fields.ReturnUrl)
+                || !Guid.TryParse(fields.WorkflowId, out var workflowId))
+            {
+                return Results.Json(new { error = "invalid_request" }, statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var refererHeader = httpContext.Request.Headers.Referer.ToString() is { Length: > 0 } referer ? referer : null;
+            var validation = await triggerService.ValidateAsync(
+                fields.ClientId, fields.ClientSecret, fields.ReturnUrl, refererHeader, cancellationToken);
+            if (validation is null)
+            {
+                // Deliberately generic — never distinguishes bad credentials from an unregistered returnUrl from
+                // a Referer mismatch, and never redirects: the returnUrl isn't trusted yet at this point.
+                return Results.Json(new { error = "invalid_client" }, statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            // From here on, validation.ValidatedReturnUrl is trusted — every remaining failure redirects to it
+            // with a status/error rather than returning a bare error response.
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.Redirect(AppendExternalTriggerQuery(validation.ValidatedReturnUrl, "status=Failed&error=workflow_not_found"));
+            }
+
+            try
+            {
+                await EnsureLicenseAllowsRunAsync(workflow, licenseQuotaGuard, configurationRepository, cancellationToken);
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Results.Redirect(AppendExternalTriggerQuery(validation.ValidatedReturnUrl, "status=Failed&error=license_restricted"));
+            }
+
+            if (await ValidateEhrEndpointForRunAsync(
+                    workflow, fields.EhrEndpointCode, ehrEndpointOverrideProvider, configurationRepository, cancellationToken) is not null)
+            {
+                return Results.Redirect(AppendExternalTriggerQuery(validation.ValidatedReturnUrl, "status=Failed&error=ehr_endpoint_invalid"));
+            }
+
+            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria)
+                || !TryParseResourceCriteria(fields.ResourceCriteria, out _))
+            {
+                return Results.Redirect(AppendExternalTriggerQuery(validation.ValidatedReturnUrl, "status=Failed&error=invalid_request"));
+            }
+
+            var workflowRunId = Guid.NewGuid();
+            var context = new WorkflowExecutionContext(
+                workflowRunId,
+                workflowRunId.ToString("N"),
+                triggeredBy: $"ApiClient:{fields.ClientId}",
+                triggerType: "ExternalTrigger",
+                ehrEndpointCode: string.IsNullOrWhiteSpace(fields.EhrEndpointCode) ? null : fields.EhrEndpointCode.Trim(),
+                sourceOverrides: BuildExternalSourceOverrides(fields));
+
+            if (string.Equals(fields.Mode, "sync", StringComparison.OrdinalIgnoreCase))
+            {
+                // Same tracked-synchronous shape as /run's own sync branch (see its remarks on why a sync run
+                // still registers with the tracker), just redirecting to the validated returnUrl instead of
+                // returning the result body directly.
+                using var syncCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                runTracker.MarkRunning(workflowRunId, syncCancellationSource);
+                try
+                {
+                    var result = await orchestrator.ExecuteAsync(workflow, context, syncCancellationSource.Token);
+                    var status = result.WorkflowRun.Status == WorkflowRunStatus.Succeeded ? "Succeeded" : "Failed";
+                    return Results.Redirect(AppendExternalTriggerQuery(
+                        validation.ValidatedReturnUrl, $"status={status}&workflowRunId={workflowRunId}"));
+                }
+                catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // The return URL is already validated, so an unexpected failure is reported the same way every
+                    // other post-validation failure is — a redirect carrying a status — rather than a bare 500 the
+                    // caller's browser would strand on.
+                    loggerFactory.CreateLogger("WorkflowEndpoints")
+                        .LogError(exception, "External run {WorkflowRunId} for workflow {WorkflowId} failed.", workflowRunId, workflowId);
+                    return Results.Redirect(AppendExternalTriggerQuery(
+                        validation.ValidatedReturnUrl, $"status=Failed&workflowRunId={workflowRunId}"));
+                }
+                finally
+                {
+                    runTracker.MarkComplete(workflowRunId);
+                }
+            }
+
+            // Async (the default): fire-and-forget, same shape as /run's own async branch — the caller is
+            // redirected immediately and the run continues after the HTTP request (and this scope) ends.
+            var runCancellationSource = new CancellationTokenSource();
+            runTracker.MarkRunning(workflowRunId, runCancellationSource);
+
+            _ = Task.Run(async () =>
+            {
+                using var scope = scopeFactory.CreateScope();
+                var scopedOrchestrator = scope.ServiceProvider.GetRequiredService<IRankedWorkflowOrchestrator>();
+                var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
+                using var actorScope = ambientActorContext.BeginCorrelatedScope("External Workflow Run", context.CorrelationId);
+                try
+                {
+                    await scopedOrchestrator.ExecuteAsync(workflow, context, runCancellationSource.Token);
+                }
+                catch (Exception exception)
+                {
+                    loggerFactory.CreateLogger("WorkflowEndpoints")
+                        .LogError(exception, "External run {WorkflowRunId} for workflow {WorkflowId} failed.", workflowRunId, workflowId);
+                }
+                finally
+                {
+                    runTracker.MarkComplete(workflowRunId);
+                }
+            });
+
+            return Results.Redirect(AppendExternalTriggerQuery(
+                validation.ValidatedReturnUrl, $"status=Triggered&workflowRunId={workflowRunId}"));
+        }).AllowAnonymous().WithMetadata(new CsrfExemptAttribute()).RequireRateLimiting("oauth");
+
+        // Step 1 of the secure browser-redirect flow, called SERVER-TO-SERVER by the integrating app's backend (never
+        // from browser JS): proves the Client ID/Secret, checks the workflow exists and that return_url is on the
+        // client's Allowed Caller URLs, and returns a single-use ticket (~90 s) plus the URL to send the browser to.
+        // The Client Secret therefore never reaches a browser, and a captured link is nearly worthless.
+        group.MapPost("/workflows/external/launch-ticket", async (
+            HttpContext httpContext,
+            IExternalWorkflowTriggerService triggerService,
+            ExternalRunTicketService ticketService,
+            IWorkflowDefinitionStore store,
+            CancellationToken cancellationToken) =>
+        {
+            var fields = await ReadExternalTriggerFieldsAsync(httpContext.Request);
+            if (string.IsNullOrWhiteSpace(fields.ClientId) || string.IsNullOrWhiteSpace(fields.ClientSecret)
+                || !Guid.TryParse(fields.WorkflowId, out var workflowId))
+            {
+                return Results.Json(new { error = "invalid_request", error_description = "client_id, client_secret and workflow_id are required." },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria))
+            {
+                return Results.Json(new { error = "invalid_request", error_description = "group_id must be at most 200 characters and search_criteria at most 4000." },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            if (!TryParseResourceCriteria(fields.ResourceCriteria, out var ticketResourceCriteria))
+            {
+                return Results.Json(new { error = "invalid_request", error_description = ResourceCriteriaErrorDescription },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            Guid? apiClientId;
+            string? validatedReturnUrl = null;
+            if (!string.IsNullOrWhiteSpace(fields.ReturnUrl))
+            {
+                // A ticket is minted by a backend, so there is no browser Referer to compare.
+                var outcome = await triggerService.ValidateCallerAsync(
+                    fields.ClientId, fields.ClientSecret, fields.ReturnUrl, null, cancellationToken);
+                if (outcome.ApiClientId is null)
+                {
+                    return outcome.Error == "caller_url_not_allowed"
+                        ? Results.Json(new { error = outcome.Error, error_description = outcome.Description },
+                            statusCode: StatusCodes.Status403Forbidden)
+                        : Results.Json(new { error = "invalid_client" }, statusCode: StatusCodes.Status401Unauthorized);
+                }
+
+                apiClientId = outcome.ApiClientId;
+                validatedReturnUrl = fields.ReturnUrl;
+            }
+            else
+            {
+                apiClientId = await triggerService.ValidateCredentialAsync(fields.ClientId, fields.ClientSecret, null, cancellationToken);
+                if (apiClientId is null)
+                {
+                    return Results.Json(new { error = "invalid_client" }, statusCode: StatusCodes.Status401Unauthorized);
+                }
+            }
+
+            if (await store.GetAsync(workflowId, cancellationToken) is null)
+            {
+                return Results.Json(new { error = "workflow_not_found" }, statusCode: StatusCodes.Status404NotFound);
+            }
+
+            var ticket = ticketService.Issue(new ExternalRunTicket(
+                apiClientId.Value, fields.ClientId, workflowId, validatedReturnUrl,
+                string.IsNullOrWhiteSpace(fields.EhrEndpointCode) ? null : fields.EhrEndpointCode.Trim(),
+                fields.Mode, fields.WindowMode, fields.CloseOnComplete, string.Empty,
+                NullIfBlank(fields.GroupId), NullIfBlank(fields.SearchCriteria),
+                ticketResourceCriteria is null ? null : JsonSerializer.Serialize(ticketResourceCriteria)));
+
+            var runUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/api/v1/workflows/external/run-page?ticket={Uri.EscapeDataString(ticket)}";
+            return Results.Ok(new { ticket, run_url = runUrl, expires_in = (int)ExternalRunTicketService.Lifetime.TotalSeconds });
+        }).AllowAnonymous().WithMetadata(new CsrfExemptAttribute()).RequireRateLimiting("oauth");
+
+        // Kicks off a run and redirects to the PORTAL's own (anonymous) "watch it run" page — never renders
+        // HTML itself, and never puts the secret anywhere past this one request: the redirect target carries
+        // only workflowRunId, a random Guid that identifies nothing else about this client. The portal page
+        // polls /workflow-runs/external/{runId}/status (below) to show live progress and the final outcome.
+        //
+        // The run itself is always started in the background; mode only decides what the page does next:
+        // async (default) shows "execution started" and finishes with status=Triggered, sync polls to the outcome.
+        //
+        // Scope note, stated plainly rather than silently overclaimed: this does NOT pause a run mid-execution
+        // to hand off to an EHR's interactive consent screen and resume afterward — the runtime orchestrator has
+        // no such paused/resumable state. A source that requires interactive authorization (SMART Standalone/EHR
+        // Launch) must already have a valid cached token before a run through this path can succeed; if it
+        // doesn't, the run fails and the portal page shows that failure plainly (via WorkflowRun.ErrorMessage)
+        // rather than attempting a consent redirect it cannot actually resume from.
+        var runPageHandler = async (
+            HttpContext httpContext,
+            ExternalRunTicketService ticketService,
+            IExternalWorkflowTriggerService triggerService,
+            IWorkflowDefinitionStore store,
+            IWorkflowRunTracker runTracker,
+            ILicenseQuotaGuard licenseQuotaGuard,
+            IConfigurationRepository configurationRepository,
+            IEhrEndpointOverrideProvider ehrEndpointOverrideProvider,
+            IServiceScopeFactory scopeFactory,
+            ILoggerFactory loggerFactory,
+            IConfiguration configuration,
+            IInteractiveSourceAuthorizationService interactiveAuthorization,
+            IDataProtectionProvider dataProtectionProvider,
+            CancellationToken cancellationToken) =>
+        {
+            var portalBaseUrl = (configuration["Portal:BaseUrl"] ?? "http://localhost:4200").TrimEnd('/');
+
+            var fields = await ReadExternalTriggerFieldsAsync(httpContext.Request);
+
+            // Preferred path: a launch ticket minted server-to-server by POST /workflows/external/launch-ticket. It
+            // was validated when minted (credential, workflow, allowed caller URL), so nothing secret is needed --
+            // or accepted -- here. Single use, ~90 s lifetime.
+            ExternalRunTicket? ticket = null;
+            if (!string.IsNullOrWhiteSpace(fields.Ticket))
+            {
+                ticket = await ticketService.RedeemAsync(fields.Ticket, cancellationToken);
+                if (ticket is null)
+                {
+                    return Results.Redirect($"{portalBaseUrl}/external-run?error=invalid_ticket");
+                }
+
+                fields = new ExternalTriggerFields(
+                    ticket.ClientId, null, ticket.WorkflowId.ToString(), ticket.ReturnUrl, ticket.EhrEndpointCode,
+                    ticket.Mode, ticket.WindowMode, ticket.CloseOnComplete,
+                    GroupId: ticket.GroupId, SearchCriteria: ticket.SearchCriteria, ResourceCriteria: ticket.ResourceCriteria);
+            }
+            else if (!configuration.GetValue("ExternalTrigger:AllowBrowserCredentials", true))
+            {
+                // Credentials in the browser can be switched off per deployment once every caller uses tickets.
+                return Results.Redirect($"{portalBaseUrl}/external-run?error=ticket_required");
+            }
+
+            if (string.IsNullOrWhiteSpace(fields.ClientId) || (ticket is null && string.IsNullOrWhiteSpace(fields.ClientSecret))
+                || string.IsNullOrWhiteSpace(fields.WorkflowId) || !Guid.TryParse(fields.WorkflowId, out var workflowId))
+            {
+                return Results.Redirect($"{portalBaseUrl}/external-run?error=invalid_request");
+            }
+
+            var refererHeader = httpContext.Request.Headers.Referer.ToString() is { Length: > 0 } referer ? referer : null;
+
+            // A supplied return_url is where the caller wants the browser sent once the run finishes — an
+            // open-redirect target if trusted blindly, so it goes through the same registered-Return-URL +
+            // Referer validation /external/run applies. With none supplied, only the credential is checked.
+            Guid? apiClientId;
+            string? validatedReturnUrl = null;
+            if (ticket is not null)
+            {
+                apiClientId = ticket.ApiClientId;
+                validatedReturnUrl = ticket.ReturnUrl;
+            }
+            else if (!string.IsNullOrWhiteSpace(fields.ReturnUrl))
+            {
+                var validation = await triggerService.ValidateAsync(
+                    fields.ClientId, fields.ClientSecret!, fields.ReturnUrl, refererHeader, cancellationToken);
+                apiClientId = validation?.ApiClientId;
+                validatedReturnUrl = validation?.ValidatedReturnUrl;
+            }
+            else
+            {
+                apiClientId = await triggerService.ValidateCredentialAsync(fields.ClientId, fields.ClientSecret!, refererHeader, cancellationToken);
+            }
+
+            if (apiClientId is null)
+            {
+                return Results.Redirect($"{portalBaseUrl}/external-run?error=invalid_client");
+            }
+
+            // How the portal page should behave once the run finishes. The validated return URL is NOT put in the
+            // query string as-is (the portal would then redirect to whatever a crafted link says): it travels as a
+            // signed, expiring token that only GET /workflows/external/return can turn back into a redirect.
+            var behaviourQuery = new System.Text.StringBuilder();
+            behaviourQuery.Append(string.Equals(fields.WindowMode, "new", StringComparison.OrdinalIgnoreCase)
+                ? "&window=new" : "&window=same");
+            if (string.Equals(fields.CloseOnComplete, "true", StringComparison.OrdinalIgnoreCase)
+                || fields.CloseOnComplete == "1")
+            {
+                behaviourQuery.Append("&close=1");
+            }
+
+            // async (the default, like /external/run) = just start it and report "started"; sync = wait for the result.
+            behaviourQuery.Append(string.Equals(fields.Mode, "sync", StringComparison.OrdinalIgnoreCase) ? "&mode=sync" : "&mode=async");
+
+            if (validatedReturnUrl is not null)
+            {
+                var returnToken = dataProtectionProvider
+                    .CreateProtector(ExternalRunReturnProtectorPurpose)
+                    .ToTimeLimitedDataProtector()
+                    .Protect(validatedReturnUrl, TimeSpan.FromHours(2));
+                behaviourQuery.Append("&returnToken=").Append(Uri.EscapeDataString(returnToken));
+            }
+
+            var workflow = await store.GetAsync(workflowId, cancellationToken);
+            if (workflow is null)
+            {
+                return Results.Redirect($"{portalBaseUrl}/external-run?error=workflow_not_found");
+            }
+
+            try
+            {
+                await EnsureLicenseAllowsRunAsync(workflow, licenseQuotaGuard, configurationRepository, cancellationToken);
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Results.Redirect($"{portalBaseUrl}/external-run?error=license_restricted");
+            }
+
+            if (await ValidateEhrEndpointForRunAsync(
+                    workflow, fields.EhrEndpointCode, ehrEndpointOverrideProvider, configurationRepository, cancellationToken) is not null)
+            {
+                return Results.Redirect($"{portalBaseUrl}/external-run?error=ehr_endpoint_invalid");
+            }
+
+            if (RunOverridesTooLong(fields.GroupId, fields.SearchCriteria)
+                || !TryParseResourceCriteria(fields.ResourceCriteria, out _))
+            {
+                return Results.Redirect($"{portalBaseUrl}/external-run?error=invalid_request");
+            }
+
+            // A Standalone / Patient source can only obtain its token through an interactive sign-in and consent
+            // screen (the patient/provider authorizing at the EHR) — a background run would just fail with
+            // "no authorized token". That flow is browser-driven and keyed on a per-browser sessionId the page must
+            // persist across the redirect to the EHR and back (the token cache key), so it can't be started
+            // server-side here: hand off to the portal page, which runs the documented flow (token-status → mint
+            // launch URL → consent → run with callerId=sessionId). Only non-secret values travel in this redirect.
+            // EHR-launch sources can't be opened directly (the EHR invokes them), so they, and every
+            // non-interactive source, keep the plain background run below.
+            var applicationType = await interactiveAuthorization.GetWorkflowApplicationTypeAsync(workflowId, cancellationToken);
+            if (applicationType is ApplicationType.Standalone or ApplicationType.Patient)
+            {
+                var flow = applicationType == ApplicationType.Patient ? "patient" : "standalone";
+                var endpointQuery = Guid.TryParse(fields.EhrEndpointCode, out var parsedEndpointId) && parsedEndpointId != Guid.Empty
+                    ? $"&ehrEndpointId={parsedEndpointId}"
+                    : string.Empty;
+                // Group ID / Search Criteria cannot ride a browser redirect in the clear (anyone could edit them, and /run only
+                // accepts per-run overrides from signed-in portal users). They go as a signed, expiring token the portal page
+                // hands back to /run after the EHR sign-in.
+                var overridesToken = ExternalRunOverridesToken.Protect(
+                    dataProtectionProvider, workflowId, NullIfBlank(fields.GroupId), NullIfBlank(fields.SearchCriteria),
+                    TryParseResourceCriteria(fields.ResourceCriteria, out var tokenCriteria) && tokenCriteria is not null
+                        ? JsonSerializer.Serialize(tokenCriteria)
+                        : null);
+                var overridesQuery = overridesToken is null ? string.Empty : $"&overridesToken={Uri.EscapeDataString(overridesToken)}";
+                return Results.Redirect($"{portalBaseUrl}/external-run?workflowId={workflowId}&flow={flow}{endpointQuery}{overridesQuery}{behaviourQuery}");
+            }
+
+            var workflowRunId = Guid.NewGuid();
+            var context = new WorkflowExecutionContext(
+                workflowRunId,
+                workflowRunId.ToString("N"),
+                triggeredBy: $"ApiClient:{fields.ClientId}",
+                triggerType: "ExternalTrigger",
+                ehrEndpointCode: string.IsNullOrWhiteSpace(fields.EhrEndpointCode) ? null : fields.EhrEndpointCode.Trim(),
+                sourceOverrides: BuildExternalSourceOverrides(fields));
+
+            var runCancellationSource = new CancellationTokenSource();
+            runTracker.MarkRunning(workflowRunId, runCancellationSource);
+
+            _ = Task.Run(async () =>
+            {
+                using var scope = scopeFactory.CreateScope();
+                var scopedOrchestrator = scope.ServiceProvider.GetRequiredService<IRankedWorkflowOrchestrator>();
+                var ambientActorContext = scope.ServiceProvider.GetRequiredService<IAmbientActorContext>();
+                using var actorScope = ambientActorContext.BeginCorrelatedScope("External Workflow Run", context.CorrelationId);
+                try
+                {
+                    await scopedOrchestrator.ExecuteAsync(workflow, context, runCancellationSource.Token);
+                }
+                catch (Exception exception)
+                {
+                    loggerFactory.CreateLogger("WorkflowEndpoints")
+                        .LogError(exception, "External run-page {WorkflowRunId} for workflow {WorkflowId} failed.", workflowRunId, workflowId);
+                }
+                finally
+                {
+                    runTracker.MarkComplete(workflowRunId);
+                }
+            });
+
+            return Results.Redirect($"{portalBaseUrl}/external-run?runId={workflowRunId}{behaviourQuery}");
+        };
+
+        group.MapPost("/workflows/external/run-page", runPageHandler)
+            .AllowAnonymous().WithMetadata(new CsrfExemptAttribute()).RequireRateLimiting("oauth");
+        // GET is the launch-ticket redirect (a plain browser navigation carrying only ?ticket=).
+        group.MapGet("/workflows/external/run-page", runPageHandler)
+            .AllowAnonymous().WithMetadata(new CsrfExemptAttribute()).RequireRateLimiting("oauth");
+
+        // The return leg for /external/run-page: the portal's run page, once a run reaches a terminal state, sends
+        // the browser here with the signed token it was handed. Only the token can name the destination — the
+        // status/run id appended are whitelisted, never free text — so this can't be turned into an open redirect.
+        group.MapGet("/workflows/external/return", (
+            string? token,
+            string? status,
+            Guid? workflowRunId,
+            IDataProtectionProvider dataProtectionProvider) =>
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return Results.Json(new { error = "invalid_request" }, statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            string returnUrl;
+            try
+            {
+                returnUrl = dataProtectionProvider
+                    .CreateProtector(ExternalRunReturnProtectorPurpose)
+                    .ToTimeLimitedDataProtector()
+                    .Unprotect(token);
+            }
+            catch (System.Security.Cryptography.CryptographicException)
+            {
+                // Tampered, from another installation, or past its lifetime.
+                return Results.Json(new { error = "invalid_or_expired_token" }, statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var safeStatus = status is "Succeeded" or "Triggered" ? status : "Failed";
+            var query = workflowRunId is { } runId
+                ? $"status={safeStatus}&workflowRunId={runId}"
+                : $"status={safeStatus}";
+            return Results.Redirect(AppendExternalTriggerQuery(returnUrl, query));
+        }).AllowAnonymous().RequireRateLimiting("oauth");
+
+        // Anonymous status poll for the portal's external-run page above. Deliberately scoped by nothing but
+        // the runId itself (an unguessable random Guid, never listable) — same "tracking number" security
+        // model as e.g. a payment receipt link, and strictly less sensitive than the workflow list/EHR
+        // endpoint list already exposed to any valid Client ID/Secret on the other /external/* routes.
+        group.MapGet("/workflows/external/run-status/{runId:guid}", async (
+            Guid runId,
+            IWorkflowRunTracker runTracker,
+            IWorkflowRunStore runStore,
+            CancellationToken cancellationToken) =>
+        {
+            if (runTracker.IsRunning(runId))
+            {
+                return Results.Ok(new { status = "Running", errorMessage = (string?)null });
+            }
+
+            var run = await runStore.GetAsync(runId, cancellationToken);
+            if (run is null)
+            {
+                return Results.NotFound();
+            }
+
+            // Never run.ErrorMessage: this endpoint is anonymous and keyed only on a run id that travels through
+            // URLs and browser history, and a raw message can carry connection details or patient identifiers.
+            // Same rule the portal's own workflow list follows — a generic message plus the quotable reference id,
+            // which an operator resolves under Operations → Errors.
+            var failed = run.Status is WorkflowRunStatus.Failed or WorkflowRunStatus.PartialSuccess or WorkflowRunStatus.Cancelled;
+            var safeMessage = failed
+                ? "The workflow did not complete successfully." +
+                  (string.IsNullOrWhiteSpace(run.ErrorReferenceId) ? string.Empty : $" Reference ID: {run.ErrorReferenceId}")
+                : null;
+            return Results.Ok(new { status = run.Status.ToString(), errorMessage = safeMessage });
+        }).AllowAnonymous().RequireRateLimiting("oauth");
+
+        // Read-only counterpart used to populate a caller's own workflow picker (e.g. the demo app's trigger
+        // console) — same credential validation as /external/run, minus returnUrl/Referer since nothing redirects.
+        group.MapPost("/workflows/external/list", async (
+            HttpContext httpContext,
+            IExternalWorkflowTriggerService triggerService,
+            IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            CancellationToken cancellationToken) =>
+        {
+            var fields = await ReadExternalTriggerFieldsAsync(httpContext.Request);
+            if (string.IsNullOrWhiteSpace(fields.ClientId) || string.IsNullOrWhiteSpace(fields.ClientSecret))
+            {
+                return Results.Json(new { error = "invalid_request" }, statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            // The caller URL must be on this client's allowed list (same check as /external/run); nothing redirects
+            // here, but the list still shouldn't be readable from an unregistered caller.
+            if (string.IsNullOrWhiteSpace(fields.ReturnUrl))
+            {
+                return Results.Json(new { error = "invalid_request", error_description = "return_url is required." },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var validation = await triggerService.ValidateCallerAsync(
+                fields.ClientId, fields.ClientSecret, fields.ReturnUrl, httpContext.Request.Headers.Referer, cancellationToken);
+            if (validation.ApiClientId is null)
+            {
+                return validation.Error == "caller_url_not_allowed"
+                    ? Results.Json(new { error = validation.Error, error_description = validation.Description },
+                        statusCode: StatusCodes.Status403Forbidden)
+                    : Results.Json(new { error = "invalid_client" }, statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            var workflows = await store.ListAsync(cancellationToken);
+            var sources = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
+            var sourceInfoById = sources.ToDictionary(s => s.Id, s => (s.Name, SystemType: s.SourceSystemType.ToString()));
+
+            // sourceSystemType lets the EHR Endpoint Code picker filter to the vendor this workflow actually
+            // reads from (e.g. Epic vs Athena) instead of listing every endpoint across every vendor.
+            // resourceTypes (the types mapped on the destination nodes) populates the caller's per-resource
+            // criteria dropdown, sent back as resource_criteria.
+            return Results.Ok(workflows.Select(w =>
+            {
+                var (_, sourceSystemType) = ResolveWorkflowSource(w, sourceInfoById);
+                var resourceTypes = w.Nodes
+                    .Where(node => node.Category == WorkflowNodeCategory.Destination)
+                    .SelectMany(node => GetConfiguredResourceTypes(node.ConfigurationJson))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Order(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                return new { id = w.Id, name = w.Name, sourceSystemType, resourceTypes };
+            }));
+        }).AllowAnonymous().WithMetadata(new CsrfExemptAttribute()).RequireRateLimiting("oauth");
+
+        // Same credential-gated shape as /external/list, for the EHR Endpoint Code picker: a valid Client
+        // ID/Secret is all that's required (this isn't scoped to a single workflow, same as /external/list).
+        // Returns the EhrEndpoint's own Id (a Guid) as "code" — that's what ehr_endpoint_code identifies it
+        // by, not VendorEndpointId (the vendor's own external identifier for that same row). Unlike the fully
+        // anonymous /ehr-public-endpoints (a hospital PICKER for SMART Standalone Launch), which withholds even
+        // that Id by design, a valid credential here is the trust boundary that makes exposing it safe.
+        group.MapPost("/workflows/external/ehr-endpoints", async (
+            HttpContext httpContext,
+            IExternalWorkflowTriggerService triggerService,
+            IEhrEndpointService ehrEndpointService,
+            CancellationToken cancellationToken) =>
+        {
+            var fields = await ReadExternalTriggerFieldsAsync(httpContext.Request);
+            if (string.IsNullOrWhiteSpace(fields.ClientId) || string.IsNullOrWhiteSpace(fields.ClientSecret))
+            {
+                return Results.Json(new { error = "invalid_request" }, statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            // The caller URL must be on this client's allowed list (same check as /external/run); nothing redirects
+            // here, but the list still shouldn't be readable from an unregistered caller.
+            if (string.IsNullOrWhiteSpace(fields.ReturnUrl))
+            {
+                return Results.Json(new { error = "invalid_request", error_description = "return_url is required." },
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var validation = await triggerService.ValidateCallerAsync(
+                fields.ClientId, fields.ClientSecret, fields.ReturnUrl, httpContext.Request.Headers.Referer, cancellationToken);
+            if (validation.ApiClientId is null)
+            {
+                return validation.Error == "caller_url_not_allowed"
+                    ? Results.Json(new { error = validation.Error, error_description = validation.Description },
+                        statusCode: StatusCodes.Status403Forbidden)
+                    : Results.Json(new { error = "invalid_client" }, statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            var endpoints = await ehrEndpointService.GetAllAsync(cancellationToken);
+            return Results.Ok(endpoints.Select(e => new { code = e.Id, name = e.Name, vendor = e.Vendor.ToString() }));
+        }).AllowAnonymous().WithMetadata(new CsrfExemptAttribute()).RequireRateLimiting("oauth");
 
         // Lightweight poll target for an async /run — cheap enough to hit every second or two without pulling the
         // full node timeline. "Running" comes from IWorkflowRunTracker (the run hasn't reached a terminal state
@@ -2337,7 +3138,10 @@ public static class WorkflowEndpoints
                     run.BulkRequestId,
                     facetsByDefinitionId[run.WorkflowDefinitionId].DestinationTypes,
                     facetsByDefinitionId[run.WorkflowDefinitionId].ResourceTypes,
-                    facetsByDefinitionId[run.WorkflowDefinitionId].ApplicationType));
+                    facetsByDefinitionId[run.WorkflowDefinitionId].ApplicationType,
+                    run.EhrEndpointName ?? "Default",
+                    run.RunGroupId,
+                    run.RunSearchCriteria));
             }
 
             if (workflowId is { } wfId)
@@ -2530,7 +3334,10 @@ public static class WorkflowEndpoints
                 run.WorkflowDefinitionVersion,
                 run.CorrelationId,
                 run.ErrorReferenceId,
-                run.BulkRequestId));
+                run.BulkRequestId,
+                EhrEndpoint: run.EhrEndpointName ?? "Default",
+                RunGroupId: run.RunGroupId,
+                RunSearchCriteria: run.RunSearchCriteria));
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Live read of this run's FHIR Bulk Data $export job, proxied from the source server — backs the Execution
@@ -3385,6 +4192,95 @@ public static class WorkflowEndpoints
 
     // First Source-category node whose referenced connection resolves — good enough for Execution History display
     // (unlike /workflows/summary, this doesn't need the launch-vs-run precedence rule, just a name to show).
+    /// <summary>Checks, before a run is started, that the EHR Endpoint a caller named can actually be used with this
+    /// workflow, so a bad choice is reported to the caller instead of failing silently in a background task. Returns an
+    /// error message, or null when fine (also null for a code that is not an endpoint id, which is ignored as before).</summary>
+    private static async Task<string?> ValidateEhrEndpointForRunAsync(
+        WorkflowDefinition workflow,
+        string? ehrEndpointCode,
+        IEhrEndpointOverrideProvider ehrEndpointOverrideProvider,
+        IConfigurationRepository configurationRepository,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(ehrEndpointCode, out var endpointId) || endpointId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var endpoint = await ehrEndpointOverrideProvider.ResolveAsync(endpointId.ToString(), cancellationToken);
+        if (endpoint is null)
+        {
+            return "The selected EHR Endpoint was not found.";
+        }
+
+        foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
+        {
+            if (!TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
+            {
+                continue;
+            }
+
+            var source = await configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+            if (source is null || (source.ApplicationType is { } applicationType && applicationType != ApplicationType.Backend))
+            {
+                continue;
+            }
+
+            if (!string.Equals(source.SourceSystemType.ToString(), endpoint.Vendor, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"EHR Endpoint '{endpoint.Name}' is a {endpoint.Vendor} endpoint, but this workflow's source is {source.SourceSystemType}.";
+            }
+
+            if (string.Equals(source.Retrieval?.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Bulk export workflows cannot be run against another EHR Endpoint yet.";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The same up-front license/quota gate /workflows/{id}/run applies (run quota, then each source's and
+    /// destination's license allow-list); the external routes have no user principal, so only the deployment-level
+    /// checks apply. Throws the license exceptions the global handler maps to 403.</summary>
+    private static async Task EnsureLicenseAllowsRunAsync(
+        WorkflowDefinition workflow,
+        ILicenseQuotaGuard licenseQuotaGuard,
+        IConfigurationRepository configurationRepository,
+        CancellationToken cancellationToken)
+    {
+        await licenseQuotaGuard.EnsureCanStartNewRunAsync(cancellationToken);
+
+        foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Source))
+        {
+            if (!TryGetConfigurationGuid(node.ConfigurationJson, "sourceConnectionId", out var sourceConnectionId))
+            {
+                continue;
+            }
+
+            var source = await configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+            if (source is not null)
+            {
+                await licenseQuotaGuard.EnsureSourceConnectionStillAllowedAsync(
+                    source.SourceSystemType, source.BaseUrl, cancellationToken);
+            }
+        }
+
+        foreach (var node in workflow.Nodes.Where(n => n.Category == WorkflowNodeCategory.Destination))
+        {
+            if (!TryGetConfigurationGuid(node.ConfigurationJson, "destinationId", out var destinationId))
+            {
+                continue;
+            }
+
+            var destination = await configurationRepository.GetDestinationAsync(destinationId, cancellationToken);
+            if (destination is not null)
+            {
+                await licenseQuotaGuard.EnsureDestinationTypeAllowedAsync(destination.DestinationType, cancellationToken);
+            }
+        }
+    }
+
     private static (string? Name, string? SystemType) ResolveWorkflowSource(
         WorkflowDefinition workflow,
         IReadOnlyDictionary<Guid, (string Name, string SystemType)> sourceInfoById)
@@ -3796,6 +4692,168 @@ public static class WorkflowEndpoints
         return TryParseConfigurationSettings(configurationJson) is { } config
             && config[key]?.ToString() is { } raw
             && Guid.TryParse(raw, out value);
+    }
+
+    /// <summary>The run record stores these in bounded columns (Group ID 200, Search Criteria 4000); reject longer values
+    /// up front instead of failing when the run row is saved.</summary>
+    private static bool RunOverridesTooLong(string? groupId, string? searchCriteria) =>
+        (groupId?.Trim().Length ?? 0) > 200 || (searchCriteria?.Trim().Length ?? 0) > 4000;
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Group ID / Search Criteria the external caller supplied for this run only (blank = keep the saved ones).</summary>
+    private static FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides? BuildExternalSourceOverrides(ExternalTriggerFields fields)
+    {
+        var groupId = NullIfBlank(fields.GroupId);
+        var searchCriteria = NullIfBlank(fields.SearchCriteria);
+        TryParseResourceCriteria(fields.ResourceCriteria, out var resourceCriteria);
+        return groupId is null && searchCriteria is null && resourceCriteria is null
+            ? null
+            : new FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides(groupId, searchCriteria, resourceCriteria);
+    }
+
+    private const int MaxResourceCriteriaEntries = 50;
+    private const int MaxResourceCriteriaLength = 4000;
+    private const string ResourceCriteriaErrorDescription =
+        "resource_criteria must be a JSON object of resource type to FHIR search criteria (at most 50 entries, each at most 4000 characters).";
+
+    /// <summary>Parses the external caller's optional per-resource-type criteria, a JSON object such as
+    /// <c>{"Condition":"clinical-status=active","Observation":"category=vital-signs"}</c>. Blank/absent is valid and yields
+    /// null. Returns false for anything that is not such an object, a key that is not a plain resource type name, too many
+    /// entries or an over-long value. Entries with a blank value are dropped. Criteria values stay raw, as they are for the
+    /// saved "Criteria" button.</summary>
+    private static bool TryParseResourceCriteria(string? raw, out Dictionary<string, string>? criteria)
+    {
+        criteria = null;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return true;
+        }
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string?>>(raw);
+            if (parsed is null || parsed.Count > MaxResourceCriteriaEntries)
+            {
+                return false;
+            }
+
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (key, value) in parsed)
+            {
+                var resourceType = key.Trim();
+                if (resourceType.Length == 0 || resourceType.Length > 64 || !resourceType.All(char.IsAsciiLetter))
+                {
+                    return false;
+                }
+
+                var trimmed = value?.Trim();
+                if (string.IsNullOrEmpty(trimmed))
+                {
+                    continue;
+                }
+
+                if (trimmed.Length > MaxResourceCriteriaLength || !result.TryAdd(resourceType, trimmed))
+                {
+                    return false;
+                }
+            }
+
+            criteria = result.Count == 0 ? null : result;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private sealed record ExternalTriggerFields(
+        string? ClientId, string? ClientSecret, string? WorkflowId, string? ReturnUrl, string? EhrEndpointCode, string? Mode,
+        string? WindowMode = null, string? CloseOnComplete = null, string? Ticket = null,
+        string? GroupId = null, string? SearchCriteria = null, string? ResourceCriteria = null);
+
+    /// <summary>Reads the external-trigger fields from either a real HTML form POST (the primary, intended shape
+    /// — a plain &lt;form method="post"&gt; needs no JS) or a JSON body (for a programmatic/test caller).
+    /// Malformed input of either shape yields all-null fields rather than throwing, so the caller's own
+    /// null-check reports one generic "invalid_request" either way.</summary>
+    private static async Task<ExternalTriggerFields> ReadExternalTriggerFieldsAsync(HttpRequest request)
+    {
+        try
+        {
+            if (HttpMethods.IsGet(request.Method))
+            {
+                // The launch-ticket redirect: nothing but the opaque ticket travels in the URL.
+                return new ExternalTriggerFields(null, null, null, null, null, null, Ticket: request.Query["ticket"]);
+            }
+
+            if (request.HasFormContentType)
+            {
+                var form = await request.ReadFormAsync();
+                return new ExternalTriggerFields(
+                    form["client_id"], form["client_secret"], form["workflow_id"], form["return_url"],
+                    form["ehr_endpoint_code"], form["mode"], form["window_mode"], form["close_on_complete"], form["ticket"],
+                    form["group_id"], form["search_criteria"], form["resource_criteria"]);
+            }
+
+            // resource_criteria may be sent as a nested JSON object (the natural shape for a JSON caller) or as a JSON string
+            // (the only shape a form field can carry); every other field must still be a string or null, as before.
+            var element = await request.ReadFromJsonAsync<Dictionary<string, JsonElement>>()
+                ?? new Dictionary<string, JsonElement>();
+            string? resourceCriteria = null;
+            var json = new Dictionary<string, string?>();
+            foreach (var (key, value) in element)
+            {
+                if (key == "resource_criteria")
+                {
+                    resourceCriteria = value.ValueKind switch
+                    {
+                        JsonValueKind.Object => value.GetRawText(),
+                        JsonValueKind.String => value.GetString(),
+                        JsonValueKind.Null => null,
+                        _ => throw new JsonException("resource_criteria must be an object or a string."),
+                    };
+                    continue;
+                }
+
+                json[key] = value.ValueKind switch
+                {
+                    JsonValueKind.String => value.GetString(),
+                    JsonValueKind.Null => null,
+                    _ => throw new JsonException("Fields must be strings."),
+                };
+            }
+
+            return new ExternalTriggerFields(
+                json.GetValueOrDefault("client_id"), json.GetValueOrDefault("client_secret"),
+                json.GetValueOrDefault("workflow_id"), json.GetValueOrDefault("return_url"),
+                json.GetValueOrDefault("ehr_endpoint_code"), json.GetValueOrDefault("mode"),
+                json.GetValueOrDefault("window_mode"), json.GetValueOrDefault("close_on_complete"),
+                json.GetValueOrDefault("ticket"), json.GetValueOrDefault("group_id"), json.GetValueOrDefault("search_criteria"),
+                resourceCriteria);
+        }
+        catch (Exception exception) when (exception is JsonException
+                                          or InvalidOperationException // no/unknown Content-Type: not readable as JSON
+                                          or InvalidDataException // malformed or oversized form body
+                                          or IOException // truncated/garbled multipart stream
+                                          or BadHttpRequestException)
+        {
+            return new ExternalTriggerFields(null, null, null, null, null, null);
+        }
+    }
+
+    /// <summary>Appends fixed, whitelisted status/error tokens (never caller-supplied free text) to a
+    /// validated Return URL, correctly choosing '?' vs '&amp;' depending on whether it already has a query
+    /// string.</summary>
+    private static string AppendExternalTriggerQuery(string returnUrl, string queryToAppend)
+    {
+        // A Domain-mode Return URL may carry a fragment (e.g. https://app.example.com/#/done, common for hash-routed
+        // SPAs). Query parameters after a '#' are part of the fragment and never reach the server or the page's
+        // query string, so the parameters must go BEFORE it.
+        var fragmentStart = returnUrl.IndexOf('#');
+        var beforeFragment = fragmentStart >= 0 ? returnUrl[..fragmentStart] : returnUrl;
+        var fragment = fragmentStart >= 0 ? returnUrl[fragmentStart..] : string.Empty;
+        return beforeFragment + (beforeFragment.Contains('?') ? '&' : '?') + queryToAppend + fragment;
     }
 
     /// <summary>

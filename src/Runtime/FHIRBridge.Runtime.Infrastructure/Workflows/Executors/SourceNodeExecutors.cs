@@ -288,13 +288,30 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         var sourceConnectionId = ReadStringConfiguration(node, "sourceConnectionId");
         if (_sourceResolver is not null && Guid.TryParse(sourceConnectionId, out var connectionId))
         {
-            source = await _sourceResolver.ResolveAsync(
-                connectionId,
-                searchParameters,
-                context.TargetPatientId,
-                cancellationToken,
-                context.PatientSearchCriteria,
-                context.CallerId);
+            // "Execute V2" runs carry their own Group ID / Search Criteria; every other run takes the original call.
+            source = context.SourceOverrides is { } runSourceOverrides
+                ? await _sourceResolver.ResolveWithRunOverridesAsync(
+                    connectionId,
+                    searchParameters,
+                    context.TargetPatientId,
+                    cancellationToken,
+                    context.PatientSearchCriteria,
+                    context.CallerId,
+                    runSourceOverrides)
+                : await _sourceResolver.ResolveAsync(
+                    connectionId,
+                    searchParameters,
+                    context.TargetPatientId,
+                    cancellationToken,
+                    context.PatientSearchCriteria,
+                    context.CallerId);
+
+            // Opt-in hospital switch: only a run that explicitly named an EHR Endpoint carries an override. Without
+            // one this is a no-op and the source is exactly what the resolver returned.
+            if (source is not null && context.EhrEndpointOverride is { } ehrEndpointOverride)
+            {
+                source = EhrEndpointSourceOverride.Apply(source, ehrEndpointOverride);
+            }
         }
 
         // Fallback: an inline source configuration embedded in node config (used by the route→graph projection).
@@ -332,6 +349,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // combine; on every other search path a row is applied on top of that path's own scope in
         // SearchWithPolicyAsync.
         source = await ApplyResourceTypeCriteriaAsync(source, node, cancellationToken);
+        source = ApplyRunResourceCriteriaOverrides(source, context.SourceOverrides?.CriteriaByResourceType);
 
         // See TrustResolverSourceType's own remarks — trust the resolver's real SourceType for a vendor whose
         // client is actually registered; every other vendor keeps the existing override behavior unchanged.
@@ -862,7 +880,8 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             resources.RemoveRange(maxRecords, resources.Count - maxRecords);
         }
 
-        if (source.SourceConnectionId is { } resolvedSourceConnectionId && _syncCursorStore is not null && syncedResourceTypes.Count > 0)
+        if (source.SourceConnectionId is { } resolvedSourceConnectionId && _syncCursorStore is not null && syncedResourceTypes.Count > 0
+            && !source.RunOverridesActive)
         {
             var syncedAtUtc = DateTime.UtcNow;
             await _syncCursorStore.RecordSuccessfulSyncAsync(resolvedSourceConnectionId, syncedResourceTypes, syncedAtUtc, cancellationToken);
@@ -1166,6 +1185,40 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         return criteriaByResourceType.Count == 0
             ? source
             : source with { SearchCriteriaByResourceType = criteriaByResourceType };
+    }
+
+    /// <summary>
+    /// External-trigger runs only: overlays the criteria the caller supplied for THIS run onto
+    /// <see cref="FhirSourceConfiguration.SearchCriteriaByResourceType"/>. A type named here has its saved criteria
+    /// REPLACED (not merged — <see cref="MergeSearchParameters"/> keeps the first value of a repeated key, so a merge would
+    /// let the saved value win); a type not named keeps its saved criteria. Returns <paramref name="source"/> unchanged
+    /// when there is no override, so every other run is unaffected.
+    /// </summary>
+    private static FhirSourceConfiguration ApplyRunResourceCriteriaOverrides(
+        FhirSourceConfiguration source,
+        IReadOnlyDictionary<string, string>? overrides)
+    {
+        if (overrides is not { Count: > 0 })
+        {
+            return source;
+        }
+
+        var merged = new Dictionary<string, string>(
+            source.SearchCriteriaByResourceType ?? new Dictionary<string, string>(),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var (resourceType, criteria) in overrides)
+        {
+            merged[resourceType] = criteria;
+        }
+
+        // A Patient override is the caller's explicit Patient search: like RunSearchCriteriaActive for the run-wide
+        // criteria, the Patient fetch must use it as given and not also be pinned to the launched patient's _id.
+        var patientOverridden = overrides.Keys.Any(key => string.Equals(key, "Patient", StringComparison.OrdinalIgnoreCase));
+        return source with
+        {
+            SearchCriteriaByResourceType = merged,
+            RunSearchCriteriaActive = source.RunSearchCriteriaActive || patientOverridden,
+        };
     }
 
     private static IEnumerable<string> SplitSearchParameters(string? searchParameters) =>

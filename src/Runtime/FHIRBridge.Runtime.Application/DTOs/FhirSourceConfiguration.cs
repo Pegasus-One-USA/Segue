@@ -80,6 +80,19 @@ public sealed record FhirSourceConfiguration(
     // they are keyed by, so they are applied AFTER those scrubs rather than being removed by them. Null/absent
     // for a type leaves it on the pre-existing connection-wide fallback, unchanged.
     IReadOnlyDictionary<string, string>? SearchCriteriaByResourceType = null,
+    // Set ONLY when the run was explicitly started against an EHR Endpoint (EhrEndpointSourceOverride). Keeps that
+    // hospital's cached access tokens apart from the default configuration's; null for every ordinary run.
+    Guid? EhrEndpointId = null,
+    // True for an "Execute V2" run (other hospital and/or other Group ID / Search Criteria). Such a run reads a different
+    // slice of data than the saved configuration, so it neither uses nor advances the connection's incremental-sync
+    // watermarks (which belong to the saved hospital/criteria). False for every ordinary run.
+    bool RunOverridesActive = false,
+    // True only when THIS run supplied its own Search Criteria (an "Execute V2" / external-trigger override) - not for a
+    // run that merely switched hospital or Group ID. Those criteria are the caller's explicit Patient search (they are
+    // carried in SearchParameters), so the Patient fetch must use them as given and must not ALSO be pinned to the
+    // launched patient's _id: servers such as eClinicalWorks reject name=...&_id=... outright. The same rule already
+    // holds for PatientSearchCriteria, the other channel a caller can use to say "search for these patients".
+    bool RunSearchCriteriaActive = false,
     // Send no 'scope' on the token request at all, rather than the resolved scopes or the vendor wildcard. Set only
     // by the EHR write-back channel, for vendors that ignore the requested scope and grant whatever APIs the client
     // id is registered for (Epic, verified live). The granted scope is then read back from the token response. False

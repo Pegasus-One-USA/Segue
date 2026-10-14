@@ -68,7 +68,28 @@ public sealed record WorkflowRunRequest(
     // run id immediately instead of blocking until the whole DAG finishes — see IWorkflowRunTracker. Poll
     // GET /workflow-runs/{runId}/status (or the existing /workflow-runs/{runId} once terminal) for progress.
     // Omit/false keeps the pre-existing blocking behavior.
-    bool Async = false);
+    bool Async = false,
+    // Run THIS execution against a specific EHR Endpoint: its base URL / token endpoint / client id / key id / practice id
+    // replace the source connection's for this run only (EhrEndpointSourceOverride). Deliberately separate from
+    // EhrEndpointId above (the Standalone consent picker). Omit for the default run, which is unchanged.
+    Guid? TargetEhrEndpointId = null,
+    // "Execute V2": Group ID / Search Criteria for THIS run in place of the source connection's saved ones. Null keeps the
+    // saved value; an empty string clears it for this run. Not stored on the connection.
+    string? GroupIdOverride = null,
+    string? SearchCriteriaOverride = null,
+    // Set to "ExternalTrigger" by the hosted /external-run page, which runs an interactive (patient / provider) workflow on
+    // behalf of an external caller. Only that one value is honoured (anything else stays "Manual"); it labels the run in
+    // Execution History and grants no extra access.
+    string? TriggerType = null,
+    // Issued by POST /workflows/external/run-page (see ExternalRunOverridesToken) when an external trigger supplied its own
+    // Group ID / Search Criteria for an interactive (Standalone / Patient) workflow. The hosted /external-run page echoes it
+    // back here after the EHR sign-in. It is the proof that an authenticated trigger chose those values, so - unlike the
+    // plain GroupIdOverride / SearchCriteriaOverride above - it needs no signed-in portal user.
+    string? ExternalOverridesToken = null,
+    // "Execute V2": FHIR search criteria per resource type for THIS run (resource type -> criteria), replacing the saved
+    // per-resource-type criteria of each type named; a type not named keeps its saved criteria. Portal users only, like
+    // the other overrides above.
+    Dictionary<string, string>? ResourceCriteriaOverrides = null);
 
 public sealed record WorkflowRunStatusResponse(Guid WorkflowRunId, string Status, string? CorrelationId = null);
 
