@@ -6,6 +6,7 @@ import { LaunchProviderInAppComponent } from './demo-types/demo-type-2/launch-pr
 import { LaunchStandalonePatientComponent } from './demo-types/patient-standalone/launch-standalone-patient';
 import { AdminSettingsComponent } from './demo-types/admin-settings/admin-settings';
 import { ApiTestConsoleComponent } from './demo-types/api-test-console/api-test-console';
+import { QueryConsoleComponent } from './demo-types/query-console/query-console';
 // Per-role "Default | New 11" shells. Each wraps its role's existing screen (Default) plus the shared curated-_11
 // browser (New 11); the existing screens are imported by the wrappers, not here, and are otherwise untouched.
 import { PatientNew11Component } from './demo-types/new-11/patient-new11';
@@ -37,6 +38,10 @@ const PROVIDER_IN_APP_PATH = '/launchproviderinapp';
 // four sample APIs in the backend (see ApiEndpointTestEndpoints.cs) — independent of any HealthApp role, so it
 // bypasses the login gate the same way isProviderInAppLaunch does below, rather than living behind a role screen.
 const API_TEST_CONSOLE_PATH = '/api-test-console';
+
+// Admin-only screen for running read-only SQL against the HealthApp database. Unlike the API test console it sits
+// behind the login gate; app.html only renders it for the Admin role.
+const QUERY_CONSOLE_PATH = '/query-console';
 
 // True SMART Standalone Launch (provider-initiated, not EHR-initiated): reached only by a ProviderStandalone-role
 // login. Unlike PROVIDER_IN_APP_PATH above, there's no incoming iss/launch to detect pre-login — the redirect in
@@ -97,6 +102,7 @@ interface LoginResponse {
     ProviderInAppNew11Component,
     BackendSystemNew11Component,
     ApiTestConsoleComponent,
+    QueryConsoleComponent,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss'
@@ -124,6 +130,9 @@ export class App implements OnInit {
   })();
 
   // Evaluated once at boot, same reasoning as isProviderInAppLaunch above.
+  protected readonly isQueryConsole =
+    window.location.pathname.toLowerCase() === QUERY_CONSOLE_PATH;
+
   protected readonly isApiTestConsole =
     window.location.pathname.toLowerCase() === API_TEST_CONSOLE_PATH;
 
