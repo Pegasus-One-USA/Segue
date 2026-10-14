@@ -17,7 +17,7 @@ interface QueryResult {
   maxRows: number;
 }
 
-const DEFAULT_QUERY = 'SELECT TOP 50 * FROM Patients_11';
+const DEFAULT_QUERY = 'SELECT TOP 50 * FROM Patient_11';
 
 /** Admin-only screen: type a read-only SQL query, run it against the HealthApp database, render the rows as a
  *  table, and open any row in a popup as a vertical (field / value) form. */
