@@ -211,6 +211,12 @@
                   <span class="info-label">Last Login</span>
                   <span class="info-value">{{ formatDateTime(user()!.lastLoginAt) }}</span>
                 </div>
+                @if (user()!.roleSyncNote) {
+                  <div class="info-row">
+                    <span class="info-label">Role Source</span>
+                    <span class="info-value">{{ user()!.roleSyncNote }}</span>
+                  </div>
+                }
                 <div class="info-row">
                   <span class="info-label">Member Since</span>
                   <span class="info-value">{{ formatDate(user()!.createdAt) }}</span>

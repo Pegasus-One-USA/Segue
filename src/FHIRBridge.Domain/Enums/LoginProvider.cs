@@ -9,5 +9,6 @@ public enum LoginProvider
     Local = 0,
     Entra = 1,
     Google = 2,
-    Saml = 3
+    Saml = 3,
+    Ping = 4
 }

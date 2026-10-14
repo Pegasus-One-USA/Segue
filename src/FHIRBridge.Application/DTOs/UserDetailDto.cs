@@ -17,4 +17,5 @@ public sealed record UserDetailDto(
     string? InvitationToken,
     bool MfaEnabled,
     bool MustSetupMfa,
-    bool InvitationEmailSent = true);
+    bool InvitationEmailSent = true,
+    string? RoleSyncNote = null);

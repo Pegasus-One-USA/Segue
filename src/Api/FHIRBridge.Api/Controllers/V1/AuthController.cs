@@ -168,11 +168,25 @@ public sealed class AuthController : ControllerBase
         var magicLinkEnabled = await _settingsCache.GetBoolAsync(
             MagicLinkEnabledKey, _configuration.GetValue<bool>(MagicLinkEnabledKey), cancellationToken);
 
+        var ping = _configuration.GetSection("Authentication:Ping");
+        var pingEnabled = await _settingsCache.GetBoolAsync(
+            "Authentication:Ping:Enabled", ping.GetValue<bool>("Enabled"), cancellationToken);
+        var pingEnvironmentId = await _settingsCache.GetStringAsync(
+            "Authentication:Ping:EnvironmentId", ping["EnvironmentId"] ?? string.Empty, cancellationToken);
+        var pingAuthDomain = await _settingsCache.GetStringAsync(
+            "Authentication:Ping:AuthDomain", ping["AuthDomain"] ?? "auth.pingone.com", cancellationToken);
+        var pingClientId = await _settingsCache.GetStringAsync(
+            "Authentication:Ping:ClientId", ping["ClientId"] ?? string.Empty, cancellationToken);
+        var pingAuthority = pingEnabled && !string.IsNullOrWhiteSpace(pingEnvironmentId)
+            ? $"https://{pingAuthDomain.Trim().TrimEnd('/')}/{pingEnvironmentId}/as"
+            : null;
+
         var dto = new SsoConfigDto(
             new SsoEntraConfigDto(entraEnabled, authority, entraClientId),
             new SsoGoogleConfigDto(google.GetValue<bool>("Enabled"), google["ClientId"]),
             new SsoSamlConfigDto(samlEnabled),
-            new SsoMagicLinkConfigDto(magicLinkEnabled));
+            new SsoMagicLinkConfigDto(magicLinkEnabled),
+            new SsoPingConfigDto(pingEnabled, pingAuthority, pingClientId));
 
         return Ok(dto);
     }

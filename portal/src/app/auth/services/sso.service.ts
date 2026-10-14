@@ -27,13 +27,30 @@ import {
 } from '@azure/msal-browser';
 import { SsoConfigService } from './sso-config.service';
 
-export type SsoProvider = 'Entra' | 'Google';
+export type SsoProvider = 'Entra' | 'Google' | 'Ping';
 export interface SsoResult {
   provider: SsoProvider;
   token: string;
 }
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
+const PING_PKCE_KEY = 'segue.ping.pkce';
+
+interface PingPkceState {
+  state: string;
+  nonce: string;
+  verifier: string;
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let bin = '';
+  bytes.forEach(b => (bin += String.fromCharCode(b)));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function randomString(byteLength: number): string {
+  return base64Url(crypto.getRandomValues(new Uint8Array(byteLength)));
+}
 
 @Injectable({ providedIn: 'root' })
 export class SsoService {
@@ -93,11 +110,102 @@ export class SsoService {
    * Entra isn't enabled/configured — never throws, so it's safe to call unconditionally at startup.
    */
   async handleRedirectResponse(): Promise<SsoResult | null> {
+    // PingOne returns with ?code=...&state=... (authorization-code + PKCE); Entra's MSAL response is a
+    // URL fragment. A pending PKCE record in sessionStorage is what marks a boot as a Ping return.
+    const ping = await this.handlePingRedirect();
+    if (ping) return ping;
+
     try {
       const instance = await this.getMsal();
       const result: AuthenticationResult | null = await instance.handleRedirectPromise();
       if (!result?.idToken) return null;
       return { provider: 'Entra', token: result.idToken };
+    } catch {
+      return null;
+    }
+  }
+
+  // ─── PingOne (OIDC authorization code + PKCE, public client) ──────────────
+  /** Navigates the tab to PingOne's sign-in page. The response is picked up on the next app boot by
+   *  handlePingRedirect() (via handleRedirectResponse()), same shape as the Entra redirect flow. */
+  async signInWithPing(): Promise<void> {
+    await this.config.load();
+    if (!this.config.pingEnabled()) {
+      throw new Error('Ping sign-in is not enabled for this deployment.');
+    }
+    const authority = this.config.pingAuthority();
+    const clientId  = this.config.pingClientId();
+    if (!authority || !clientId) {
+      throw new Error('Ping sign-in is not configured.');
+    }
+
+    const pkce: PingPkceState = {
+      state: randomString(16),
+      nonce: randomString(16),
+      verifier: randomString(48),
+    };
+    const challenge = base64Url(new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pkce.verifier)),
+    ));
+    sessionStorage.setItem(PING_PKCE_KEY, JSON.stringify(pkce));
+
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: window.location.origin,
+      scope: 'openid email profile',
+      state: pkce.state,
+      nonce: pkce.nonce,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+    });
+    window.location.assign(`${authority}/authorize?${params.toString()}`);
+  }
+
+  /** Resolves to a result only when this boot is the return from PingOne; otherwise null. Never throws. */
+  private async handlePingRedirect(): Promise<SsoResult | null> {
+    const raw = sessionStorage.getItem(PING_PKCE_KEY);
+    if (!raw) return null;
+
+    const query = new URLSearchParams(window.location.search);
+    const code  = query.get('code');
+    const state = query.get('state');
+    if (!code && !query.get('error')) return null;
+
+    // One-shot: consume the PKCE record and strip the response from the address bar either way.
+    sessionStorage.removeItem(PING_PKCE_KEY);
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    try {
+      const pkce = JSON.parse(raw) as PingPkceState;
+      if (!code || state !== pkce.state) return null;
+
+      await this.config.load();
+      const authority = this.config.pingAuthority();
+      const clientId  = this.config.pingClientId();
+      if (!authority || !clientId) return null;
+
+      const response = await fetch(`${authority}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: window.location.origin,
+          client_id: clientId,
+          code_verifier: pkce.verifier,
+        }),
+      });
+      if (!response.ok) return null;
+
+      const idToken = (await response.json())?.id_token as string | undefined;
+      if (!idToken) return null;
+
+      // The API validates signature/issuer/audience; the nonce is only checkable here, so bind it to this tab.
+      const payload = JSON.parse(atob(idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload?.nonce !== pkce.nonce) return null;
+
+      return { provider: 'Ping', token: idToken };
     } catch {
       return null;
     }

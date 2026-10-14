@@ -12,6 +12,8 @@ public sealed class SsoConfigurationsServiceTests
 {
     private readonly Mock<ISystemSettingsCache> _settingsCache = new();
     private readonly Mock<ISystemSettingsService> _systemSettingsService = new();
+    private readonly Mock<FHIRBridge.Application.Abstractions.Security.ISecretWriter> _secretWriter = new();
+    private readonly Mock<FHIRBridge.Application.Abstractions.Security.IPingConnectionTester> _pingTester = new();
     private readonly SamlAuthenticationOptions _samlOptions = new()
     {
         Enabled = false,
@@ -47,7 +49,10 @@ public sealed class SsoConfigurationsServiceTests
             Options.Create(_samlOptions),
             Options.Create(_localAuthOptions),
             Options.Create(_entraOptions),
-            Options.Create(_googleOptions));
+            Options.Create(_googleOptions),
+            Options.Create(new PingAuthenticationOptions()),
+            _secretWriter.Object,
+            _pingTester.Object);
     }
 
     [Fact]

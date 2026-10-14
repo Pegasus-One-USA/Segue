@@ -95,6 +95,9 @@ export interface User {
   twoFactorEnabled:   boolean;
   invitedBy?:         string;
   lastLoginAt?:       string;
+  /** Set when an identity provider (e.g. PingOne SSO) changed or created this user's role, e.g.
+   *  "Role updated via Ping SSO on 2026-10-14: Admin to Audit". Absent for roles managed only in Segue. */
+  roleSyncNote?:      string;
   createdAt:          string;
   updatedAt:          string;
   createdBy?:         string | null;
@@ -227,6 +230,8 @@ export interface UserDetailDto {
   /** False when this response comes from an invite/resend call whose email failed to send. Absent on a
    *  plain user read (the backend defaults it to true there — not meaningful outside the invite flow). */
   invitationEmailSent?:      boolean;
+  /** See User.roleSyncNote. */
+  roleSyncNote?:             string | null;
 }
 
 /** Result of an invite / resend-invite call, surfaced to the UI so it can show the invite link. */

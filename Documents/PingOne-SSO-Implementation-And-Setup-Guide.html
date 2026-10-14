@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PingOne SSO Implementation and Setup Guide — FHIRBridge</title>
+<style>
+  :root {
+    --primary: #00A89D;
+    --primary-dark: #007A72;
+    --ink: #1E293B;
+    --muted: #64748B;
+    --border: #E2E8F0;
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --code-bg: #F1F5F9;
+    --backend: #6D28D9;
+    --backend-bg: #F3E8FF;
+    --frontend: #1D4ED8;
+    --frontend-bg: #DBEAFE;
+    --new: #059669;
+    --new-bg: #D1FAE5;
+    --modified: #D97706;
+    --modified-bg: #FEF3C7;
+    --deleted: #DC2626;
+    --deleted-bg: #FEE2E2;
+    --test: #4338CA;
+    --test-bg: #E0E7FF;
+    --ok-bg: #ECFDF5;
+    --warn-bg: #FFFBEB;
+    --info-bg: #EFF6FF;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink); background: var(--bg); margin: 0; line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+  header.doc-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff; padding: 48px 24px;
+  }
+  header.doc-header .wrap { padding: 0; }
+  header.doc-header h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header.doc-header p { margin: 0; font-size: 15px; opacity: .92; }
+  header.doc-header .meta { margin-top: 20px; display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; opacity: .9; }
+  header.doc-header .meta strong { display: block; }
+
+  h2 { font-size: 22px; font-weight: 800; margin: 56px 0 16px; padding-bottom: 10px; border-bottom: 2px solid var(--border); letter-spacing: -.3px; }
+  h2 .num { color: var(--primary); margin-right: 8px; }
+  h3 { font-size: 17px; font-weight: 700; margin: 32px 0 10px; }
+  h4 { font-size: 14px; font-weight: 700; margin: 22px 0 6px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+  p { margin: 0 0 12px; }
+  a { color: var(--primary-dark); }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 5px; }
+
+  code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font-family: Consolas, "Courier New", monospace; font-size: 12.5px; word-break: break-word; }
+  pre { background: #0F172A; color: #E2E8F0; padding: 16px 18px; border-radius: 8px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 0 0 16px; }
+  pre code { background: none; padding: 0; color: inherit; }
+
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 24px; margin-top: 28px; columns: 2; column-gap: 40px; }
+  .toc a { text-decoration: none; display: block; padding: 3px 0; font-size: 14px; }
+  .toc a:hover { text-decoration: underline; }
+
+  .callout { border-left: 4px solid var(--primary); background: var(--ok-bg); padding: 12px 16px; border-radius: 6px; margin: 0 0 16px; font-size: 14px; }
+  .callout.warn { border-color: var(--modified); background: var(--warn-bg); }
+  .callout.info { border-color: var(--frontend); background: var(--info-bg); }
+  .callout.danger { border-color: var(--deleted); background: var(--deleted-bg); }
+  .callout strong:first-child { display: block; margin-bottom: 2px; }
+
+  .tbl-wrap { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th { background: #F1F5F9; text-align: left; padding: 10px 12px; font-weight: 700; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .tag.new { background: var(--new-bg); color: var(--new); }
+  .tag.mod { background: var(--modified-bg); color: var(--modified); }
+  .tag.be { background: var(--backend-bg); color: var(--backend); }
+  .tag.fe { background: var(--frontend-bg); color: var(--frontend); }
+  .tag.test { background: var(--test-bg); color: var(--test); }
+  .tag.allow { background: var(--new-bg); color: var(--new); }
+  .tag.deny { background: var(--deleted-bg); color: var(--deleted); }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps > li { counter-increment: step; position: relative; padding: 12px 16px 12px 56px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+  .steps > li::before { content: counter(step); position: absolute; left: 14px; top: 12px; width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .steps > li ul { margin-top: 6px; }
+
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 0 0 20px; }
+  .flow .box { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--primary); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  .flow .box b { display: block; margin-bottom: 2px; }
+  .flow .arrow { align-self: center; color: var(--muted); font-weight: 700; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin: 0 0 14px; }
+  .card h4 { margin-top: 0; }
+
+  @media (max-width: 720px) {
+    .toc { columns: 1; }
+    header.doc-header h1 { font-size: 24px; }
+    .wrap { padding: 28px 16px 60px; }
+    .flow .arrow { display: none; }
+  }
+  @media print { header.doc-header { background: #fff; color: #000; } pre { white-space: pre-wrap; } }
+</style>
+</head>
+<body>
+
+<header class="doc-header">
+  <div class="wrap">
+    <h1>PingOne SSO — Implementation and Setup Guide</h1>
+    <p>How "Continue with Ping" sign-in and PingOne-driven roles were added to FHIRBridge (Segue): what changed and why, how every setting behaves, where each value comes from, and how to configure the PingOne account.</p>
+    <div class="meta">
+      <div><strong>Branch</strong>feature/ping-identity</div>
+      <div><strong>Date</strong>2026-10-14</div>
+      <div><strong>Audience</strong>Developers, administrators, support</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<nav class="toc" aria-label="Contents">
+  <a href="#overview">1. Overview and how it works</a>
+  <a href="#changes">2. Code changes, file by file</a>
+  <a href="#settings">3. Settings reference (every field)</a>
+  <a href="#conditions">4. Conditions and combinations, with examples</a>
+  <a href="#values">5. Where to get each field value</a>
+  <a href="#pingone">6. Setting up the PingOne account</a>
+  <a href="#segue">7. Configuring Segue</a>
+  <a href="#test">8. Testing checklist</a>
+  <a href="#troubleshoot">9. Troubleshooting</a>
+  <a href="#security">10. Security notes</a>
+  <a href="#tests">11. Automated tests</a>
+</nav>
+
+<!-- ================================================================ -->
+<h2 id="overview"><span class="num">1</span>Overview and how it works</h2>
+
+<p>Before this change, Segue supported local password login, magic link, Microsoft Entra ID, Google and SAML. This work adds <strong>PingOne</strong> as an OpenID Connect (OIDC) sign-in provider, and — the important part — makes PingOne the <strong>source of truth for roles</strong>. At every Ping sign-in Segue asks PingOne which groups the user belongs to, maps those groups to a Segue role using an admin-defined list, and applies the result.</p>
+
+<h3>What was built</h3>
+<ul>
+  <li>A <strong>"Continue with Ping"</strong> button on the login page (authorization-code flow with PKCE, no client secret in the browser).</li>
+  <li>Server-side validation of the PingOne ID token (signature, issuer, audience, lifetime).</li>
+  <li>A <strong>live role lookup</strong> through the PingOne Management API using a separate "worker" application.</li>
+  <li>An ordered <strong>group → role mapping</strong> editable on <em>Settings → SSO Configurations</em>, with policies for conflicts, unmapped users and role mismatches.</li>
+  <li><strong>Just-in-time (JIT) account creation</strong> for new Ping users whose group maps to a role.</li>
+  <li>A <strong>Test connection</strong> button, an audit trail of role changes, and a "Role Source" note on the user detail page.</li>
+  <li>Everything is editable at runtime (stored as system settings); <code>appsettings.json</code> only provides defaults. No restart needed.</li>
+</ul>
+
+<h3>Two applications in PingOne, two jobs</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>Application</th><th>PingOne type</th><th>Used by</th><th>Purpose</th><th>Secret?</th></tr>
+  <tr><td><strong>Portal app</strong></td><td>Single-Page App (OIDC)</td><td>The browser</td><td>Signs the person in and returns an ID token.</td><td>No — public client + PKCE</td></tr>
+  <tr><td><strong>Worker app</strong></td><td>Worker</td><td>The Segue API server</td><td>Reads the user's group membership from the Management API.</td><td>Yes — stored in the secret store, write-only in the UI</td></tr>
+</table></div>
+
+<h3>Sign-in sequence</h3>
+<div class="flow">
+  <div class="box"><b>1. Portal</b>Creates PKCE verifier, state and nonce; redirects to PingOne <code>/authorize</code>.</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>2. PingOne</b>User signs in; PingOne redirects back to the portal root with <code>?code=…</code>.</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>3. Portal</b>Checks state, exchanges the code at <code>/token</code>, checks the nonce, gets the ID token.</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>4. API</b>Validates the ID token (JWKS, issuer, audience).</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>5. API</b>Worker app token → <code>memberOfGroups</code> → map groups to roles → apply policy.</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>6. API</b>Issues the normal Segue session (JWT).</div>
+</div>
+
+<div class="callout info"><strong>Redirect URI</strong>The portal sends its own origin (for example <code>http://localhost:4200</code>) as the redirect URI. The <em>exact same string</em> must be registered on the PingOne portal app. The response is handled on the next app boot (the same pattern Entra uses).</div>
+
+<h3>Design decisions (the "why")</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>Decision</th><th>Reason</th></tr>
+  <tr><td>Roles fetched live at every login, not cached in Segue</td><td>Removing someone from a PingOne group takes effect at their next sign-in. PingOne stays the single place to manage access.</td></tr>
+  <tr><td>A user holds <strong>one</strong> Segue role; the mapping list is ordered</td><td>Matches how Segue works. The order decides which role wins when "Use mapping order" is selected.</td></tr>
+  <tr><td>Strict defaults (Deny) and strict fallback on unreadable values</td><td>A mis-saved or unknown value must never loosen access. Unknown values fall back to Deny / RestrictMismatch.</td></tr>
+  <tr><td>Worker secret is write-only; stored via the secret store</td><td>Never returned to the browser and never written to a settings row. Only a hint (length + last four characters) is shown so an admin can spot a bad paste.</td></tr>
+  <tr><td>Each provider validator owns its own "enabled" check</td><td>The repo forbids switching on provider types. Adding Ping meant adding a class, not editing a switch in the composite validator.</td></tr>
+  <tr><td>Host names validated as bare host names</td><td>The domains are put into URLs the server calls with credentials attached; a scheme, path, port or user-info must never be accepted (prevents credential forwarding / SSRF). The API host must be a <code>*.pingone.*</code> host.</td></tr>
+  <tr><td>Pagination links must stay on the configured API host</td><td>The bearer token is never sent to another host if PingOne (or an attacker) returns a foreign <code>next</code> link.</td></tr>
+  <tr><td>Outage must not lock out existing users (except in the strict mode)</td><td>If PingOne can't be reached, existing users keep their last roles — unless "Restrict sign-in if roles do not match" is selected, which refuses rather than fail open.</td></tr>
+</table></div>
+
+<!-- ================================================================ -->
+<h2 id="changes"><span class="num">2</span>Code changes, file by file</h2>
+
+<p>Legend: <span class="tag new">NEW</span> new file · <span class="tag mod">MOD</span> modified · <span class="tag be">Backend</span> · <span class="tag fe">Portal</span> · <span class="tag test">Test</span>.</p>
+
+<h3>2.1 Domain</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>File</th><th></th><th>What changed and why</th></tr>
+  <tr><td><code>FHIRBridge.Domain/Enums/LoginProvider.cs</code></td><td><span class="tag mod">MOD</span></td><td>Added <code>Ping = 4</code> so a user can be linked to a PingOne identity.</td></tr>
+  <tr><td><code>FHIRBridge.Domain/Entities/User.cs</code></td><td><span class="tag mod">MOD</span></td><td>Added <code>RoleSyncNote</code> (max 300 chars) and <code>RecordRoleSync()</code>. Records <em>why</em> a role changed without an admin editing it, e.g. "Role updated via Ping SSO on 2026-10-14: Audit to Admin".</td></tr>
+</table></div>
+
+<h3>2.2 Application layer</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>File</th><th></th><th>What changed and why</th></tr>
+  <tr><td><code>Application/Security/PingAuthenticationOptions.cs</code></td><td><span class="tag new">NEW</span></td><td>Binds <code>Authentication:Ping</code> in appsettings (defaults only; the screen overrides them).</td></tr>
+  <tr><td><code>Application/Security/PingGroupRoleMapping.cs</code></td><td><span class="tag new">NEW</span></td><td><code>PingGroupRoleMapper</code>: parse/serialize the ordered mapping JSON, read older shapes, and <code>MapInOrder</code> (case-insensitive, distinct roles, in mapping order).</td></tr>
+  <tr><td><code>Application/Security/PingSettingKeys.cs</code></td><td><span class="tag new">NEW</span></td><td>One definition of every <code>Authentication:Ping:*</code> system-setting key plus the worker-secret reference. Shared by the screen's service and the runtime reader so they cannot drift.</td></tr>
+  <tr><td><code>Application/Abstractions/Security/IExternalRoleResolver.cs</code></td><td><span class="tag new">NEW</span></td><td>Provider-neutral contract: "which Segue roles does the external IdP grant this identity?" Registered as a collection (strategy pattern, no switch).</td></tr>
+  <tr><td><code>…/ExternalRoleResolution.cs</code>, <code>ExternalRoleSyncMode.cs</code>, <code>ExternalRoleConflictMode.cs</code>, <code>ExternalNoRoleMode.cs</code></td><td><span class="tag new">NEW</span></td><td>The result record and the three policy enums (one type per file).</td></tr>
+  <tr><td><code>…/IPingConnectionTester.cs</code>, <code>ExternalConnectionTestResult.cs</code></td><td><span class="tag new">NEW</span></td><td>Contract behind the "Test connection" button and the secret hint; result message is safe to show an admin.</td></tr>
+  <tr><td><code>…/IUserPermissionsProvider.cs</code></td><td><span class="tag mod">MOD</span></td><td>Added <code>Invalidate(userId)</code> (default no-op) so cached permissions are dropped right after SSO changes a user's role.</td></tr>
+  <tr><td><code>Application/Services/ExternalRoleReconciler.cs</code></td><td><span class="tag new">NEW</span></td><td>All role logic for an external sign-in: live lookup, conflict handling, JIT creation, and reconciling an existing user (AutoSwitch / AllowDifferent / RestrictMismatch / no-mapped-group). Extracted from <code>SsoAuthService</code> to keep that service small.</td></tr>
+  <tr><td><code>Application/Services/SsoAuthService.cs</code></td><td><span class="tag mod">MOD</span></td><td>Now calls the reconciler once and produces clearer denial messages (disabled account vs. no account vs. no mapped group).</td></tr>
+  <tr><td><code>Application/Services/SsoConfigurationsService.cs</code>, <code>ISsoConfigurationsService.cs</code></td><td><span class="tag mod">MOD</span></td><td>Read/save the Ping settings, validate them (GUID environment id, bare host names, no duplicate groups, JSON length limit), write the worker secret through <code>ISecretWriter</code>, and expose <code>TestPingConnectionAsync</code>.</td></tr>
+  <tr><td><code>Application/DTOs/SsoConfigurationsRequests.cs</code></td><td><span class="tag mod">MOD</span></td><td>Ping DTOs for the settings screen. The secret is write-only: the response only says whether one is set, plus a hint.</td></tr>
+  <tr><td><code>Application/DTOs/SsoRequests.cs</code></td><td><span class="tag mod">MOD</span></td><td><code>SsoPingConfigDto</code>: the public values the login page needs (enabled, authority, client id).</td></tr>
+  <tr><td><code>Application/DTOs/UserDetailDto.cs</code>, <code>Services/UserManagementService.cs</code></td><td><span class="tag mod">MOD</span></td><td>Return <code>RoleSyncNote</code> to the portal.</td></tr>
+  <tr><td><code>Application/DependencyInjection.cs</code></td><td><span class="tag mod">MOD</span></td><td>Registers <code>IExternalRoleReconciler</code>.</td></tr>
+</table></div>
+
+<h3>2.3 Infrastructure layer</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>File</th><th></th><th>What changed and why</th></tr>
+  <tr><td><code>Security/PingSettingsReader.cs</code></td><td><span class="tag new">NEW</span></td><td>Reads settings live (screen value, else appsettings). Unknown enum text falls back to the strictest option. A secret entered on the screen wins over a Key Vault reference in appsettings.</td></tr>
+  <tr><td><code>Security/PingTokenValidator.cs</code></td><td><span class="tag new">NEW</span></td><td>Validates the PingOne ID token: signature via the environment's JWKS (discovered and cached), issuer, audience = portal client id, lifetime. Returns subject, email and name.</td></tr>
+  <tr><td><code>Security/PingManagementClient.cs</code></td><td><span class="tag new">NEW</span></td><td>All HTTP to PingOne: worker token (client-credentials; tries Basic then Post auth, cached until a minute before expiry), user lookup by email, paged group membership, host-pinned pagination.</td></tr>
+  <tr><td><code>Security/PingRoleResolver.cs</code></td><td><span class="tag new">NEW</span></td><td>Implements <code>IExternalRoleResolver</code>: applies to Ping logins (and SAML when "apply to SAML" is on), finds the PingOne user, maps groups to roles. An outage returns a "failed" result instead of throwing.</td></tr>
+  <tr><td><code>Security/PingConnectionTester.cs</code></td><td><span class="tag new">NEW</span></td><td>Test connection: forces a fresh token then reads one group, and turns each failure into a clear admin message. Also builds the secret hint.</td></tr>
+  <tr><td><code>Security/PingApiException.cs</code></td><td><span class="tag new">NEW</span></td><td>Carries the failing step and PingOne's own error text; maps (step, HTTP status) to guidance.</td></tr>
+  <tr><td><code>Security/IProviderTokenValidator.cs</code>, <code>EntraTokenValidator.cs</code>, <code>GoogleTokenValidator.cs</code></td><td><span class="tag mod">MOD</span></td><td>Added <code>IsEnabledAsync</code> so each provider owns its enabled check. No behaviour change for Entra/Google.</td></tr>
+  <tr><td><code>Security/CompositeExternalTokenValidator.cs</code></td><td><span class="tag mod">MOD</span></td><td>Removed the <code>switch</code> on provider; now asks the matching validator whether it is enabled. This is what lets a new provider be "just a class". (Only visible difference: an unregistered provider now reports "not enabled".)</td></tr>
+  <tr><td><code>Security/CachedUserPermissionsProvider.cs</code></td><td><span class="tag mod">MOD</span></td><td>Implements <code>Invalidate</code> (removes the user's cached permissions).</td></tr>
+  <tr><td><code>DependencyInjection.cs</code></td><td><span class="tag mod">MOD</span></td><td>Registers the validator, settings reader, management client (named HTTP client, 10 s timeout), resolver and tester.</td></tr>
+  <tr><td><code>Persistence/Configurations/UserConfiguration.cs</code></td><td><span class="tag mod">MOD</span></td><td>Maps <code>RoleSyncNote</code> (max length 300).</td></tr>
+  <tr><td><code>Persistence/Migrations/20261014042617_AddUserRoleSyncNote*.cs</code> + snapshot</td><td><span class="tag new">NEW</span> <span class="tag mod">MOD</span></td><td>SQL Server migration: nullable <code>nvarchar(300)</code> column <code>Users.RoleSyncNote</code>.</td></tr>
+  <tr><td><code>Infrastructure.Migrations.PostgreSql/Migrations/20261014042842_AddUserRoleSyncNote*.cs</code> + snapshot</td><td><span class="tag new">NEW</span> <span class="tag mod">MOD</span></td><td>Same column for PostgreSQL (<code>varchar(300)</code>).</td></tr>
+</table></div>
+
+<h3>2.4 API</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>File</th><th></th><th>What changed and why</th></tr>
+  <tr><td><code>Api/Controllers/V1/AuthController.cs</code></td><td><span class="tag mod">MOD</span></td><td>The public SSO config endpoint now includes <code>ping</code>: enabled, authority (<code>https://{authDomain}/{envId}/as</code>) and client id. Authority is <code>null</code> when Ping is off or incomplete.</td></tr>
+  <tr><td><code>Api/Controllers/V1/SsoConfigurationsController.cs</code></td><td><span class="tag mod">MOD</span></td><td>New <code>POST /api/v1/system/sso-configurations/ping/test</code>.</td></tr>
+  <tr><td><code>Api/appsettings.json</code></td><td><span class="tag mod">MOD</span></td><td>Added a disabled <code>Authentication:Ping</code> block with defaults (<code>auth.pingone.com</code>, <code>api.pingone.com</code>, JIT on, apply-to-SAML on, empty mappings).</td></tr>
+</table></div>
+
+<h3>2.5 Portal (Angular)</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>File</th><th></th><th>What changed and why</th></tr>
+  <tr><td><code>auth/services/sso.service.ts</code></td><td><span class="tag mod">MOD</span></td><td><code>signInWithPing()</code> (PKCE + state + nonce, redirect) and <code>handlePingRedirect()</code> (verify state, exchange code, verify nonce). A pending PKCE record in <code>sessionStorage</code> marks a boot as a Ping return.</td></tr>
+  <tr><td><code>auth/services/sso-config.service.ts</code></td><td><span class="tag mod">MOD</span></td><td>Reads <code>ping</code> from the public config; the button shows only when enabled with an authority and client id.</td></tr>
+  <tr><td><code>auth/components/sso-buttons/*</code></td><td><span class="tag mod">MOD</span></td><td>"Continue with Ping" button and click handler.</td></tr>
+  <tr><td><code>app.config.ts</code></td><td><span class="tag mod">MOD</span></td><td>On boot, if the Ping return fails, the API's own reason is passed to the login page through <code>sessionStorage</code> (not the URL, so a crafted link cannot show arbitrary text).</td></tr>
+  <tr><td><code>auth/pages/login/login.component.ts</code></td><td><span class="tag mod">MOD</span></td><td>Shows the API's reason (e.g. "not in any group linked to a Segue role") instead of a generic message.</td></tr>
+  <tr><td><code>settings/pages/sso-configurations/*.html / .ts / .scss</code></td><td><span class="tag mod">MOD</span></td><td>New "Ping Identity (PingOne)" card: credentials, ordered mapping editor (add/remove/move), policy radios, Test connection.</td></tr>
+  <tr><td><code>settings/models/sso-configurations.model.ts</code>, <code>services/sso-configurations.service.ts</code>, <code>core/api-endpoints.ts</code></td><td><span class="tag mod">MOD</span></td><td>Types, <code>testPing()</code> call and endpoint constant.</td></tr>
+  <tr><td><code>auth/models/user.model.ts</code>, <code>services/api-user.service.ts</code>, <code>user-management/pages/user-detail/*.html</code></td><td><span class="tag mod">MOD</span></td><td>Carry <code>roleSyncNote</code> and show it as a "Role Source" row on the user detail page.</td></tr>
+</table></div>
+
+<h3>2.6 Tests</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>File</th><th></th><th>Covers</th></tr>
+  <tr><td><code>Auth/PingGroupRoleMapperTests.cs</code></td><td><span class="tag test">NEW</span></td><td>Parsing, ordering, case-insensitivity, older formats.</td></tr>
+  <tr><td><code>Auth/PingRoleResolverTests.cs</code></td><td><span class="tag test">NEW</span></td><td>Group lookup by id and name, mapping order, response shapes, SAML applicability, failures.</td></tr>
+  <tr><td><code>Auth/SsoAuthServicePingRolesTests.cs</code></td><td><span class="tag test">NEW</span></td><td>Every sync/conflict/no-group/JIT combination in section 4.</td></tr>
+  <tr><td><code>Auth/SsoConfigurationsPingTests.cs</code></td><td><span class="tag test">NEW</span></td><td>Saving and validating the Ping settings, secret handling.</td></tr>
+  <tr><td><code>Auth/SsoConfigurationsServiceTests.cs</code></td><td><span class="tag mod">MOD</span></td><td>Constructor updated for the new dependencies.</td></tr>
+</table></div>
+
+<!-- ================================================================ -->
+<h2 id="settings"><span class="num">3</span>Settings reference (every field)</h2>
+<p>Open <strong>Settings → SSO Configurations → Ping Identity (PingOne)</strong>. Changes apply immediately after <strong>Save</strong>; no restart.</p>
+
+<div class="tbl-wrap"><table>
+  <tr><th>Field</th><th>Default</th><th>Required when</th><th>What it does</th></tr>
+  <tr><td><strong>Enabled</strong></td><td>Off</td><td>—</td><td>Master switch. Off: the Ping button is hidden and Ping tokens are rejected. Turning it on requires a valid Environment ID and Portal Client ID.</td></tr>
+  <tr><td><strong>Environment ID</strong></td><td>empty</td><td>Enabled</td><td>PingOne environment GUID. Part of the authority and Management API URLs.</td></tr>
+  <tr><td><strong>Auth Domain</strong></td><td><code>auth.pingone.com</code></td><td>Region ≠ North America</td><td>PingOne authorization host for your region. Bare host name only.</td></tr>
+  <tr><td><strong>API Domain</strong></td><td><code>api.pingone.com</code></td><td>Region ≠ North America</td><td>Management API host. Must be a <code>*.pingone.*</code> host, same region as the Auth Domain.</td></tr>
+  <tr><td><strong>Portal App Client ID</strong></td><td>empty</td><td>Enabled</td><td>Client ID of the Single-Page App. Used for sign-in and as the expected token audience.</td></tr>
+  <tr><td><strong>Worker App Client ID</strong></td><td>empty</td><td>Roles from Ping</td><td>Client ID of the Worker app that reads groups.</td></tr>
+  <tr><td><strong>Worker App Client Secret</strong></td><td>none</td><td>Roles from Ping</td><td>Write-only. Blank keeps the stored secret; a value replaces it. Trimmed of stray spaces/newlines.</td></tr>
+  <tr><td><strong>Create an account on first sign-in…</strong> (JIT)</td><td>On</td><td>—</td><td>Creates a Segue user for a new Ping identity <em>only if</em> one of their groups maps to a role.</td></tr>
+  <tr><td><strong>Also apply Ping roles to SAML sign-ins</strong></td><td>On</td><td>—</td><td>Treats a SAML login like a Ping login for role resolution; the user is found in PingOne by email (must match exactly one PingOne user).</td></tr>
+  <tr><td><strong>Group to role mapping</strong></td><td>empty</td><td>Roles from Ping</td><td>Ordered rows of <em>PingOne Group ID or exact name</em> → <em>one Segue role</em>. A group may appear only once. Top row = highest priority.</td></tr>
+  <tr><td><strong>More than one role (conflict)</strong></td><td>Deny</td><td>—</td><td><code>Deny</code>: refuse sign-in. <code>UseMappingOrder</code>: the top matching row decides.</td></tr>
+  <tr><td><strong>No mapped group</strong></td><td>Deny</td><td>—</td><td><code>Deny</code>: refuse. <code>AllowSegueRole</code>: existing users sign in with the role they already hold.</td></tr>
+  <tr><td><strong>Role mismatch</strong></td><td>Auto-switch</td><td>—</td><td>Checkbox <em>Auto-switch</em> = <code>AutoSwitch</code>. Unchecked → pick <code>AllowDifferent</code> or <code>RestrictMismatch</code>.</td></tr>
+  <tr><td><strong>Test connection</strong></td><td>—</td><td>—</td><td>Tests the <em>saved</em> settings (save first). The button is disabled while the form has unsaved changes.</td></tr>
+</table></div>
+
+<div class="callout warn"><strong>Precedence</strong>A value saved on the screen overrides <code>appsettings.json</code>. A worker secret saved on the screen overrides a Key Vault reference configured in appsettings (<code>WorkerClientSecretKeyVaultName</code> / <code>WorkerClientSecretName</code>). Unrecognised saved policy values fall back to the strictest option (<code>RestrictMismatch</code> / <code>Deny</code>).</div>
+
+<h3>Validation rules enforced on Save</h3>
+<ul>
+  <li>When enabled: Environment ID must be a GUID and Portal Client ID is required.</li>
+  <li>Auth Domain must be a bare host name (<code>auth.pingone.com</code>, not <code>https://…</code> or with a path/port).</li>
+  <li>API Domain must be a PingOne host (<code>api.pingone.com</code>, <code>api.pingone.eu</code>, …).</li>
+  <li>Every mapping row needs both a group and a role; a group cannot be mapped twice.</li>
+  <li>The serialized mapping must fit in 1,900 characters (the setting value limit is 2,000).</li>
+</ul>
+
+<!-- ================================================================ -->
+<h2 id="conditions"><span class="num">4</span>Conditions and combinations, with examples</h2>
+
+<p>The examples use these mappings (top row = highest priority) and Segue roles that already exist:</p>
+<div class="tbl-wrap"><table>
+  <tr><th>#</th><th>PingOne group (ID or name)</th><th>Segue role</th></tr>
+  <tr><td>1</td><td><code>Segue-Admins</code></td><td>Admin</td></tr>
+  <tr><td>2</td><td><code>Segue-Operators</code></td><td>Operations</td></tr>
+  <tr><td>3</td><td><code>Segue-Auditors</code></td><td>Audit</td></tr>
+</table></div>
+<p>Group matching is case-insensitive and works with either the PingOne group ID or its name. A role name in the mapping that does not exist in Segue is ignored (a warning is logged).</p>
+
+<h3>4.1 Decision order at sign-in</h3>
+<ol class="steps">
+  <li><strong>Provider enabled?</strong> Ping off → "The 'Ping' identity provider is not enabled."</li>
+  <li><strong>ID token valid?</strong> Bad signature, issuer, audience or expired → rejected and logged.</li>
+  <li><strong>Find the Segue user</strong> by PingOne subject, else by email.</li>
+  <li><strong>Role lookup</strong> (Ping, or SAML when "apply to SAML" is on): worker token → <code>memberOfGroups</code> → mapped roles in mapping order.</li>
+  <li><strong>Several different roles?</strong> Apply the conflict setting (4.3).</li>
+  <li><strong>No account?</strong> Apply JIT (4.5). <strong>Account exists?</strong> Apply no-mapped-group (4.4) and mismatch (4.2) policies.</li>
+  <li><strong>Account disabled?</strong> Refuse.</li>
+  <li>Issue the Segue session.</li>
+</ol>
+
+<h3>4.2 Existing user: Segue role vs. Ping role</h3>
+<p>Applies when the user already has a Segue account and at least one group maps to a role.</p>
+<div class="tbl-wrap"><table>
+  <tr><th>Setting</th><th>Segue role = Ping role</th><th>Segue role ≠ Ping role</th><th>Example</th></tr>
+  <tr><td><strong>Auto-switch</strong> (<code>AutoSwitch</code>)</td><td><span class="tag allow">Sign in</span> no change</td><td><span class="tag allow">Sign in</span> role is <strong>changed</strong> to the Ping role; note saved on the user; audit entry <code>SSO:Ping:RoleUpdated</code></td><td>Jane is Audit in Segue, in group <code>Segue-Admins</code> → becomes Admin. User page shows "Role updated via Ping SSO on 2026-10-14: Audit to Admin".</td></tr>
+  <tr><td><strong>Allow different</strong> (<code>AllowDifferent</code>)</td><td><span class="tag allow">Sign in</span></td><td><span class="tag allow">Sign in</span> keeps the Segue role; nothing changes</td><td>Same Jane signs in as Audit even though Ping says Admin.</td></tr>
+  <tr><td><strong>Restrict</strong> (<code>RestrictMismatch</code>)</td><td><span class="tag allow">Sign in</span></td><td><span class="tag deny">Refused</span> "Your Segue role (Audit) does not match your PingOne role (Admin). Ask an administrator to align them."</td><td>Jane is blocked until an admin aligns the roles.</td></tr>
+</table></div>
+<div class="callout info"><strong>"Matches" means exactly one role</strong>A user matches only if they hold <em>exactly one</em> Segue role and it is the Ping-mapped one. A user with two roles in Segue is treated as a mismatch; auto-switch reduces them to the single Ping role.</div>
+
+<h3>4.3 User in several mapped groups (conflict)</h3>
+<p>Only triggers when the groups map to <em>different</em> roles. Two groups that both map to Admin, or groups not in the list, never cause a conflict.</p>
+<div class="tbl-wrap"><table>
+  <tr><th>Conflict setting</th><th>Result</th><th>Example: Sam is in <code>Segue-Operators</code> and <code>Segue-Auditors</code></th></tr>
+  <tr><td><strong>Deny</strong> (default)</td><td><span class="tag deny">Refused</span> "Your PingOne groups are linked to more than one Segue role…". Audit entry lists the roles.</td><td>Sam cannot sign in until removed from one group (or the setting changes).</td></tr>
+  <tr><td><strong>UseMappingOrder</strong></td><td><span class="tag allow">Continues</span> with the top-most matching row's role, then 4.2 applies.</td><td>Operations is row 2, Audit is row 3 → Sam gets <strong>Operations</strong>.</td></tr>
+</table></div>
+
+<h3>4.4 Existing user in no mapped group</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>Setting</th><th>Result</th><th>Example</th></tr>
+  <tr><td><strong>Deny</strong> (default)</td><td><span class="tag deny">Refused</span> "Your PingOne account is not in any group that is linked to a Segue role. Ask an administrator to add you to a mapped group." (in every mismatch mode)</td><td>Pat has a Segue account but is only in <code>Finance</code> in Ping → blocked.</td></tr>
+  <tr><td><strong>AllowSegueRole</strong></td><td><span class="tag allow">Sign in</span> with the existing Segue role, untouched. No note, no change.</td><td>Pat signs in with whatever role Segue already gives them.</td></tr>
+</table></div>
+
+<h3>4.5 User with no Segue account</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>JIT setting</th><th>Mapped group?</th><th>Result</th></tr>
+  <tr><td>On</td><td>Yes</td><td><span class="tag allow">Account created</span> and signed in. Role = mapped role; note "Created via Ping SSO on … with role …"; audit entry <code>SSO:Ping:Provisioned</code>. Example: new hire Lee in <code>Segue-Auditors</code> gets an Audit account on first sign-in.</td></tr>
+  <tr><td>On</td><td>No</td><td><span class="tag deny">Refused</span> "No Segue account exists for this PingOne user, and none of their groups is linked to a Segue role. Ask an administrator."</td></tr>
+  <tr><td>Off</td><td>Yes</td><td><span class="tag deny">Refused</span> "No Segue account exists for this identity. Ask an administrator to create one for you."</td></tr>
+  <tr><td>Off</td><td>No</td><td><span class="tag deny">Refused</span> (same as above; an admin must create the account first, e.g. by invitation)</td></tr>
+</table></div>
+<p>The "no-mapped-group" setting never lets a person without a Segue account in.</p>
+
+<h3>4.6 Disabled account</h3>
+<p>If the matching Segue user is disabled, sign-in is refused: "Your Segue account is disabled. Ask an administrator to re-enable it." No role changes are applied to a disabled user.</p>
+
+<h3>4.7 PingOne cannot be reached or misconfigured</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>Mismatch setting</th><th>Existing user</th><th>New user</th></tr>
+  <tr><td>Auto-switch / Allow different</td><td><span class="tag allow">Signs in</span> with the last-known roles (a PingOne outage does not lock people out); warning logged</td><td><span class="tag deny">Refused</span> — no account and no role information</td></tr>
+  <tr><td>Restrict</td><td><span class="tag deny">Refused</span> "Your role could not be verified with PingOne right now. Please try again shortly." (strict mode never fails open)</td><td><span class="tag deny">Refused</span></td></tr>
+</table></div>
+
+<h3>4.8 SAML logins</h3>
+<ul>
+  <li><strong>Apply to SAML on</strong> and Ping enabled: the SAML user is located in PingOne by email. Zero or more than one match → no roles are assumed ("do not guess"), so the no-mapped-group rule applies.</li>
+  <li><strong>Apply to SAML off</strong>, or Ping disabled: SAML behaves exactly as before; Ping is not consulted.</li>
+</ul>
+
+<h3>4.9 Quick combination cheat-sheet</h3>
+<div class="tbl-wrap"><table>
+  <tr><th>Goal</th><th>Recommended settings</th></tr>
+  <tr><td>PingOne fully controls access; admins never touch Segue roles</td><td>JIT <strong>On</strong> · Mismatch <strong>Auto-switch</strong> · No-mapped-group <strong>Deny</strong> · Conflict <strong>UseMappingOrder</strong> (or <strong>Deny</strong> for ambiguity alerts)</td></tr>
+  <tr><td>Strictest: roles in Segue and Ping must agree</td><td>JIT <strong>Off</strong> · Mismatch <strong>Restrict</strong> · No-mapped-group <strong>Deny</strong> · Conflict <strong>Deny</strong></td></tr>
+  <tr><td>Ping for authentication only; keep managing roles in Segue</td><td>Mismatch <strong>Allow different</strong> · No-mapped-group <strong>AllowSegueRole</strong> · JIT <strong>Off</strong></td></tr>
+  <tr><td>Pilot rollout (some users not yet in groups)</td><td>No-mapped-group <strong>AllowSegueRole</strong> · Mismatch <strong>Allow different</strong>, then tighten later</td></tr>
+  <tr><td>Hide the feature</td><td>Enabled <strong>Off</strong> (everything else is ignored)</td></tr>
+</table></div>
+
+<!-- ================================================================ -->
+<h2 id="values"><span class="num">5</span>Where to get each field value</h2>
+<p>PingOne console labels can differ slightly between console versions; the names below are what to look for.</p>
+<div class="tbl-wrap"><table>
+  <tr><th>Segue field</th><th>Where to find it in PingOne</th><th>Example</th></tr>
+  <tr><td><strong>Environment ID</strong></td><td>Open the environment → <em>Environment</em> (or <em>Settings</em>) → <em>Properties</em>; also shown in the URL <code>…/environments/&lt;id&gt;</code> and on each application's <em>Configuration</em> tab (URLs).</td><td><code>11111111-2222-3333-4444-555555555555</code></td></tr>
+  <tr><td><strong>Auth Domain</strong></td><td>The host in the application's <em>Authorization URL</em> / <em>Issuer</em> on the Configuration tab, or the region you chose when creating the environment.</td><td><code>auth.pingone.com</code> (NA), <code>auth.pingone.eu</code>, <code>auth.pingone.asia</code>, <code>auth.pingone.ca</code>, <code>auth.pingone.com.au</code>, <code>auth.pingone.sg</code></td></tr>
+  <tr><td><strong>API Domain</strong></td><td>Same region as the Auth Domain, with <code>api.</code> instead of <code>auth.</code> (see PingOne's regional endpoint list).</td><td><code>api.pingone.com</code>, <code>api.pingone.eu</code>, …</td></tr>
+  <tr><td><strong>Portal App Client ID</strong></td><td>Applications → your <em>Single-Page App</em> → <em>Overview</em> / <em>Configuration</em> → <em>Client ID</em>.</td><td>GUID</td></tr>
+  <tr><td><strong>Worker App Client ID</strong></td><td>Applications → your <em>Worker</em> app → <em>Overview</em> / <em>Configuration</em> → <em>Client ID</em>.</td><td>GUID</td></tr>
+  <tr><td><strong>Worker App Client Secret</strong></td><td>Applications → your Worker app → <em>Configuration</em> → <em>Client Secret</em> (use the copy icon; regenerate if lost).</td><td>~64 characters</td></tr>
+  <tr><td><strong>Group ID</strong> (mapping)</td><td>Directory → <em>Groups</em> → open the group → <em>Group ID</em> on its details. Using the exact group <strong>name</strong> also works.</td><td><code>Segue-Admins</code> or a GUID</td></tr>
+  <tr><td><strong>Segue role</strong> (mapping)</td><td>Pick from the dropdown on the screen. Roles come from Segue's own Role Management (names must exist exactly).</td><td>Admin, Operations, Audit</td></tr>
+  <tr><td><strong>Redirect URI</strong> (to enter in PingOne)</td><td>The portal's own address — the browser's origin, no path, no trailing slash.</td><td><code>http://localhost:4200</code>, <code>https://segue.example.org</code></td></tr>
+</table></div>
+
+<div class="callout"><strong>Tip: compare the secret</strong>After saving, the screen shows "Saved secret: 64 characters, ending …3TPx". Compare this with the console to catch a bad paste (missing characters, extra spaces).</div>
+
+<!-- ================================================================ -->
+<h2 id="pingone"><span class="num">6</span>Setting up the PingOne account</h2>
+
+<h3>6.1 Create an account and environment</h3>
+<ol class="steps">
+  <li>Sign up for PingOne (a free trial is enough) and sign in to the admin console.</li>
+  <li>Create or choose an <strong>environment</strong> (e.g. "Segue Dev"). Pick the <strong>region</strong> deliberately — it decides your Auth/API domains and cannot be changed later.</li>
+  <li>Make sure the environment includes the <strong>PingOne SSO</strong> service (needed for sign-in and the user directory).</li>
+  <li>Note the <strong>Environment ID</strong> (section 5).</li>
+</ol>
+
+<h3>6.2 Create the groups</h3>
+<ol class="steps">
+  <li>Go to <strong>Directory → Groups → Add Group (+)</strong>.</li>
+  <li>Create one group per Segue role you want to grant, for example <code>Segue-Admins</code>, <code>Segue-Operators</code>, <code>Segue-Auditors</code>. Add a description.</li>
+  <li>Use clear, unique names; if you map by name, the match is on the exact (case-insensitive) name.</li>
+  <li>Open each group and copy its <strong>Group ID</strong> if you prefer to map by ID.</li>
+</ol>
+<div class="callout info"><strong>Keep it simple</strong>One group per Segue role works best. Put people in the single highest-privilege group they need to avoid conflicts (section 4.3).</div>
+
+<h3>6.3 Create users and put them in groups</h3>
+<ol class="steps">
+  <li>Go to <strong>Directory → Users → Add User</strong>. Fill in username, <strong>email address</strong> (required — Segue matches existing accounts by email), given and family name, and set a password (or send an invitation).</li>
+  <li>Open the user → <strong>Groups</strong> tab → <strong>Add Groups</strong> → select the group(s) → Save. (Alternatively, from the group's <em>Users</em> tab.)</li>
+  <li>Make sure the user is <strong>enabled</strong> and the email is spelled exactly as in Segue.</li>
+</ol>
+
+<h3>6.4 Create the Portal application (Single-Page App)</h3>
+<ol class="steps">
+  <li>Go to <strong>Applications → Applications → Add Application (+)</strong>.</li>
+  <li>Choose <strong>Web App / Single-Page App</strong> and select <strong>OIDC</strong>. Name it e.g. "Segue Portal".</li>
+  <li>On <strong>Configuration</strong> set:
+    <ul>
+      <li><strong>Response Type</strong>: Code</li>
+      <li><strong>Grant Type</strong>: Authorization Code</li>
+      <li><strong>PKCE Enforcement</strong>: S256 Required (Segue always sends S256)</li>
+      <li><strong>Token Endpoint Authentication Method</strong>: None (public client — the browser has no secret)</li>
+      <li><strong>Redirect URIs</strong>: the portal origin, e.g. <code>http://localhost:4200</code> (add one per environment: local, test, prod)</li>
+      <li><strong>Sign-off URLs</strong> (optional): the same origin</li>
+    </ul>
+  </li>
+  <li>On <strong>Resources → Scopes</strong> allow <code>openid</code>, <code>profile</code> and <code>email</code> (Segue requests <code>openid email profile</code>).</li>
+  <li>Toggle the application <strong>Enabled</strong> (top right). Copy the <strong>Client ID</strong>.</li>
+</ol>
+<div class="callout warn"><strong>Most common mistake</strong>The Redirect URI must match the portal's origin <em>exactly</em> (scheme, host, port; no trailing slash, no <code>/auth/login</code> path). A mismatch shows a PingOne "redirect_uri mismatch" error.</div>
+
+<h3>6.5 Create the Worker application</h3>
+<ol class="steps">
+  <li>Go to <strong>Applications → Add Application</strong> and choose <strong>Worker</strong>. Name it e.g. "Segue Role Reader".</li>
+  <li>On <strong>Configuration</strong> note the <strong>Client ID</strong> and <strong>Client Secret</strong>. <strong>Token Endpoint Authentication Method</strong> may be <em>Client Secret Basic</em> or <em>Client Secret Post</em> — Segue tries Basic first and then Post, so either works.</li>
+  <li>Open the <strong>Roles</strong> tab → <strong>Grant Roles</strong> and assign <strong>Identity Data Read Only</strong> with the <em>environment</em> as the scope. This is what allows reading groups and memberships. Without it the test reports "not allowed to read groups".</li>
+  <li>Toggle the application <strong>Enabled</strong>.</li>
+</ol>
+<div class="callout danger"><strong>Least privilege</strong>Do not give the worker app an administrator role. Read-only identity data is sufficient. Treat the client secret like a password and rotate it if exposed.</div>
+
+<h3>6.6 (Optional) PingOne user attributes</h3>
+<p>Segue reads <code>sub</code> (PingOne user id), <code>email</code> and <code>name</code> from the ID token. If the name is empty, check the application's <em>Attribute Mappings</em> and the user's profile.</p>
+
+<!-- ================================================================ -->
+<h2 id="segue"><span class="num">7</span>Configuring Segue</h2>
+<ol class="steps">
+  <li>Make sure the Segue roles you plan to map already exist (Role Management) and that the database has the new migration (<code>Users.RoleSyncNote</code>) applied.</li>
+  <li>Sign in as an administrator and open <strong>Settings → SSO Configurations</strong>.</li>
+  <li>In <strong>Ping Identity (PingOne)</strong> fill in Environment ID, Auth Domain, API Domain, Portal App Client ID, Worker App Client ID and Worker App Client Secret (section 5).</li>
+  <li>Add the group mappings (top row = highest priority) and choose the policies (section 4.9).</li>
+  <li>Tick <strong>Enabled</strong> and click <strong>Save</strong>.</li>
+  <li>Click <strong>Test connection</strong>. Expect: "Connected to PingOne. The worker application can read groups."</li>
+  <li>Sign out and confirm the <strong>Continue with Ping</strong> button appears on the login page.</li>
+</ol>
+
+<h3>Optional: defaults in appsettings.json</h3>
+<pre><code>"Authentication": {
+  "Ping": {
+    "Enabled": false,
+    "EnvironmentId": "",
+    "AuthDomain": "auth.pingone.com",
+    "ApiDomain": "api.pingone.com",
+    "ClientId": "",
+    "WorkerClientId": "",
+    "WorkerClientSecretKeyVaultName": "",
+    "WorkerClientSecretName": "",
+    "JitProvisioning": true,
+    "ApplyToSaml": true,
+    "GroupRoleMappings": {}
+  }
+}</code></pre>
+<p>Values saved on the screen take precedence. Never put the worker secret itself in this file — use the screen or a Key Vault reference.</p>
+
+<!-- ================================================================ -->
+<h2 id="test"><span class="num">8</span>Testing checklist</h2>
+<div class="tbl-wrap"><table>
+  <tr><th>#</th><th>Scenario</th><th>Setup</th><th>Expected</th></tr>
+  <tr><td>1</td><td>Connection test</td><td>Save valid settings</td><td>Green "Connected to PingOne…"</td></tr>
+  <tr><td>2</td><td>Happy path, existing user</td><td>User in <code>Segue-Admins</code>, Segue role Admin</td><td>Signs in, no role change</td></tr>
+  <tr><td>3</td><td>Auto-switch</td><td>Segue role Audit, Ping group Admins, Auto-switch on</td><td>Role becomes Admin; "Role Source" note on user page</td></tr>
+  <tr><td>4</td><td>Restrict</td><td>Same as 3 with Restrict</td><td>Refused with mismatch message</td></tr>
+  <tr><td>5</td><td>JIT</td><td>New Ping user in a mapped group, no Segue account</td><td>Account created with mapped role</td></tr>
+  <tr><td>6</td><td>No mapped group</td><td>User in no mapped group</td><td>Refused (Deny) or signs in (AllowSegueRole)</td></tr>
+  <tr><td>7</td><td>Conflict</td><td>User in two groups mapping to different roles</td><td>Refused (Deny) or top row wins (UseMappingOrder)</td></tr>
+  <tr><td>8</td><td>Group removal</td><td>Remove user from group, sign in again</td><td>New role / refusal applied immediately</td></tr>
+  <tr><td>9</td><td>Disabled Segue user</td><td>Disable account</td><td>Refused: account disabled</td></tr>
+  <tr><td>10</td><td>Ping off</td><td>Untick Enabled and Save</td><td>Button disappears; other login methods unaffected</td></tr>
+</table></div>
+<p>After each role change, check <em>Governance → Authentication log</em> for the <code>SSO:Ping:RoleUpdated</code> / <code>SSO:Ping:Provisioned</code> entries.</p>
+
+<!-- ================================================================ -->
+<h2 id="troubleshoot"><span class="num">9</span>Troubleshooting</h2>
+<div class="tbl-wrap"><table>
+  <tr><th>Symptom / message</th><th>Likely cause</th><th>Fix</th></tr>
+  <tr><td>No "Continue with Ping" button</td><td>Not enabled, or Environment ID / Client ID empty</td><td>Fill both, tick Enabled, Save, refresh the login page.</td></tr>
+  <tr><td>PingOne shows "redirect_uri mismatch"</td><td>Redirect URI on the Portal app differs from the portal origin</td><td>Register the exact origin (6.4).</td></tr>
+  <tr><td>Returns to login with a generic failure</td><td>State/nonce lost (second tab, cleared storage), or token exchange failed</td><td>Try again in one tab; confirm Token Endpoint Auth Method is <em>None</em> and PKCE S256.</td></tr>
+  <tr><td>"PingOne rejected the worker app's client ID or secret…"</td><td>Wrong secret/ID, app disabled, or wrong Auth Domain/Environment</td><td>Re-paste the secret; compare with the hint; check the app is enabled and the region matches.</td></tr>
+  <tr><td>"…may not allow the client-credentials grant"</td><td>Worker app type/grant misconfigured</td><td>Use a <em>Worker</em> app.</td></tr>
+  <tr><td>"…not allowed to read groups"</td><td>Worker app lacks a role</td><td>Grant <em>Identity Data Read Only</em> on the Roles tab.</td></tr>
+  <tr><td>"A token was issued but the Management API did not accept it"</td><td>API Domain in a different region from Auth Domain</td><td>Align the regions (section 5).</td></tr>
+  <tr><td>"PingOne could not be reached…"</td><td>Wrong host or blocked outbound network</td><td>Check domains and firewall/proxy rules to PingOne.</td></tr>
+  <tr><td>"…not in any group that is linked to a Segue role"</td><td>User not in a mapped group, or name/ID typo</td><td>Add to the group or fix the mapping (try the Group ID).</td></tr>
+  <tr><td>"…linked to more than one Segue role"</td><td>Conflict mode is Deny and the user is in several groups</td><td>Remove from extra groups or switch to Use mapping order.</td></tr>
+  <tr><td>"No Segue account exists for this identity…"</td><td>JIT off and no account</td><td>Invite the user, or enable JIT.</td></tr>
+  <tr><td>"Ping Environment ID must be a GUID" / host-name errors on Save</td><td>Validation</td><td>Paste the GUID only; enter host names without <code>https://</code>.</td></tr>
+  <tr><td>Role not updated after changing a group</td><td>Role is read at sign-in</td><td>Sign out and in again.</td></tr>
+  <tr><td>Test connection disabled</td><td>Unsaved changes on the form</td><td>Save first.</td></tr>
+</table></div>
+
+<!-- ================================================================ -->
+<h2 id="security"><span class="num">10</span>Security notes</h2>
+<ul>
+  <li><strong>No secrets in the browser.</strong> The portal is a public PKCE client. The worker secret lives only on the server, in the secret store, and is write-only.</li>
+  <li><strong>Strict token checks.</strong> Signature (JWKS), issuer, audience (the portal client id) and lifetime are validated on the server; the nonce is checked in the browser, bound to the tab.</li>
+  <li><strong>State and PKCE are one-shot.</strong> The record is removed from <code>sessionStorage</code> on return and the response is removed from the address bar.</li>
+  <li><strong>Hosts are constrained.</strong> Bare host names only; the API host must be PingOne; pagination links are rejected if they point to another host.</li>
+  <li><strong>Fail closed.</strong> Unknown policy values fall to the strictest option; the restrict mode refuses when PingOne cannot be queried.</li>
+  <li><strong>PHI/PII-safe logging.</strong> Logs contain counts and role names only — never tokens, emails or group contents. Error text from PingOne is length-limited and shown only to administrators on the test screen.</li>
+  <li><strong>Auditable.</strong> Provisioning and role changes create authentication-log entries and a note on the user.</li>
+  <li><strong>Least privilege.</strong> The worker app needs only <em>Identity Data Read Only</em>.</li>
+</ul>
+
+<!-- ================================================================ -->
+<h2 id="tests"><span class="num">11</span>Automated tests</h2>
+<p>Run the relevant tests with:</p>
+<pre><code>dotnet test tests/FHIRBridge.UnitTests --filter "FullyQualifiedName~Ping|FullyQualifiedName~SsoAuthServicePingRoles"
+dotnet test tests/FHIRBridge.ArchitectureTests</code></pre>
+<p>The architecture tests confirm the layering rules (Domain ← Application ← Infrastructure) and the ban on <code>switch</code> over application types still hold with the new classes.</p>
+
+</div>
+</body>
+</html>

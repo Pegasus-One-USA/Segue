@@ -11,5 +11,8 @@ public interface IProviderTokenValidator
 {
     LoginProvider Provider { get; }
 
+    /// <summary>Whether this provider is currently switched on (live-read settings, falling back to appsettings).</summary>
+    Task<bool> IsEnabledAsync(CancellationToken cancellationToken);
+
     Task<ExternalIdentity> ValidateAsync(string token, CancellationToken cancellationToken);
 }

@@ -46,6 +46,9 @@ public sealed class EntraTokenValidator : IProviderTokenValidator
 
     public LoginProvider Provider => LoginProvider.Entra;
 
+    public Task<bool> IsEnabledAsync(CancellationToken cancellationToken) =>
+        _settingsCache.GetBoolAsync("Authentication:Entra:Enabled", _fallback.Enabled, cancellationToken);
+
     public async Task<ExternalIdentity> ValidateAsync(string token, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(token))

@@ -2,7 +2,11 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { SSO_CONFIGURATIONS_ENDPOINTS } from '../../core/api-endpoints';
-import { SsoConfigurationsModel, UpdateSsoConfigurationsRequest } from '../models/sso-configurations.model';
+import {
+  ConnectionTestResult,
+  SsoConfigurationsModel,
+  UpdateSsoConfigurationsRequest,
+} from '../models/sso-configurations.model';
 
 @Injectable({ providedIn: 'root' })
 export class SsoConfigurationsService {
@@ -14,5 +18,10 @@ export class SsoConfigurationsService {
 
   update(request: UpdateSsoConfigurationsRequest): Observable<SsoConfigurationsModel> {
     return this.http.put<SsoConfigurationsModel>(SSO_CONFIGURATIONS_ENDPOINTS.update, request);
+  }
+
+  /** Tests the SAVED Ping settings (worker token + group read) — save first, then test. */
+  testPing(): Observable<ConnectionTestResult> {
+    return this.http.post<ConnectionTestResult>(SSO_CONFIGURATIONS_ENDPOINTS.pingTest, {});
   }
 }

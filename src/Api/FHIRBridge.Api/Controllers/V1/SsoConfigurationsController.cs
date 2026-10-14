@@ -40,6 +40,12 @@ public sealed class SsoConfigurationsController : ControllerBase
         return Ok(EnrichWithComputedUrls(dto));
     }
 
+    /// <summary>Tests the saved PingOne settings (worker token + group read). The message is safe to show to an admin.</summary>
+    [HttpPost("ping/test")]
+    [ProducesResponseType(typeof(FHIRBridge.Application.Abstractions.Security.ExternalConnectionTestResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestPing(CancellationToken cancellationToken) =>
+        Ok(await _service.TestPingConnectionAsync(cancellationToken));
+
     /// <summary>The service layer is HTTP-agnostic — these two URLs depend on the current request's own
     /// scheme/host, so they're filled in here rather than resolved via config, matching how
     /// AuthController.BuildAcsUrl() already derives the ACS URL the same way.</summary>

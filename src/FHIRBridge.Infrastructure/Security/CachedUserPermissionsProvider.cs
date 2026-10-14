@@ -35,6 +35,8 @@ public sealed class CachedUserPermissionsProvider : IUserPermissionsProvider
         _cache = cache;
     }
 
+    public void Invalidate(Guid userId) => _cache.Remove($"user-permissions:{userId}");
+
     public async Task<IReadOnlyList<string>> GetEffectivePermissionCodesAsync(Guid userId, CancellationToken cancellationToken)
     {
         var cacheKey = $"user-permissions:{userId}";

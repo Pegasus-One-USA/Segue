@@ -12,4 +12,7 @@ public interface ISsoConfigurationsService
     Task<SsoConfigurationsDto> GetAsync(CancellationToken cancellationToken);
 
     Task<SsoConfigurationsDto> UpdateAsync(UpdateSsoConfigurationsRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Checks the saved PingOne settings: the worker app can get a token and read groups.</summary>
+    Task<Abstractions.Security.ExternalConnectionTestResult> TestPingConnectionAsync(CancellationToken cancellationToken);
 }

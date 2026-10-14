@@ -160,6 +160,22 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
         ExternalUserId = externalUserId;
     }
 
+    /// <summary>
+    /// Why this user's role last changed without an admin editing it, e.g. "Role updated via PingOne SSO on
+    /// 2026-10-14: Audit to Admin". Null for users whose roles are only ever managed in Segue.
+    /// </summary>
+    public string? RoleSyncNote { get; private set; }
+
+    /// <summary>Records that an external identity provider changed (or created) this user's role.</summary>
+    public void RecordRoleSync(string note)
+    {
+        RoleSyncNote = string.IsNullOrWhiteSpace(note)
+            ? null
+            : note.Length > MaxRoleSyncNoteLength ? note[..MaxRoleSyncNoteLength] : note;
+    }
+
+    public const int MaxRoleSyncNoteLength = 300;
+
     public void SetEnabled(bool isEnabled)
     {
         // An invited-but-not-yet-activated user is neither Active nor Inactive — only SetInvited(),

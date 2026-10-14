@@ -16,18 +16,21 @@ public sealed class SsoAuthService : ISsoAuthService
     private readonly IUserAccessRepository _repository;
     private readonly ILocalAuthService _localAuth;
     private readonly IGovernanceLogger _governanceLogger;
+    private readonly IExternalRoleReconciler _roleReconciler;
 
     public SsoAuthService(
         IExternalTokenValidator tokenValidator,
         IUserAccessRepository repository,
         ILocalAuthService localAuth,
         IGovernanceLogger governanceLogger,
+        IExternalRoleReconciler roleReconciler,
         ILogger<SsoAuthService>? logger = null)
     {
         _tokenValidator = tokenValidator;
         _repository = repository;
         _localAuth = localAuth;
         _governanceLogger = governanceLogger;
+        _roleReconciler = roleReconciler;
         _logger = logger ?? NullLogger<SsoAuthService>.Instance;
     }
 
@@ -75,6 +78,10 @@ public sealed class SsoAuthService : ISsoAuthService
             user = await _repository.GetUserByEmailAsync(identity.Email.Trim().ToLowerInvariant(), cancellationToken);
         }
 
+        // When an external IdP is the source of RBAC (e.g. PingOne), its roles are applied live on every login.
+        var external = await _roleReconciler.ReconcileAsync(user, identity, authenticationType, cancellationToken);
+        user = external.User;
+
         if (user is null || !user.IsEnabled)
         {
             await _governanceLogger.LogAuthenticationAsync(
@@ -91,8 +98,17 @@ public sealed class SsoAuthService : ISsoAuthService
                 authenticationType, identity.Subject,
                 user is null ? "no account is linked to this external identity" : "the linked account is disabled");
 
-            // 401 — no enabled account matches this external identity.
-            throw new UnauthorizedAccessException("No enabled Segue account is linked to this identity.");
+            // 401 — no enabled account matches this external identity. The reason is spelled out so the user
+            // (and whoever supports them) can tell a missing account from a missing group mapping.
+            throw new UnauthorizedAccessException(
+                user is not null
+                    ? "Your Segue account is disabled. Ask an administrator to re-enable it."
+                    : external.LookupSucceeded && !external.HasMappedRole
+                        ? $"No Segue account exists for this {ExternalRoleReconciler.ProviderLabel(identity.Provider)} user, and none of their groups is "
+                          + "linked to a Segue role. Ask an administrator."
+                        : external.LookupSucceeded
+                            ? "No Segue account exists for this identity. Ask an administrator to create one for you."
+                            : "No enabled Segue account is linked to this identity. Ask an administrator for an invitation.");
         }
 
         // Ensure the identity is linked so subsequent logins resolve by subject.

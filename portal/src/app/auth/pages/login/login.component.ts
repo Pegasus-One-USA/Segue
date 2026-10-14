@@ -64,7 +64,13 @@ export class LoginComponent {
     // the same pattern the SAML ACS redirect already uses for its own failures.
     const ssoError = this.route.snapshot.queryParamMap.get('error');
     if (ssoError === 'sso_failed') {
-      this.toast.error('No matching account found for this identity. Ask an administrator for an invitation.');
+      // The reason the API gave is stored by app.config.ts before it redirects here (one-shot).
+      let reason: string | null = null;
+      try {
+        reason = sessionStorage.getItem('segue.sso.error');
+        sessionStorage.removeItem('segue.sso.error');
+      } catch { /* storage unavailable */ }
+      this.toast.error(reason ?? 'No matching account found for this identity. Ask an administrator for an invitation.');
     }
   }
 
@@ -177,9 +183,12 @@ export class LoginComponent {
       },
       error: (err: HttpErrorResponse) => {
         this.ssoBusy.set(false);
+        // Show the API's own reason when it gave one (e.g. no group is linked to a Segue role); the generic
+        // text is only a fallback.
+        const apiMessage = err?.error?.message;
         const message = err?.status === 401
-          ? 'No matching account found for this identity. Ask an administrator for an invitation.'
-          : err?.error?.message ?? 'Single sign-on failed. Please try again.';
+          ? apiMessage ?? 'No matching account found for this identity. Ask an administrator for an invitation.'
+          : apiMessage ?? 'Single sign-on failed. Please try again.';
         this.toast.error(message);
       },
     });
