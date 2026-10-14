@@ -1,0 +1,22 @@
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportJobsControllerTests.cs
+  s_b1e7fcc7fc9bab::t_9195e39aa671ce 1-87
+src/Api/FHIRBridge.Api/Controllers/V1/BulkExportJobsController.cs
+  s_b1e7fcc7fc9bab::t_dc8f40c16b30a5 74-75,78-87
+  s_b1e7fcc7fc9bab::t_4674141757c89d 27,33-34,40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "71f8ec5a94dee5df09bffdce9a8cd70a4961d664",
+  "prompts": {},
+  "sessions": {
+    "s_b1e7fcc7fc9bab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339ebaf9-b31a-49e1-b147-e7b3f8c890e8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
