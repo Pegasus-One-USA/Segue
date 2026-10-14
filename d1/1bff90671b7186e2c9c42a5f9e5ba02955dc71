@@ -1,0 +1,75 @@
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.scss
+  s_50d034df3438c6::t_beeb1cf32bc189 792-795
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_2858ad6a6dacd2::t_9b01da78d36968 399-465
+portal/src/app/components/node-library-v2/node-library-dialog.component.html
+  s_2858ad6a6dacd2::t_2b96bc1ad8e23e 343
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_50d034df3438c6::t_e2f0076f9e42ff 1133,1135-1141,1154,1159
+  s_2858ad6a6dacd2::t_601792be1292e6 1448-1477
+  s_50d034df3438c6::t_e4ee2fceae62f2 985-986
+  s_50d034df3438c6::t_20664c9cdf2660 1017-1024,1028-1029,1031-1032,1036-1039,1045-1053,1055-1058,1060,1079-1102,1106-1108,1112-1113
+  s_50d034df3438c6::t_dece67162f7681 272-276
+  s_50d034df3438c6::t_8972ebc2c11613 327-333
+  s_2858ad6a6dacd2::t_09a99bb191775d 804-810
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_2858ad6a6dacd2::t_910391eb4c72c6 133,145,2469-2484,2908-2922,4058-4059
+  s_2858ad6a6dacd2::t_2b96bc1ad8e23e 627-628,2945-2968
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_50d034df3438c6::t_c0455c9b1706d5 1275,1494-1505
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_50d034df3438c6::t_0919b93238515a 362-372,383
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_2858ad6a6dacd2::t_2b96bc1ad8e23e 1281-1304
+  s_50d034df3438c6::t_beeb1cf32bc189 857-869
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCriteriaPrecedenceTests.cs
+  s_50d034df3438c6::t_a473ef0e9aef2f 17-20,27,29,32,36,40,44-45,48-50,53,57,61-74,77,81,85,88-89,93,97-98,100,102,106-133,141,161-164,170,176,210
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/SearchCriteriaPostFilter.cs
+  s_2858ad6a6dacd2::t_5676d266ac7b6f 103
+  s_2858ad6a6dacd2::t_648fa55e580bf4 11-13
+  s_2858ad6a6dacd2::t_baeea3aeb05909 1-10,14-63,95-102,104-173
+  s_2858ad6a6dacd2::t_66eac2923c0789 64-94
+tests/FHIRBridge.Api.IntegrationTests/Tests/WorkflowCopyCriteriaTests.cs
+  s_50d034df3438c6::t_e7c1448ba5400c 1-60
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SearchCriteriaPostFilterTests.cs
+  s_2858ad6a6dacd2::t_54c6b7ee0ab7d1 84-96
+  s_2858ad6a6dacd2::t_910391eb4c72c6 1
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_2858ad6a6dacd2::t_e9777cf774788b 25,37-38,49,179,201-309
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorBulkExportCriteriaTests.cs
+  s_2858ad6a6dacd2::t_28bd59d66a3e6c 1-117
+tests/FHIRBridge.UnitTests/Sources/SourceConnectionSearchParameterCompositionTests.cs
+  s_50d034df3438c6::t_92de98806b271a 1-35
+portal/src/app/components/node-library-v2/generic-fhir-source-form/generic-fhir-source-form.component.html
+  s_50d034df3438c6::t_9c54905369b011 183-185
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_2858ad6a6dacd2::t_2b96bc1ad8e23e 334-338
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_50d034df3438c6::t_63f8b5179ce9fc 553-554
+  s_50d034df3438c6::t_c81500e6e4cdbd 364
+  s_50d034df3438c6::t_e6a86a4cd5d928 571-573,579
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d11bff90671b7186e2c9c42a5f9e5ba02955dc71",
+  "prompts": {},
+  "sessions": {
+    "s_2858ad6a6dacd2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10f975bc-e65d-460b-891b-694aafcfefd5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    },
+    "s_50d034df3438c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cf823631-fcfb-43ef-bbd6-e9439462a07e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
