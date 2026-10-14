@@ -24,17 +24,20 @@ public sealed class BulkExportJobsController : ControllerBase
     private readonly IFhirBulkExportClient _bulkExportClient;
     private readonly ISourceConnectionRuntimeResolver _sourceResolver;
     private readonly IPausedBulkExportRunCloser _pausedRunCloser;
+    private readonly ILogger<BulkExportJobsController> _logger;
 
     public BulkExportJobsController(
         IBulkExportJobRepository jobRepository,
         IFhirBulkExportClient bulkExportClient,
         ISourceConnectionRuntimeResolver sourceResolver,
-        IPausedBulkExportRunCloser pausedRunCloser)
+        IPausedBulkExportRunCloser pausedRunCloser,
+        ILogger<BulkExportJobsController> logger)
     {
         _jobRepository = jobRepository;
         _bulkExportClient = bulkExportClient;
         _sourceResolver = sourceResolver;
         _pausedRunCloser = pausedRunCloser;
+        _logger = logger;
     }
 
     [HttpGet("{id:guid}")]
@@ -68,10 +71,20 @@ public sealed class BulkExportJobsController : ControllerBase
         if (job.Status is BulkExportJobStatus.Completed or BulkExportJobStatus.Failed or BulkExportJobStatus.Cancelled)
         {
             // A job that ended Failed or Cancelled must not leave its run paused — e.g. an earlier cancel whose run close
-            // failed. Closing is a no-op for a run already closed, so retrying the request repairs it.
+            // failed. Closing is a no-op for a run already closed, so retrying the request repairs it. Best effort: the
+            // job's state is what this request is answering, so a store error here is logged and the answer stays 409.
             if (job.Status != BulkExportJobStatus.Completed)
             {
-                await CloseRunAsync(job, cancel: job.Status == BulkExportJobStatus.Cancelled, cancellationToken);
+                try
+                {
+                    await CloseRunAsync(job, cancel: job.Status == BulkExportJobStatus.Cancelled, cancellationToken);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    _logger.LogError(exception,
+                        "Could not close workflow run {WorkflowRunId} left paused by {Status} bulk export job {JobId}.",
+                        job.WorkflowRunId, job.Status, job.Id);
+                }
             }
 
             return Conflict(new { message = $"Bulk export job is already {job.Status.ToLowerInvariant()}." });
