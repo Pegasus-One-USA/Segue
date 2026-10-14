@@ -203,39 +203,33 @@ public sealed class BulkExportPollService : IBulkExportPollService
     /// records before the run resumes — the deferred twin of SourceNodeExecutor.EnforceBulkExportCriteria. A
     /// <c>$export</c> request carries no search criteria, so this is the only place they can take effect; only the
     /// simple code filters <see cref="SearchCriteriaPostFilter"/> enforces apply. Rows are read now, not at kick-off,
-    /// so criteria edited while the export ran are the ones applied. Returns <paramref name="resources"/> unchanged
-    /// when the node can't be found (the resume then fails on it anyway), carries no stamped canvas id, or has no
-    /// criteria. Lookup failures propagate rather than letting unfiltered records through.
+    /// so criteria edited while the export ran are the ones applied — except where the run's caller supplied its own
+    /// criteria for a type (an external trigger's resource criteria, kept in the run's context): those replace the
+    /// saved row for this run, exactly as SourceNodeExecutor.ApplyRunResourceCriteriaOverrides does on the immediate
+    /// path. Returns <paramref name="resources"/> unchanged when there is nothing to filter by. Lookup failures
+    /// propagate rather than letting unfiltered records through.
     /// </summary>
     private async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> ApplyResourceCriteriaAsync(
         BulkExportJob job,
         IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> resources,
         CancellationToken cancellationToken)
     {
-        if (_criteriaRepository is null
-            || _runStore is null
-            || _definitionStore is null
-            || resources.Count == 0
-            || job.WorkflowRunId is not { } runId
-            || job.WorkflowNodeId is not { } nodeId)
+        if (resources.Count == 0)
         {
             return resources;
         }
 
-        var run = await _runStore.GetAsync(runId, cancellationToken);
-        var workflow = run is null ? null : await _definitionStore.GetAsync(run.WorkflowDefinitionId, cancellationToken);
-        var node = workflow?.Nodes.FirstOrDefault(candidate => candidate.Id == nodeId);
-        if (workflow is null || ReadCanvasNodeId(node?.ConfigurationJson) is not { } canvasNodeId)
+        var criteriaByResourceType = await ReadSavedCriteriaAsync(job, cancellationToken);
+        var (apiCriteria, runOverrides) = ReadRunCriteria(job.ContextJson);
+        foreach (var (resourceType, criteria) in runOverrides)
+        {
+            criteriaByResourceType[resourceType] = criteria;
+        }
+
+        if (criteriaByResourceType.Count == 0 && string.IsNullOrWhiteSpace(apiCriteria))
         {
             return resources;
         }
-
-        var criteriaByResourceType = (await _criteriaRepository.ListForWorkflowAsync(workflow.Id, cancellationToken))
-            .Where(row => string.Equals(row.SourceNodeId, canvasNodeId, StringComparison.OrdinalIgnoreCase))
-            .Where(row => !string.IsNullOrWhiteSpace(row.Criteria))
-            .GroupBy(row => row.ResourceType, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First().Criteria, StringComparer.OrdinalIgnoreCase);
-        var apiCriteria = ReadPatientSearchCriteria(job.ContextJson);
 
         var kept = new HashSet<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>();
         foreach (var group in resources.GroupBy(resource => resource.ResourceType, StringComparer.OrdinalIgnoreCase))
@@ -258,6 +252,43 @@ public sealed class BulkExportPollService : IBulkExportPollService
         }
 
         return kept.Count == resources.Count ? resources : resources.Where(kept.Contains).ToList();
+    }
+
+    /// <summary>
+    /// The paused source node's saved Criteria rows, by resource type. Empty when they can't be looked up: no
+    /// repository/stores wired, the node no longer exists (the resume then fails on it anyway), or the node carries
+    /// no stamped canvas id.
+    /// </summary>
+    private async Task<Dictionary<string, string>> ReadSavedCriteriaAsync(BulkExportJob job, CancellationToken cancellationToken)
+    {
+        var saved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (_criteriaRepository is null
+            || _runStore is null
+            || _definitionStore is null
+            || job.WorkflowRunId is not { } runId
+            || job.WorkflowNodeId is not { } nodeId)
+        {
+            return saved;
+        }
+
+        var run = await _runStore.GetAsync(runId, cancellationToken);
+        var workflow = run is null ? null : await _definitionStore.GetAsync(run.WorkflowDefinitionId, cancellationToken);
+        var node = workflow?.Nodes.FirstOrDefault(candidate => candidate.Id == nodeId);
+        if (workflow is null || ReadCanvasNodeId(node?.ConfigurationJson) is not { } canvasNodeId)
+        {
+            return saved;
+        }
+
+        foreach (var row in await _criteriaRepository.ListForWorkflowAsync(workflow.Id, cancellationToken))
+        {
+            if (string.Equals(row.SourceNodeId, canvasNodeId, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(row.Criteria))
+            {
+                saved.TryAdd(row.ResourceType, row.Criteria);
+            }
+        }
+
+        return saved;
     }
 
     /// <summary>The node's stamped canvas id — what ResourceTypeCriteria rows are keyed by (see StampNodeIdentity).</summary>
@@ -284,26 +315,51 @@ public sealed class BulkExportPollService : IBulkExportPollService
         }
     }
 
-    /// <summary>The paused run's own API criteria, from the WorkflowExecutionContext serialized at kick-off.</summary>
-    private static string? ReadPatientSearchCriteria(string? contextJson)
+    /// <summary>
+    /// The criteria the paused run's caller supplied, from the WorkflowExecutionContext serialized at kick-off: the
+    /// API's Patient criteria (PatientSearchCriteria) and an external trigger's per-resource-type criteria
+    /// (SourceOverrides.CriteriaByResourceType). Empty when the run carried neither, or the context can't be read.
+    /// </summary>
+    private static (string? ApiCriteria, IReadOnlyDictionary<string, string> RunOverrides) ReadRunCriteria(string? contextJson)
     {
+        var runOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(contextJson))
         {
-            return null;
+            return (null, runOverrides);
         }
 
         try
         {
             using var document = JsonDocument.Parse(contextJson);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("PatientSearchCriteria", out var value)
-                && value.ValueKind == JsonValueKind.String
-                    ? value.GetString()
-                    : null;
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return (null, runOverrides);
+            }
+
+            var apiCriteria = root.TryGetProperty("PatientSearchCriteria", out var api) && api.ValueKind == JsonValueKind.String
+                ? api.GetString()
+                : null;
+
+            if (root.TryGetProperty("SourceOverrides", out var sourceOverrides)
+                && sourceOverrides.ValueKind == JsonValueKind.Object
+                && sourceOverrides.TryGetProperty("CriteriaByResourceType", out var byType)
+                && byType.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var entry in byType.EnumerateObject())
+                {
+                    if (entry.Value.ValueKind == JsonValueKind.String && entry.Value.GetString() is { Length: > 0 } criteria)
+                    {
+                        runOverrides[entry.Name] = criteria;
+                    }
+                }
+            }
+
+            return (apiCriteria, runOverrides);
         }
         catch (JsonException)
         {
-            return null;
+            return (null, runOverrides);
         }
     }
 
