@@ -28,15 +28,33 @@ public sealed class RedisRunStatusRelay : IHostedService
     private Task _forwardTail = Task.CompletedTask;
     private int _subscribeState; // 0 = not subscribed, 1 = subscribing, 2 = subscribed
     private volatile bool _stopped;
+    /// <summary>Cancelled on stop: a push in flight is abandoned and anything still queued is dropped.</summary>
+    private readonly CancellationTokenSource _stopping = new();
+    private readonly TimeSpan _pushTimeout;
+
+    /// <summary>The longest one push may take. Pushes go out one at a time, so without a bound a single hung push held
+    /// up every status change after it and the portal stopped updating live.</summary>
+    public static readonly TimeSpan DefaultPushTimeout = TimeSpan.FromSeconds(10);
 
     public RedisRunStatusRelay(
         IConnectionMultiplexer redis,
         IRunStatusNotifier notifier,
         ILogger<RedisRunStatusRelay> logger)
+        : this(redis, notifier, logger, DefaultPushTimeout)
+    {
+    }
+
+    /// <summary>Internal so DI only ever sees the public constructor; tests pass a short timeout.</summary>
+    internal RedisRunStatusRelay(
+        IConnectionMultiplexer redis,
+        IRunStatusNotifier notifier,
+        ILogger<RedisRunStatusRelay> logger,
+        TimeSpan pushTimeout)
     {
         _redis = redis;
         _notifier = notifier;
         _logger = logger;
+        _pushTimeout = pushTimeout;
         _onConnectionRestored = (_, _) => TrySubscribe();
         _onMessage = (channel, message) => EnqueueForward(message);
     }
@@ -52,6 +70,7 @@ public sealed class RedisRunStatusRelay : IHostedService
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _stopped = true;
+        _stopping.Cancel();
         _redis.ConnectionRestored -= _onConnectionRestored;
         Interlocked.Exchange(ref _subscribeState, 0);
         try
@@ -80,10 +99,16 @@ public sealed class RedisRunStatusRelay : IHostedService
         }
     }
 
-    /// <summary>Forwards one channel message. Never throws: a bad message or a failed push is logged and dropped, and
-    /// the next message is handled as normal.</summary>
+    /// <summary>Forwards one channel message. Never throws: a bad message, a failed push or one that overran the push
+    /// timeout is logged and dropped, and the next message is handled as normal. Once the relay has stopped, queued
+    /// messages are dropped unsent.</summary>
     public async Task ForwardAsync(RedisValue message)
     {
+        if (_stopped)
+        {
+            return;
+        }
+
         if (!RunStatusChannel.TryDeserialize(message, out var statusEvent, out var reason))
         {
             // The payload itself is not logged: a run's error message can carry source-system detail.
@@ -93,7 +118,16 @@ public sealed class RedisRunStatusRelay : IHostedService
 
         try
         {
-            await _notifier.NotifyAsync(statusEvent!, CancellationToken.None);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_stopping.Token);
+            timeout.CancelAfter(_pushTimeout);
+            // The token cancels the push on stop or timeout; WaitAsync bounds a notifier that ignores it, so it still
+            // releases the queue. (WaitAsync takes no stop token: completing it on stop would dispose `timeout` before
+            // the stop reached the notifier through it.)
+            await _notifier.NotifyAsync(statusEvent!, timeout.Token).WaitAsync(_pushTimeout);
+        }
+        catch (Exception) when (_stopped)
+        {
+            // Shutting down: the push was abandoned on purpose.
         }
         catch (Exception exception)
         {

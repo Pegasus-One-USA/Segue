@@ -192,26 +192,83 @@ public sealed class RunStatusRedisRelayTests
         hub.Completed.Should().Equal("Running", "Succeeded");
     }
 
+    [Fact]
+    public async Task A_hung_push_times_out_and_later_events_still_go_out()
+    {
+        // PR #247 review: pushes go out one at a time, so a push that never finished held up every later event and
+        // the portal stopped updating live. Each push is now bounded, even for a notifier that ignores its token.
+        var redis = new FakeRedis();
+        var hub = new GatedNotifier { IgnoreCancellation = true };
+        var relay = new RedisRunStatusRelay(redis.Multiplexer.Object, hub, NullLogger<RedisRunStatusRelay>.Instance, TimeSpan.FromMilliseconds(100));
+        await relay.StartAsync(CancellationToken.None);
+
+        redis.Deliver(RunStatusChannel.Name, RunStatusChannel.Serialize(SucceededEvent with { Status = "Running" }));
+        redis.Deliver(RunStatusChannel.Name, RunStatusChannel.Serialize(SucceededEvent));
+
+        await hub.SecondStarted;
+        hub.Started.Should().Equal("Running", "Succeeded");
+        hub.Release();
+    }
+
+    [Fact]
+    public async Task Stopping_abandons_the_push_in_flight_and_drops_queued_events()
+    {
+        var redis = new FakeRedis();
+        var hub = new GatedNotifier();
+        var relay = new RedisRunStatusRelay(redis.Multiplexer.Object, hub, NullLogger<RedisRunStatusRelay>.Instance);
+        await relay.StartAsync(CancellationToken.None);
+
+        redis.Deliver(RunStatusChannel.Name, RunStatusChannel.Serialize(SucceededEvent with { Status = "Running" }));
+        redis.Deliver(RunStatusChannel.Name, RunStatusChannel.Serialize(SucceededEvent));
+        await relay.StopAsync(CancellationToken.None);
+        await hub.FirstCancelled;
+        await Task.Delay(100);
+
+        hub.Started.Should().Equal("Running"); // "Succeeded" was queued behind it and is never sent
+    }
+
     /// <summary>Holds the first push open until <see cref="Release"/>; records the order pushes start and finish in.</summary>
     private sealed class GatedNotifier : IRunStatusNotifier
     {
         private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _secondStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _firstCancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public List<string> Started { get; } = [];
 
         public List<string> Completed { get; } = [];
 
+        /// <summary>The first push waits on the gate alone, as a notifier that never honours its token would.</summary>
+        public bool IgnoreCancellation { get; init; }
+
         public Task Drained => _drained.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        public Task SecondStarted => _secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        public Task FirstCancelled => _firstCancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         public void Release() => _gate.TrySetResult();
 
         public async Task NotifyAsync(RunStatusChangedEvent statusEvent, CancellationToken cancellationToken)
         {
             lock (Started) Started.Add(statusEvent.Status);
+            if (Started.Count == 2)
+            {
+                _secondStarted.TrySetResult();
+            }
+
             if (Started.Count == 1)
             {
-                await _gate.Task;
+                if (IgnoreCancellation)
+                {
+                    await _gate.Task;
+                }
+                else
+                {
+                    cancellationToken.Register(() => _firstCancelled.TrySetResult());
+                    await _gate.Task.WaitAsync(cancellationToken).ContinueWith(_ => { }, TaskScheduler.Default);
+                }
             }
 
             lock (Completed) Completed.Add(statusEvent.Status);

@@ -610,4 +610,122 @@ public sealed class BulkExportPollServiceTests
 
         healthyJob.PollAttemptCount.Should().Be(1);
     }
+
+    [Fact]
+    public async Task An_InProgress_poll_whose_save_fails_counts_one_attempt_not_two()
+    {
+        // PR #247 review: the InProgress branch recorded the attempt, its save threw, and the failure handler recorded
+        // it again, so one tick with a transient store error used up two attempts of the cap.
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.InProgress, RetryAfter: TimeSpan.FromSeconds(30)));
+        repository.SetupSequence(r => r.UpdateAsync(job, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("The job store is unavailable."))
+            .Returns(Task.CompletedTask);
+
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 120, CancellationToken.None);
+
+        job.PollAttemptCount.Should().Be(1);
+        job.Status.Should().Be(BulkExportJobStatus.Polling);
+        // The failure handler only re-saves the attempt the InProgress branch recorded, keeping its RetryAfter.
+        job.NextPollNotBeforeUtc.Should().BeAfter(DateTime.UtcNow.AddSeconds(20));
+        repository.Verify(r => r.UpdateAsync(job, It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task An_InProgress_poll_at_the_cap_whose_close_fails_is_not_counted_past_the_cap()
+    {
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.InProgress));
+        _runCloser.SetupSequence(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("The run store is unavailable."))
+            .ReturnsAsync(true);
+
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 1, CancellationToken.None);
+
+        job.PollAttemptCount.Should().Be(1);
+        job.Status.Should().Be(BulkExportJobStatus.Failed); // the failure handler retried the close within the same tick
+    }
+
+    [Fact]
+    public async Task A_failed_download_of_a_completed_export_is_retried_after_the_download_delay_and_named_as_such()
+    {
+        // PR #247 review: a download failure was retried on the short status-poll interval, so the attempt cap could
+        // fail an export that had succeeded within minutes. It now waits DownloadRetryDelay, and the cap's error says
+        // the export completed but its results could not be downloaded.
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        var files = new[] { new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson") };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files));
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TaskCanceledException("The download timed out."));
+
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 2, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Polling);
+        job.PollAttemptCount.Should().Be(1);
+        job.NextPollNotBeforeUtc.Should().BeAfter(DateTime.UtcNow.AddMinutes(4));
+
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 2, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        job.ErrorMessage.Should().StartWith("The bulk export completed, but its results could not be downloaded after 2 attempts.")
+            .And.Contain("The download timed out.");
+    }
+
+    [Fact]
+    public async Task A_resume_failure_whose_run_is_no_longer_paused_is_logged_as_not_closed()
+    {
+        // PR #247 review: a run left Running (its pause was never saved) whose resume then threw before any node ran
+        // is closed by nobody, and FailAsync's false return was ignored without a trace.
+        var job = CreateJob(Guid.NewGuid());
+        var repository = new Mock<IBulkExportJobRepository>();
+        var client = new Mock<IFhirBulkExportClient>();
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        var orchestrator = new Mock<IRankedWorkflowOrchestrator>();
+        var logger = new Mock<Microsoft.Extensions.Logging.ILogger<BulkExportPollService>>();
+        var service = new BulkExportPollService(
+            repository.Object, client.Object, resolver.Object, orchestrator.Object, _runCloser.Object, logger.Object);
+        var files = new[] { new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson") };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files));
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ResourceEnvelope("Patient", "p1", "{}", null, null)]);
+        orchestrator.Setup(o => o.ResumeAfterBulkExportAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(),
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("The EHR data dump could not be written."));
+        _runCloser.Setup(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        logger.Verify(l => l.Log(
+            Microsoft.Extensions.Logging.LogLevel.Error,
+            It.IsAny<Microsoft.Extensions.Logging.EventId>(),
+            It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains("was not closed after its resume failed")
+                && state.ToString()!.Contains(job.WorkflowRunId!.Value.ToString())),
+            null,
+            It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
+    }
 }

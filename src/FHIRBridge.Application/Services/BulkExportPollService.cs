@@ -59,6 +59,7 @@ public sealed class BulkExportPollService : IBulkExportPollService
             // Isolated per job: one job's failure (a stale SourceConnection, a transient network error, a losing
             // optimistic-concurrency race against another Worker instance) must never stop the rest of the batch —
             // same isolation principle ScheduleDispatcherWorker applies at the tick level, just at job granularity.
+            var progress = new PollProgress(job.PollAttemptCount);
             try
             {
                 // Re-enter the paused run's correlation scope for the duration of this job. Everything the poll
@@ -69,7 +70,7 @@ public sealed class BulkExportPollService : IBulkExportPollService
                 // it belongs to. Scoped per job, not per tick: one tick polls many jobs, each with its own run.
                 using var correlationScope = _ambientActorContext?.BeginScope("BulkExportPollWorker", job.CorrelationId);
 
-                await PollOneJobAsync(job, defaultPollIntervalSeconds, maxPollAttempts, cancellationToken);
+                await PollOneJobAsync(job, progress, defaultPollIntervalSeconds, maxPollAttempts, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -87,10 +88,29 @@ public sealed class BulkExportPollService : IBulkExportPollService
                         CancellationToken.None);
                 }
 
-                await RecordFailedAttemptAsync(job, exception, defaultPollIntervalSeconds, maxPollAttempts, cancellationToken);
+                await RecordFailedAttemptAsync(job, progress, exception, defaultPollIntervalSeconds, maxPollAttempts, cancellationToken);
             }
         }
     }
+
+    /// <summary>How far one job's poll got this tick, so a failure is counted and retried for what actually broke.</summary>
+    private sealed class PollProgress
+    {
+        public PollProgress(int attemptCountAtStart)
+        {
+            AttemptCountAtStart = attemptCountAtStart;
+        }
+
+        public int AttemptCountAtStart { get; }
+
+        /// <summary>The source reported the export complete; a failure after this is in fetching its results.</summary>
+        public bool ExportCompleted { get; set; }
+    }
+
+    /// <summary>The wait before retrying the downloads of an export the source has already finished. A failed download
+    /// (a timeout, a file server briefly down) is no reason to give up on an export that succeeded, so this is longer
+    /// than the status-poll interval: the attempt cap then spans hours rather than minutes before the job fails.</summary>
+    private static readonly TimeSpan DownloadRetryDelay = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// Counts a poll that threw — the source's token request refused (revoked or expired credentials, a disabled
@@ -101,9 +121,14 @@ public sealed class BulkExportPollService : IBulkExportPollService
     /// <para>Only a job still Polling: once Completed, the run belongs to the continuation (see RunContinuationAsync),
     /// and a Failed job has already been closed. Recording the attempt can itself fail (the database is what broke);
     /// that is logged and the job is left for the next tick, as before.</para>
+    /// <para>One tick counts at most one attempt: when the InProgress branch already recorded this tick's attempt and
+    /// then its save (or closing the run at the cap) threw, the attempt is not recorded again, only saved. A failure
+    /// after the source reported the export complete — the result downloads — is retried after
+    /// <see cref="DownloadRetryDelay"/> and named as a download failure if the cap ends it.</para>
     /// </summary>
     private async Task RecordFailedAttemptAsync(
-        BulkExportJob job, Exception exception, int defaultPollIntervalSeconds, int maxPollAttempts, CancellationToken cancellationToken)
+        BulkExportJob job, PollProgress progress, Exception exception, int defaultPollIntervalSeconds, int maxPollAttempts,
+        CancellationToken cancellationToken)
     {
         if (job.Status != BulkExportJobStatus.Polling)
         {
@@ -112,13 +137,20 @@ public sealed class BulkExportPollService : IBulkExportPollService
 
         try
         {
-            job.RecordPollAttempt(DateTime.UtcNow + TimeSpan.FromSeconds(Math.Max(1, defaultPollIntervalSeconds)));
+            if (job.PollAttemptCount == progress.AttemptCountAtStart)
+            {
+                var retryDelay = progress.ExportCompleted
+                    ? DownloadRetryDelay
+                    : TimeSpan.FromSeconds(Math.Max(1, defaultPollIntervalSeconds));
+                job.RecordPollAttempt(DateTime.UtcNow + retryDelay);
+            }
+
             if (job.PollAttemptCount >= maxPollAttempts)
             {
-                await FailJobAsync(
-                    job,
-                    $"Bulk export status could not be read after {job.PollAttemptCount} attempts. Last error: {Snippet(exception.Message)}",
-                    cancellationToken);
+                var failure = progress.ExportCompleted
+                    ? $"The bulk export completed, but its results could not be downloaded after {job.PollAttemptCount} attempts."
+                    : $"Bulk export status could not be read after {job.PollAttemptCount} attempts.";
+                await FailJobAsync(job, $"{failure} Last error: {Snippet(exception.Message)}", cancellationToken);
                 return;
             }
 
@@ -135,7 +167,7 @@ public sealed class BulkExportPollService : IBulkExportPollService
     private static string Snippet(string message) => message.Length > 300 ? message[..300] + "…" : message;
 
     private async Task PollOneJobAsync(
-        BulkExportJob job, int defaultPollIntervalSeconds, int maxPollAttempts, CancellationToken cancellationToken)
+        BulkExportJob job, PollProgress progress, int defaultPollIntervalSeconds, int maxPollAttempts, CancellationToken cancellationToken)
     {
         var source = await _sourceResolver.ResolveAsync(
             job.SourceConnectionId, searchParameters: null, targetPatientId: null, cancellationToken);
@@ -165,6 +197,8 @@ public sealed class BulkExportPollService : IBulkExportPollService
                 break;
 
             case BulkExportPollStatus.Completed:
+                progress.ExportCompleted = true;
+
                 // Honor the user's resource-type selection strictly. The FHIR Bulk Data spec lets a server put
                 // resources it considers related to the requested `_type` into the output manifest — eCW returns
                 // Binary/Medication/Media/Specimen (referenced by the requested types) even though `_type` asked
@@ -252,10 +286,20 @@ public sealed class BulkExportPollService : IBulkExportPollService
                     // AwaitingBulkExport, so the first case is left as the orchestrator saved it.
                     try
                     {
-                        await _pausedRunCloser.FailAsync(
+                        var closed = await _pausedRunCloser.FailAsync(
                             job.WorkflowRunId!.Value,
                             $"The bulk export completed, but the run could not be resumed: {Snippet(exception.Message)}",
                             CancellationToken.None);
+                        if (!closed)
+                        {
+                            // Usually the orchestrator closed it already. But a run left Running — its pause was never
+                            // saved — whose resume threw before any node ran is closed by nobody: say so, so it can be
+                            // found, instead of it showing Running for ever with no trace.
+                            _logger.LogError(
+                                "Workflow run {WorkflowRunId} was not closed after its resume failed: it was no longer awaiting its bulk export. "
+                                + "If it still shows Running, it is stuck and must be closed by hand.",
+                                job.WorkflowRunId);
+                        }
                     }
                     catch (Exception closeException) when (closeException is not OperationCanceledException)
                     {
