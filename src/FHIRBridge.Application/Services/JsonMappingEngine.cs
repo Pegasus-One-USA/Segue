@@ -25,6 +25,8 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         // Every field's full resolved value list, BEFORE whatever ArrayPolicy collapses it into `parent` —
         // see MappingTestResultDto.RawArrayValues for why this survives alongside the collapsed view.
         var rawArrayValues = new Dictionary<string, IReadOnlyList<object?>>(StringComparer.OrdinalIgnoreCase);
+        // See MappingTestResultDto.PrimitiveArrayItems — separate from rawArrayValues so existing chains are unchanged.
+        var primitiveArrayItems = new Dictionary<string, IReadOnlyList<object?>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var field in fields)
         {
@@ -87,9 +89,12 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
             // down for why a template's {0}/{1} are meaningless without them.
             var joinedRows = isJoinedFields ? ResolveJoinedFieldRows(root, field) : null;
 
+            // Resolved ONCE and kept: the transform-chain parts below reuse the same matches (see
+            // TryReadPrimitiveArrayItems) rather than walking the path a second time.
+            var matches = joinedRows is null ? ResolveAll(root, field.JsonPath) : null;
             var resolved = joinedRows is not null
                 ? JoinRows(joinedRows, ParseDelimiter(field.Format), field, errors)
-                : ResolveAll(root, field.JsonPath)
+                : matches!
                     .Select(m => (
                         Value: ConvertElement(
                             m.Element, field.ValueType, field.Format, field.TargetField, errors,
@@ -216,6 +221,17 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
                         ? TakeFirstInstance(resolved, values)
                         : values);
 
+            // A path that stops ON an array of plain values ("$.name[*].given" rather than "...given[*]") resolves
+            // each array as ONE value, so its parts above are a single, ", "-joined string — the long-standing
+            // contract every existing transform chain relies on, left as it is. The array's ITEMS (the same parts
+            // "...given[*]" yields, narrowed by the same instance selection) are recorded alongside, for the one
+            // consumer that needs them: a column whose De-identification rule runs after its Transformations.
+            if (matches is not null && correlatedPositions is null && !HasCsvAggregate(field.Format)
+                && TryReadPrimitiveArrayItems(matches, field, policy, instanceIndex) is { } arrayItems)
+            {
+                primitiveArrayItems[field.TargetField] = arrayItems;
+            }
+
             // "aggregate=csv" is the payload's own signal for "join every resolved occurrence into one
             // delimited string on the parent row" — no ArrayPolicy value represents that (see
             // MappingImportService.ResolveArrayMetadata's doc comment on why it's encoded onto Format
@@ -324,7 +340,8 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         return new MappingTestResultDto(
             rowsList[0], errors, rowsList, childTableDtos,
             referenceLookups.Count > 0 ? referenceLookups : null,
-            rawArrayValues.Count > 0 ? rawArrayValues : null);
+            rawArrayValues.Count > 0 ? rawArrayValues : null,
+            primitiveArrayItems.Count > 0 ? primitiveArrayItems : null);
     }
 
     /// <summary>Extracts the resource-local id from a FHIR reference string — "Patient/xyz" or an absolute URL
@@ -632,6 +649,49 @@ public sealed partial class JsonMappingEngine : IJsonMappingEngine
         }
 
         return kept.Count > 0 ? kept : values;
+    }
+
+    /// <summary>
+    /// The items of the arrays-of-plain-values a field's path stops on, as transform-chain parts: the array(s) are
+    /// narrowed by <see cref="SelectInstance"/> and <see cref="TakeFirstInstance"/> exactly as the column's own
+    /// value is, and only then expanded — so the items always belong to the instance the column holds, and an empty
+    /// selected array yields no items rather than another instance's. Takes the matches the column's own value was
+    /// resolved from, so the path is never walked twice. Null when the path matched no such array (an object, a
+    /// scalar, or an array holding objects), leaving the parts as they were.
+    /// </summary>
+    private static List<object?>? TryReadPrimitiveArrayItems(
+        IReadOnlyList<(JsonElement Element, IReadOnlyList<int> Indices)> matches, MappingFieldDto field,
+        ArrayPolicy policy, int? instanceIndex)
+    {
+        if (matches.Count == 0 || !matches.All(m => m.Element.ValueKind == JsonValueKind.Array
+                && m.Element.EnumerateArray().All(item => item.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))))
+        {
+            return null;
+        }
+
+        // The instance is chosen among the ARRAYS — exactly as the column's own value chooses it among the same
+        // matches — and only then split into items. Choosing among the items instead would skip an empty array
+        // (it has no items to choose), so with name[0].given = [] the column would hold name[0]'s (empty) given
+        // while the items came from name[1]: another person's name.
+        var arrays = matches.Select(m => (Value: (object?)m.Element, m.Indices)).ToList();
+        if (instanceIndex is int selected)
+        {
+            arrays = SelectInstance(arrays, selected);
+        }
+
+        var selectedArrays = policy is ArrayPolicy.Scalar or ArrayPolicy.FirstItem or ArrayPolicy.RejectIfMultiple
+            ? TakeFirstInstance(arrays, arrays.Select(array => array.Value).ToList())
+            : arrays.Select(array => array.Value).ToList();
+
+        // Conversion errors were already reported for the column's own value; these are the same source values.
+        var discardedErrors = new List<string>();
+        return selectedArrays
+            .Cast<JsonElement>()
+            .SelectMany(array => array.EnumerateArray())
+            .Select(item => ConvertElement(
+                item, field.ValueType, field.Format, field.TargetField, discardedErrors,
+                field.MaxLength, field.Precision, field.Scale, field.DeferTypeToTransform))
+            .ToList();
     }
 
     /// <summary>True when the field's Format carries the "index=N" marker the "Nth instance" instance

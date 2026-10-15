@@ -844,6 +844,9 @@ app.MapPipelineRunPatientEndpoints();
 // "New 11" menu data — read-only GETs over the curated _11 tables, available to any authenticated role.
 app.MapResource11Endpoints();
 
+// Admin-only read-only SQL runner behind the Query Console screen.
+app.MapQueryConsoleEndpoints();
+
 // Data Lake Webhook receiver — the "lake" side of FHIRBridge's DataLakeWebhook destination, so a
 // workflow can be run end to end against this app. POST /api/datalake/webhook is anonymous by design
 // (server-to-server, no session cookie); see DataLakeWebhookEndpoints for the optional

@@ -231,6 +231,10 @@ export class CanvasComponent {
     const plan = this.pendingDelete();
     if (!plan) return;
 
+    // The rules a removed Transformation / De-identification step stood for are NOT deleted here: the canvas is
+    // an unsaved edit. The workflow save that drops the step deletes them, inside its own transaction (see
+    // WorkflowConfigurationCleanupService), so leaving without saving, putting the step back, or a failed save
+    // all leave the saved workflow and its rules as they were.
     // Strip the removed steps' configuration off the destinations that host it BEFORE the nodes go, so
     // the two can't get out of step if one half throws. A chain node's data lives on its destination
     // (see CHAIN_STEP_OWNED_FIELDS), so skipping this would leave the canvas carrying mappings for a
@@ -247,6 +251,7 @@ export class CanvasComponent {
     // and once removeNode has run they are no longer in the store to look up.
     const removedDestinations = this.destinationsBeingRemoved(plan);
     const orphanedDestinationTypes = this.destinationTypesLosingTheirLastNode(plan);
+    const transformationStepsRemoved = this.transformationStepsBeingRemoved(plan);
 
     for (const removal of plan.removals) this.store.removeNode(removal.id);
 
@@ -297,6 +302,8 @@ export class CanvasComponent {
       }
     }
 
+    this.discardDraftRulesOfRemovedTransformationSteps(transformationStepsRemoved);
+
     const count = plan.removals.length;
     this.toast.show(
       count === 1 ? 'Module removed' : `${count} modules removed`,
@@ -305,6 +312,47 @@ export class CanvasComponent {
         : `${plan.removals.map(removal => removal.label).join(', ')} deleted.`,
     );
     this.pendingDelete.set(null);
+  }
+
+  /** For each destination that stays but loses its Transformation step (see
+   *  NodeDeletePlan.transformationRuleDeletes): its type, and whether another destination of the same type is
+   *  left on the canvas that its unsaved draft rules could belong to. */
+  private transformationStepsBeingRemoved(plan: NodeDeletePlan): {
+    destinationType: DestinationType;
+    otherDestinationsOfThisTypeRemain: boolean;
+  }[] {
+    const removedNodeIds = new Set(plan.removals.map(removal => removal.id));
+    const typeOf = (node: CanvasNode): DestinationType | undefined =>
+      node.kind === 'transform'
+        ? TRANSFORMS.find(t => t.id === (node as TransformNode).transformId)?.destinationType as DestinationType | undefined
+        : undefined;
+
+    return plan.transformationRuleDeletes.flatMap(entry => {
+      const destination = this.store.byId(entry.destinationNodeId);
+      const destinationType = destination ? typeOf(destination) : undefined;
+      if (!destination || !destinationType) return [];
+      return [{
+        destinationType,
+        otherDestinationsOfThisTypeRemain: this.store.nodes().some(node =>
+          node.id !== destination.id && !removedNodeIds.has(node.id) && typeOf(node) === destinationType),
+      }];
+    });
+  }
+
+  /** Discards this user's UNSAVED draft rules for each destination type that loses its Transformation step —
+   *  drafts belong to no saved workflow, so they go with the unsaved edit (the saved rules are the save's job,
+   *  see confirmDelete). Only when no other destination of the type is left, since drafts record no node and
+   *  could belong to it. Fire-and-forget like the destination delete's draft cleanup: drafts, not saved data. */
+  private discardDraftRulesOfRemovedTransformationSteps(
+    steps: ReturnType<CanvasComponent['transformationStepsBeingRemoved']>,
+  ): void {
+    for (const step of steps) {
+      if (step.otherDestinationsOfThisTypeRemain) continue;
+      this.transformationRules.deletePending([step.destinationType]).subscribe({
+        next: () => { /* silent: drafts, not data */ },
+        error: () => { /* the next save or delete retries */ },
+      });
+    }
   }
 
   /** The destinations this delete removes, as (configuration id, type) pairs — the identity their rules
@@ -419,7 +467,11 @@ export class CanvasComponent {
     const newId = node.kind === 'transform' ? this.store.nextTransformId()
                 : node.kind === 'merge'     ? this.store.nextMergeId()
                 : this.store.nextNodeId();
-    this.store.addNode({ ...node, id: newId, x: menu.flowX, y: menu.flowY } as CanvasNode);
+    // A pasted node is one the user placed: it must not inherit the "added automatically for rules" marker, which
+    // would let the builder remove it later (see WorkflowBuilderV2Component.removeChainStep).
+    const fields = { ...(node.fields ?? {}) };
+    delete fields['__autoAdded'];
+    this.store.addNode({ ...node, id: newId, x: menu.flowX, y: menu.flowY, fields } as CanvasNode);
     this.toast.show('Pasted', 'Node pasted onto canvas.');
     this.ctxMenu.set(null);
   }

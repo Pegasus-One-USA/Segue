@@ -3,8 +3,11 @@ using System.Text.Json.Nodes;
 using FHIRBridge.Application.Abstractions.Persistence;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FHIRBridge.Application.Services;
 
@@ -14,27 +17,47 @@ public sealed class WorkflowConfigurationCleanupService : IWorkflowConfiguration
     private readonly IConfigurationRepository _configurationRepository;
     private readonly ITransformationRuleRepository _transformationRuleRepository;
     private readonly IWorkflowDefinitionStore _workflowDefinitionStore;
+    private readonly IDeIdentificationProfileService? _deIdentificationProfileService;
+    private readonly ILogger<WorkflowConfigurationCleanupService> _logger;
 
     public WorkflowConfigurationCleanupService(
         IConfigurationRepository configurationRepository,
         ITransformationRuleRepository transformationRuleRepository,
-        IWorkflowDefinitionStore workflowDefinitionStore)
+        IWorkflowDefinitionStore workflowDefinitionStore,
+        IDeIdentificationProfileService? deIdentificationProfileService = null,
+        ILogger<WorkflowConfigurationCleanupService>? logger = null)
     {
         _configurationRepository = configurationRepository;
         _transformationRuleRepository = transformationRuleRepository;
         _workflowDefinitionStore = workflowDefinitionStore;
+        _deIdentificationProfileService = deIdentificationProfileService;
+        _logger = logger ?? NullLogger<WorkflowConfigurationCleanupService>.Instance;
     }
 
     public async Task<WorkflowConfigurationCleanupResult> SoftDeleteUnreferencedAsync(
         Guid workflowId,
         WorkflowDefinition? previousDefinition,
-        IReadOnlyCollection<string?> newNodeConfigurationJson,
+        IReadOnlyCollection<SavedWorkflowNode> newNodes,
         CancellationToken cancellationToken)
     {
         if (previousDefinition is null)
         {
             return WorkflowConfigurationCleanupResult.Empty;
         }
+
+        var newNodeConfigurationJson = newNodes.Select(node => node.ConfigurationJson).ToArray();
+
+        // The rules a removed Transformation / De-identification step stood for. Decided here — from the stored
+        // definition this save replaces and the one it stores — rather than when the step is deleted on the
+        // canvas, so they go only if, and when, the workflow without that step is actually saved: an unsaved
+        // canvas, a failed save (this runs inside the save's transaction) or a step put back before saving all
+        // leave them in place, and the saved workflow never points at rules that are gone.
+        var transformationStepRulesDeleted = await DeleteRulesOfRemovedTransformationStepsAsync(
+            workflowId, previousDefinition, newNodes, cancellationToken);
+        var (deIdentificationRulesDeleted, keptBecauseUsedBy) = await DeleteRulesOfRemovedDeIdentificationAsync(
+            workflowId, previousDefinition, newNodes, cancellationToken);
+        var stepResult = new WorkflowConfigurationCleanupResult(
+            [], [], transformationStepRulesDeleted, deIdentificationRulesDeleted, keptBecauseUsedBy);
 
         var previousConfigurationJson = previousDefinition.Nodes.Select(node => node.ConfigurationJson).ToArray();
 
@@ -46,7 +69,7 @@ public sealed class WorkflowConfigurationCleanupService : IWorkflowConfiguration
 
         if (removedDestinationIds.Count == 0 && removedMappingProfileIds.Count == 0)
         {
-            return WorkflowConfigurationCleanupResult.Empty;
+            return stepResult;
         }
 
         // Every id any OTHER stored workflow still points at. A destination connection is a Settings-level
@@ -62,7 +85,96 @@ public sealed class WorkflowConfigurationCleanupService : IWorkflowConfiguration
         var retiredRuleIds = await RetireWorkflowScopedRulesAsync(
             workflowId, removedDestinationIds, newNodeConfigurationJson, cancellationToken);
 
-        return new WorkflowConfigurationCleanupResult(retiredMappingProfileIds, retiredRuleIds);
+        return stepResult with { MappingProfileIds = retiredMappingProfileIds, TransformationRuleIds = retiredRuleIds };
+    }
+
+    /// <summary>
+    /// A Transformation step removed while its destination stays: that destination's Workflow-scoped rules for
+    /// this workflow are deleted (the destination itself going is handled by RetireWorkflowScopedRulesAsync).
+    /// Rules that record no destination are taken only when no other destination of the same type is left,
+    /// since they could belong to it.
+    /// </summary>
+    private async Task<int> DeleteRulesOfRemovedTransformationStepsAsync(
+        Guid workflowId,
+        WorkflowDefinition previousDefinition,
+        IReadOnlyCollection<SavedWorkflowNode> newNodes,
+        CancellationToken cancellationToken)
+    {
+        var previousStepDestinations = CollectGuids(previousDefinition.Nodes
+            .Where(node => node.NodeType == WorkflowNodeTypes.FhirResourceTransform)
+            .Select(node => node.ConfigurationJson), "destinationId");
+        if (previousStepDestinations.Count == 0)
+        {
+            return 0;
+        }
+
+        var newStepDestinations = CollectGuids(newNodes
+            .Where(node => node.NodeType == WorkflowNodeTypes.FhirResourceTransform)
+            .Select(node => node.ConfigurationJson), "destinationId");
+        var newDestinations = CollectGuids(newNodes.Select(node => node.ConfigurationJson), "destinationId");
+
+        var deleted = 0;
+        foreach (var destinationId in previousStepDestinations)
+        {
+            if (newStepDestinations.Contains(destinationId) || !newDestinations.Contains(destinationId)
+                || await _configurationRepository.GetDestinationAsync(destinationId, cancellationToken) is not { } destination)
+            {
+                continue;
+            }
+
+            var otherOfSameType = false;
+            foreach (var otherId in newDestinations.Where(id => id != destinationId))
+            {
+                if ((await _configurationRepository.GetDestinationAsync(otherId, cancellationToken))?.DestinationType
+                    == destination.DestinationType)
+                {
+                    otherOfSameType = true;
+                    break;
+                }
+            }
+
+            deleted += await _transformationRuleRepository.DeleteWorkflowRulesForDestinationAsync(
+                workflowId, destinationId, destination.DestinationType, includeUnattributed: !otherOfSameType,
+                cancellationToken);
+        }
+
+        return deleted;
+    }
+
+    /// <summary>
+    /// The workflow's last De-identification step removed: the rules of the policy it owns are deleted — unless
+    /// anything outside this workflow still uses that policy, in which case they are kept and the reason logged
+    /// (the save itself goes ahead). See IDeIdentificationProfileService.DeleteWorkflowPolicyRulesAsync.
+    /// </summary>
+    private async Task<(int Deleted, IReadOnlyList<string>? KeptBecauseUsedBy)> DeleteRulesOfRemovedDeIdentificationAsync(
+        Guid workflowId,
+        WorkflowDefinition previousDefinition,
+        IReadOnlyCollection<SavedWorkflowNode> newNodes,
+        CancellationToken cancellationToken)
+    {
+        if (_deIdentificationProfileService is null
+            || !previousDefinition.Nodes.Any(node => node.NodeType == WorkflowNodeTypes.DeIdentification)
+            || newNodes.Any(node => node.NodeType == WorkflowNodeTypes.DeIdentification))
+        {
+            return (0, null);
+        }
+
+        // The previous definition's destinations too: the save has already replaced this workflow's stored nodes, so
+        // a destination removed together with its De-identification step is referenced only there.
+        var previousDestinationIds = CollectGuids(
+            previousDefinition.Nodes.Select(node => node.ConfigurationJson), "destinationId");
+        var result = await _deIdentificationProfileService.DeleteWorkflowPolicyRulesAsync(
+            workflowId, cancellationToken, previousDestinationIds);
+        if (result.UsedElsewhere.Count == 0)
+        {
+            return (result.Deleted, null);
+        }
+
+        _logger.LogWarning(
+            "Workflow {WorkflowId} no longer has a De-identification step, but its de-identification policy is still "
+            + "used by {UsedBy}, so its rules were kept.",
+            workflowId, string.Join(", ", result.UsedElsewhere));
+        return (0, result.UsedElsewhere);
     }
 
     /// <summary>

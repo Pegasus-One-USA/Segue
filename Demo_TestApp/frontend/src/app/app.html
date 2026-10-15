@@ -67,6 +67,11 @@
     [loginTypeLabel]="loginTypeLabel()"
     (logout)="logout()"
   ></app-backend-system-new11>
+} @else if (role() === 'Admin' && isQueryConsole) {
+  <app-query-console
+    [loginTypeLabel]="loginTypeLabel()"
+    (logout)="logout()"
+  ></app-query-console>
 } @else if (role() === 'Admin') {
   <app-admin-settings
     [loginTypeLabel]="loginTypeLabel()"

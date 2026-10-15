@@ -8,6 +8,7 @@ import { AdminSettingsComponent } from './demo-types/admin-settings/admin-settin
 import { ApiTestConsoleComponent } from './demo-types/api-test-console/api-test-console';
 import { ClientCredentialsConsoleComponent } from './demo-types/client-credentials-console/client-credentials-console';
 import { ExternalTriggerConsoleComponent } from './demo-types/external-trigger-console/external-trigger-console';
+import { QueryConsoleComponent } from './demo-types/query-console/query-console';
 // Per-role "Default | New 11" shells. Each wraps its role's existing screen (Default) plus the shared curated-_11
 // browser (New 11); the existing screens are imported by the wrappers, not here, and are otherwise untouched.
 import { PatientNew11Component } from './demo-types/new-11/patient-new11';
@@ -49,6 +50,10 @@ const CLIENT_CREDENTIALS_CONSOLE_PATH = '/client-credentials-console';
 // the RETURN leg of that same flow: FHIRBridge redirects the browser back to whatever Return URL was
 // submitted, which for this console is this same path with ?status=&workflowRunId=&error= appended.
 const EXTERNAL_TRIGGER_CONSOLE_PATH = '/external-trigger-console';
+
+// Admin-only screen for running read-only SQL against the HealthApp database. Unlike the API test console it sits
+// behind the login gate; app.html only renders it for the Admin role.
+const QUERY_CONSOLE_PATH = '/query-console';
 
 // True SMART Standalone Launch (provider-initiated, not EHR-initiated): reached only by a ProviderStandalone-role
 // login. Unlike PROVIDER_IN_APP_PATH above, there's no incoming iss/launch to detect pre-login — the redirect in
@@ -111,6 +116,7 @@ interface LoginResponse {
     ApiTestConsoleComponent,
     ClientCredentialsConsoleComponent,
     ExternalTriggerConsoleComponent,
+    QueryConsoleComponent,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss'
@@ -138,6 +144,9 @@ export class App implements OnInit {
   })();
 
   // Evaluated once at boot, same reasoning as isProviderInAppLaunch above.
+  protected readonly isQueryConsole =
+    window.location.pathname.toLowerCase() === QUERY_CONSOLE_PATH;
+
   protected readonly isApiTestConsole =
     window.location.pathname.toLowerCase() === API_TEST_CONSOLE_PATH;
 

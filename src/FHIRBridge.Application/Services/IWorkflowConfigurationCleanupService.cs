@@ -5,7 +5,8 @@ namespace FHIRBridge.Application.Services;
 /// <summary>
 /// Retires the configuration a workflow save just stopped referencing — the mapping profiles and
 /// workflow-scoped transformation rules left behind when a destination (and the Mapping / Transformation /
-/// De-identification steps feeding it) is removed from the canvas.
+/// De-identification steps feeding it) is removed from the canvas, and the rules a removed Transformation or
+/// De-identification step stood for.
 /// </summary>
 /// <remarks>
 /// Nothing here issues a physical DELETE. Both record types are <c>ISoftDeletable</c>, so the removes
@@ -24,22 +25,30 @@ public interface IWorkflowConfigurationCleanupService
     /// <param name="previousDefinition">
     /// The stored definition being replaced. Null for a brand-new workflow, which has nothing to retire.
     /// </param>
-    /// <param name="newNodeConfigurationJson">
-    /// Every node's <c>ConfigurationJson</c> from the incoming save.
+    /// <param name="newNodes">
+    /// Every node of the incoming save: its node type and <c>ConfigurationJson</c>.
     /// </param>
     Task<WorkflowConfigurationCleanupResult> SoftDeleteUnreferencedAsync(
         Guid workflowId,
         WorkflowDefinition? previousDefinition,
-        IReadOnlyCollection<string?> newNodeConfigurationJson,
+        IReadOnlyCollection<SavedWorkflowNode> newNodes,
         CancellationToken cancellationToken);
 }
+
+/// <summary>One node of a workflow being saved, as the cleanup pass reads it.</summary>
+public sealed record SavedWorkflowNode(string NodeType, string? ConfigurationJson);
 
 /// <summary>What one cleanup pass retired. Ids, so a caller can report or log the change.</summary>
 public sealed record WorkflowConfigurationCleanupResult(
     IReadOnlyCollection<Guid> MappingProfileIds,
-    IReadOnlyCollection<Guid> TransformationRuleIds)
+    IReadOnlyCollection<Guid> TransformationRuleIds,
+    int TransformationStepRulesDeleted = 0,
+    int DeIdentificationRulesDeleted = 0,
+    IReadOnlyList<string>? DeIdentificationRulesKeptBecauseUsedBy = null)
 {
     public static WorkflowConfigurationCleanupResult Empty { get; } = new([], []);
 
-    public bool RetiredAnything => MappingProfileIds.Count > 0 || TransformationRuleIds.Count > 0;
+    public bool RetiredAnything =>
+        MappingProfileIds.Count > 0 || TransformationRuleIds.Count > 0
+        || TransformationStepRulesDeleted > 0 || DeIdentificationRulesDeleted > 0;
 }

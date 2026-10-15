@@ -12,13 +12,16 @@ public sealed class DeIdentificationProfileService : IDeIdentificationProfileSer
 {
     private readonly IDeIdentificationProfileRepository _repository;
     private readonly IDeIdentificationService _deIdentificationService;
+    private readonly ITransformationRuleRepository _ruleRepository;
 
     public DeIdentificationProfileService(
         IDeIdentificationProfileRepository repository,
-        IDeIdentificationService deIdentificationService)
+        IDeIdentificationService deIdentificationService,
+        ITransformationRuleRepository ruleRepository)
     {
         _repository = repository;
         _deIdentificationService = deIdentificationService;
+        _ruleRepository = ruleRepository;
     }
 
     public async Task<List<DeIdentificationProfileDto>> ListAsync(CancellationToken cancellationToken)
@@ -66,6 +69,36 @@ public sealed class DeIdentificationProfileService : IDeIdentificationProfileSer
             cancellationToken);
 
         return new DeIdentificationPreviewResult(redacted.Json);
+    }
+
+    public async Task<WorkflowDeIdentificationRuleDeletionResult> DeleteWorkflowPolicyRulesAsync(
+        Guid workflowId, CancellationToken cancellationToken, IReadOnlyCollection<Guid>? previousDestinationIds = null)
+    {
+        // The workflow's own policy is the one named with its id — the only link a policy has to a workflow.
+        var workflowName = workflowId.ToString();
+        var profiles = await _repository.ListAsync(cancellationToken);
+        var owned = profiles.FirstOrDefault(profile =>
+            string.Equals(profile.Name, workflowName, StringComparison.OrdinalIgnoreCase));
+        if (owned is null)
+        {
+            // No policy of its own means no rules of its own: nothing to delete, which is a success.
+            return new WorkflowDeIdentificationRuleDeletionResult(0, []);
+        }
+
+        var usage = await _repository.FindUsageAsync(owned.Id, workflowId, previousDestinationIds ?? [], cancellationToken);
+        if (usage.UsedElsewhere.Count > 0)
+        {
+            return new WorkflowDeIdentificationRuleDeletionResult(0, usage.UsedElsewhere);
+        }
+
+        var deleted = await _ruleRepository.DeleteDeIdentificationProfileRulesAsync(owned.Id, cancellationToken);
+        // The workflow's own connections stop naming the now-empty policy, so nothing resolves to it afterwards.
+        if (usage.OwnDestinationIds.Count > 0)
+        {
+            await _repository.ClearFromDestinationsAsync(owned.Id, usage.OwnDestinationIds, cancellationToken);
+        }
+
+        return new WorkflowDeIdentificationRuleDeletionResult(deleted, []);
     }
 
     private static DeIdentificationProfileDto ToDto(DeIdentificationProfile profile) =>

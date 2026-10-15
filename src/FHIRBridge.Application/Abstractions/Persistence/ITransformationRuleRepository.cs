@@ -130,6 +130,14 @@ public interface ITransformationRuleRepository
         Guid resourcePipelineRouteId, Guid destinationConfigurationId, DestinationType destinationType,
         bool includeUnattributed, CancellationToken cancellationToken);
 
+    /// <summary>Whether the profile has ANY pre-mapping rule, for any resource type — the same rows
+    /// <see cref="GetPreMappingRulesAsync"/> returns per type, so "has rules" and "applies rules" cannot disagree.</summary>
+    Task<bool> HasPreMappingRulesAsync(Guid deIdentificationProfileId, CancellationToken cancellationToken);
+
+    /// <summary>Deletes every rule of one de-identification profile, in a single save — all of them or none.
+    /// Returns how many were deleted.</summary>
+    Task<int> DeleteDeIdentificationProfileRulesAsync(Guid deIdentificationProfileId, CancellationToken cancellationToken);
+
     Task<TransformationRule?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
     Task AddAsync(TransformationRule rule, CancellationToken cancellationToken);
