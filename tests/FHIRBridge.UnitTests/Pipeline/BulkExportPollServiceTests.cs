@@ -20,6 +20,15 @@ public sealed class BulkExportPollServiceTests
         RuntimeSourceType.Epic, "Epic", "https://fhir.example.com/R4", "https://auth/token", "client-1",
         null, null, []);
 
+    /// <summary>Uses up attempts on a job, as earlier ticks' status polls would have.</summary>
+    private static void UseAttempts(BulkExportJob job, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            job.RecordPollAttempt(DateTime.UtcNow);
+        }
+    }
+
     private static BulkExportJob CreateJob(
         Guid sourceConnectionId, string sourcePath = BulkExportJobSourcePath.WorkflowNode, string? requestedResourceTypesJson = null)
     {
@@ -259,6 +268,7 @@ public sealed class BulkExportPollServiceTests
             .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files));
         client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("file link expired"));
+        UseAttempts(job, BulkExportPollService.DownloadAttemptBudget); // the last download attempt the budget allows
 
         await service.PollDueJobsAsync(50, 5, maxPollAttempts: 1, CancellationToken.None);
 
@@ -299,6 +309,124 @@ public sealed class BulkExportPollServiceTests
             job.WorkflowRunId!.Value,
             It.Is<string>(reason => reason.Contains("Workflow definition was not found.")),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Downloads_keep_their_own_retry_budget_after_a_long_status_phase()
+    {
+        // PR #247 third review: downloads shared the 120-attempt cap with status polls, so an export that needed 119
+        // status polls failed on its FIRST download error although the source had finished it. A completed export now
+        // gets DownloadAttemptBudget more attempts on top of the cap, however many status polls came before.
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        var files = new[] { new BulkExportFile("Patient", "https://fhir.example.com/files/1.ndjson") };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files));
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("The file server is briefly unavailable."));
+        UseAttempts(job, 119);
+
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Polling); // retried, not failed
+        job.PollAttemptCount.Should().Be(120);
+        _runCloser.Verify(c => c.FailAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        UseAttempts(job, BulkExportPollService.DownloadAttemptBudget - 1); // the rest of the download budget
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        job.ErrorMessage.Should().StartWith("The bulk export completed, but its results could not be downloaded");
+    }
+
+    [Fact]
+    public async Task A_status_read_failure_still_stops_at_the_ordinary_cap()
+    {
+        // The download budget applies only once the source reported the export complete.
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("No route to host."));
+        UseAttempts(job, 119);
+
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        job.ErrorMessage.Should().StartWith("Bulk export status could not be read after 120 attempts.");
+    }
+
+    // PR #247 third review: a failed download's message carries the file URL — for a source whose file URLs are
+    // pre-signed (requiresAccessToken: false), the URL itself grants access to the bulk NDJSON — and up to 300
+    // characters of the response body. Once a job failed, that text became the job's error, the run's error and its
+    // Errors entry, the popup's reason, and the run-status event broadcast to every connected browser. Only the host
+    // of any URL may leave the poller, and no markup.
+    [Fact]
+    public async Task A_failed_download_never_puts_a_file_url_or_response_markup_in_the_job_or_run_error()
+    {
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        var files = new[] { new BulkExportFile("Patient", "https://files.example.com/exports/7f3a/Patient.ndjson?sv=2024&sig=SECRET") };
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: files));
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException(
+                "Bulk export file download returned 403 (Forbidden) for https://files.example.com/exports/7f3a/Patient.ndjson?sv=2024&sig=SECRET. "
+                + "<?xml version=\"1.0\"?><Error><Code>AuthenticationFailed</Code><Url>https://files.example.com/exports/7f3a/Patient.ndjson?sig=SECRET</Url></Error>"));
+        string? runReason = null;
+        _runCloser.Setup(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, string, CancellationToken>((_, reason, _) => runReason = reason)
+            .ReturnsAsync(true);
+        UseAttempts(job, BulkExportPollService.DownloadAttemptBudget);
+
+        await service.PollDueJobsAsync(50, 5, maxPollAttempts: 1, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        foreach (var text in new[] { job.ErrorMessage!, runReason! })
+        {
+            text.Should().NotContain("SECRET").And.NotContain("sig=").And.NotContain("/exports/7f3a")
+                .And.NotContain("<").And.NotContain(">");
+            text.Should().Contain("403 (Forbidden)").And.Contain("https://files.example.com");
+        }
+    }
+
+    [Fact]
+    public async Task A_failed_status_poll_never_puts_a_url_query_or_an_html_page_in_the_job_or_run_error()
+    {
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(
+                BulkExportPollStatus.Failed,
+                ErrorMessage: "Bulk export status poll returned 500 (Internal Server Error). <html>\n<body>Retry at https://fhir.example.com/status/1?_token=SECRET</body></html>"));
+        string? runReason = null;
+        _runCloser.Setup(c => c.FailAsync(job.WorkflowRunId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, string, CancellationToken>((_, reason, _) => runReason = reason)
+            .ReturnsAsync(true);
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        foreach (var text in new[] { job.ErrorMessage!, runReason! })
+        {
+            text.Should().NotContain("SECRET").And.NotContain("_token").And.NotContain("<").And.NotContain("\n");
+            text.Should().Contain("500 (Internal Server Error)").And.Contain("https://fhir.example.com");
+        }
     }
 
     [Fact]
@@ -682,10 +810,12 @@ public sealed class BulkExportPollServiceTests
         job.PollAttemptCount.Should().Be(1);
         job.NextPollNotBeforeUtc.Should().BeAfter(DateTime.UtcNow.AddMinutes(4));
 
+        UseAttempts(job, BulkExportPollService.DownloadAttemptBudget); // up to one short of the download cap
         await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 2, CancellationToken.None);
 
         job.Status.Should().Be(BulkExportJobStatus.Failed);
-        job.ErrorMessage.Should().StartWith("The bulk export completed, but its results could not be downloaded after 2 attempts.")
+        var cap = 2 + BulkExportPollService.DownloadAttemptBudget;
+        job.ErrorMessage.Should().StartWith($"The bulk export completed, but its results could not be downloaded after {cap} attempts.")
             .And.Contain("The download timed out.");
     }
 
