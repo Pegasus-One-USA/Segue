@@ -1754,9 +1754,12 @@ public static class WorkflowEndpoints
                 effectiveResourceCriteria = tokenCriteriaMap;
             }
 
-            // "Execute V2" per-run overrides (another EHR Endpoint, Group ID, Search Criteria) are an operator action:
-            // honored only for a signed-in portal user who already passed workflow.run above. A public-launch caller
-            // or a machine client must not be able to repoint a workflow at a different hospital or widen its criteria.
+            // Per-run overrides (another EHR Endpoint, Group ID, Search Criteria, per-resource criteria) on THIS route are
+            // honored only for a signed-in portal user who already passed workflow.run above ("Execute V2"). A
+            // public-launch caller can't use them at all, except through the signed overrides token handled above. An API
+            // client doesn't send them here: it sends them through the /workflows/external/* routes, which accept them only
+            // server-to-server — never with credentials or a request from a browser (see HasExternalRunOverrides and
+            // IsBrowserRequest) — so a Client Secret leaked into a page can't be used to repoint or widen a run.
             if (request is { } overrideRequest
                 && ((overrideRequest.TargetEhrEndpointId is { } requestedTarget && requestedTarget != Guid.Empty)
                     || overrideRequest.GroupIdOverride is not null

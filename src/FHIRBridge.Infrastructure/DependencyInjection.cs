@@ -340,6 +340,7 @@ public static class DependencyInjection
             services.AddScoped<ILicenseRequestRepository, EfLicenseRequestRepository>();
             services.AddScoped<ILicenseHistoryRepository, EfLicenseHistoryRepository>();
             services.AddScoped<ISystemSettingsSeeder, SystemSettingsSeeder>();
+            services.AddScoped<IResourceTypeCriteriaBackfill, ResourceTypeCriteriaBackfill>();
             services.AddScoped<INotificationSettingsRepository, EfNotificationSettingsRepository>();
             services.AddScoped<IBrandConfigurationRepository, EfBrandConfigurationRepository>();
             services.AddScoped<ITenantRepository, EfTenantRepository>();

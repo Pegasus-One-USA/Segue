@@ -1024,6 +1024,11 @@ static void BootstrapDatabase(WebApplication app)
     var systemSettingsSeeder = scope.ServiceProvider.GetService<ISystemSettingsSeeder>();
     systemSettingsSeeder?.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
 
+    // One-time: move the retired source-level Search Criteria into per-resource-type criteria rows, so existing
+    // workflows keep filtering exactly as before runs stopped reading them. A no-op once it has run.
+    var criteriaBackfill = scope.ServiceProvider.GetService<IResourceTypeCriteriaBackfill>();
+    criteriaBackfill?.EnsureAsync(CancellationToken.None).GetAwaiter().GetResult();
+
     logger.LogInformation(
         "Database bootstrap completed in {ElapsedMs}ms. RbacBootstrapper={RbacBootstrapperRan} "
         + "EndpointDirectorySeeders={EndpointDirectorySeederCount} SystemSettingsSeeder={SystemSettingsSeederRan}",
