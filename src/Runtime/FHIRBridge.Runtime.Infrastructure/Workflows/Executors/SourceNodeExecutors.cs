@@ -1133,7 +1133,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             var combinedKeys = combinedResource.Select(ParameterKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
             parameters = combinedResource
                 .Concat(existing.Where(segment =>
-                    ResultShapingParameterKeys.Contains(ParameterBaseKey(segment))
+                    ResultShapingParameterKeys.Contains(ParameterKey(segment))
                     && !apiKeys.Contains(ParameterKey(segment))
                     && !combinedKeys.Contains(ParameterKey(segment))))
                 .ToList();
@@ -1160,15 +1160,15 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         };
     }
 
+    /// <summary>
+    /// The parameter name precedence is decided on: the text before '=', minus any modifier (<c>identifier:exact</c>
+    /// → <c>identifier</c>, <c>_include:iterate</c> → <c>_include</c>). With the modifier kept, a higher tier's
+    /// identifier:exact=A and a lower tier's identifier=B were both sent, and Epic rejects a repeated identifier.
+    /// </summary>
     private static string ParameterKey(string segment)
     {
         var equals = segment.IndexOf('=');
-        return equals < 0 ? segment : segment[..equals];
-    }
-
-    private static string ParameterBaseKey(string segment)
-    {
-        var key = ParameterKey(segment);
+        var key = equals < 0 ? segment : segment[..equals];
         var colon = key.IndexOf(':');
         return colon < 0 ? key : key[..colon];
     }

@@ -146,6 +146,18 @@ public sealed class SourceNodeExecutorCriteriaPrecedenceTests
     }
 
     [Fact]
+    public async Task A_modified_parameter_wins_over_the_same_unmodified_parameter()
+    {
+        var calls = await RunAsync(
+            resources: "Patient",
+            sourceSearchParameters: "",
+            criteriaRows: [("Patient", "identifier=RES-1")],
+            callerCriteria: new Dictionary<string, string> { ["Patient"] = "identifier:exact=CALLER-1" });
+
+        calls["Patient"].SearchParameters.Should().Be("identifier:exact=CALLER-1");
+    }
+
+    [Fact]
     public async Task Caller_criteria_win_a_parameter_the_saved_criteria_also_set()
     {
         var calls = await RunAsync(

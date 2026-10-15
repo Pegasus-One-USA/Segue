@@ -304,6 +304,14 @@ builder.Services.AddHostedService(serviceProvider => new FHIRBridge.Infrastructu
 builder.Services.AddFhirBridgeAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization(options =>
 {
+    // Plain [Authorize] (e.g. RunStatusHub, which broadcasts every run's status) means "a signed-in user". A
+    // client-credentials token is a validly signed JWT on the same "Local" scheme, so without this it passed every such
+    // check; it is only meant for POST /workflows/{id}/run, which is anonymous-capable and checks it explicitly.
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .RequireAssertion(context => !context.User.HasClaim("token_use", "client_credentials"))
+        .Build();
+
     options.AddPolicy(AuthorizationPolicies.UnifiedAdmin, policy =>
     {
         policy.RequireAuthenticatedUser();
@@ -431,6 +439,13 @@ using (var settingsBootstrapScope = builder.Services.BuildServiceProvider().Crea
         "RateLimiting:Webhook:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120, default).GetAwaiter().GetResult();
     var webhookWindowMinutes = settingsCache.GetIntAsync(
         "RateLimiting:Webhook:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1, default).GetAwaiter().GetResult();
+    // The portal's external-run page polls the anonymous run-status endpoint every few seconds for the whole run. On the
+    // shared "oauth" policy (30 per 5 minutes) a run outlasting ~45 s was throttled for the rest of the window and never
+    // reached its return redirect — and everyone behind one hospital NAT shares a bucket — so it gets its own.
+    var externalRunStatusPermit = settingsCache.GetIntAsync(
+        "RateLimiting:ExternalRunStatus:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:ExternalRunStatus:PermitPerWindow") ?? 300, default).GetAwaiter().GetResult();
+    var externalRunStatusWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:ExternalRunStatus:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:ExternalRunStatus:WindowMinutes") ?? 1, default).GetAwaiter().GetResult();
 
     builder.Services.AddRateLimiter(options =>
     {
@@ -463,6 +478,16 @@ using (var settingsBootstrapScope = builder.Services.BuildServiceProvider().Crea
             {
                 PermitLimit = webhookPermit,
                 Window = TimeSpan.FromMinutes(webhookWindowMinutes),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("external-run-status", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ClientPartitionKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = externalRunStatusPermit,
+                Window = TimeSpan.FromMinutes(externalRunStatusWindowMinutes),
                 QueueLimit = 0
             }));
 

@@ -75,8 +75,9 @@ public static class SearchCriteriaPostFilter
 
     /// <summary>
     /// Combines two criteria strings where <paramref name="higher"/> wins: every parameter of
-    /// <paramref name="higher"/>, then each parameter of <paramref name="lower"/> whose key (the text before '=',
-    /// modifier included) <paramref name="higher"/> doesn't set. A key repeated within one string is kept as authored,
+    /// <paramref name="higher"/>, then each parameter of <paramref name="lower"/> whose name (the text before '=',
+    /// modifier dropped — identifier:exact and identifier are the same parameter) <paramref name="higher"/> doesn't
+    /// set. A name repeated within one string is kept as authored,
     /// since that's how FHIR expresses a range (date=ge2024-01-01&amp;date=le2024-12-31). Null when both are empty.
     /// </summary>
     public static string? CombineCriteria(string? higher, string? lower)
@@ -95,10 +96,13 @@ public static class SearchCriteriaPostFilter
             ? []
             : criteria.Trim().TrimStart('?').Trim('&').Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+    /// <summary>The parameter's name without its modifier (<c>identifier:exact</c> → <c>identifier</c>).</summary>
     private static string ParameterKey(string segment)
     {
         var equals = segment.IndexOf('=');
-        return equals < 0 ? segment : segment[..equals];
+        var key = equals < 0 ? segment : segment[..equals];
+        var colon = key.IndexOf(':');
+        return colon < 0 ? key : key[..colon];
     }
 
     private static List<CodeFilter> ParseFilters(string? searchParameters)

@@ -50,6 +50,9 @@ const STATE_KEY = 'external-run.interactive-state';
 const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
 const TERMINAL_STATUSES = new Set(['Succeeded', 'Failed', 'PartialSuccess', 'Cancelled']);
 const POLL_INTERVAL_MS = 1500;
+// Ceiling for the back-off after failed polls (a 429 or a network blip): retrying at full speed while throttled only
+// keeps the rate-limit bucket empty, so each consecutive failure doubles the wait up to this.
+const MAX_POLL_BACKOFF_MS = 15000;
 /** Long enough for the person to see the outcome before the window closes or navigates away. */
 const COMPLETE_DELAY_MS = 2500;
 
@@ -66,6 +69,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   ticket_required: 'This FHIRBridge deployment only accepts launch tickets. The application must obtain one from its backend first.',
   ehr_endpoint_invalid: 'The selected EHR Endpoint cannot be used with this workflow (not found, a different vendor, or a bulk export).',
   license_restricted: 'This workflow cannot be run right now: the license run quota is exhausted or the license does not allow one of its sources or destinations.',
+  write_back_not_allowed: 'This workflow writes into an EHR, so it cannot be started by an external application.',
+  overrides_not_allowed: 'EHR Endpoint, Group ID and search criteria can only be chosen by the application\'s backend (launch ticket), not from the browser.',
 };
 
 function loadState(): InteractiveRunState | null {
@@ -115,6 +120,7 @@ export class ExternalRunComponent implements OnInit, OnDestroy {
   private asyncMode = true;
   private options: CompletionOptions = { windowMode: 'same', closeOnComplete: false, returnToken: null };
   private pollHandle: ReturnType<typeof setTimeout> | null = null;
+  private consecutivePollFailures = 0;
 
   private readonly route = inject(ActivatedRoute);
   private readonly http = inject(HttpClient);
@@ -298,6 +304,7 @@ export class ExternalRunComponent implements OnInit, OnDestroy {
       this.status.set(result.status);
       this.errorMessage.set(result.errorMessage);
       this.pollFailed.set(false);
+      this.consecutivePollFailures = 0;
 
       if (!TERMINAL_STATUSES.has(result.status)) {
         this.pollHandle = setTimeout(() => void this.poll(runId), POLL_INTERVAL_MS);
@@ -305,9 +312,11 @@ export class ExternalRunComponent implements OnInit, OnDestroy {
         this.onFinished(result.status, runId);
       }
     } catch {
-      // Transient network hiccup — keep trying rather than giving up on one failed poll.
+      // Transient failure (network hiccup, or 429 while throttled) — keep trying rather than giving up, backing off.
       this.pollFailed.set(true);
-      this.pollHandle = setTimeout(() => void this.poll(runId), POLL_INTERVAL_MS);
+      this.consecutivePollFailures++;
+      const delay = Math.min(POLL_INTERVAL_MS * 2 ** this.consecutivePollFailures, MAX_POLL_BACKOFF_MS);
+      this.pollHandle = setTimeout(() => void this.poll(runId), delay);
     }
   }
 }

@@ -232,6 +232,8 @@ public static class DependencyInjection
             services.AddSingleton<IExecutionResourceHistoryRecorder, InMemoryExecutionResourceHistoryRecorder>();
             services.AddSingleton<ISourceCapabilityRepository, InMemorySourceCapabilityRepository>();
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
+            // The workflow run endpoints take this as a parameter, so without it the API host couldn't start at all here.
+            services.AddSingleton<FHIRBridge.Runtime.Application.Abstractions.Sources.IEhrEndpointOverrideProvider, FHIRBridge.Infrastructure.Sources.EhrEndpointOverrideProvider>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<IApiClientRepository, InMemoryApiClientRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();

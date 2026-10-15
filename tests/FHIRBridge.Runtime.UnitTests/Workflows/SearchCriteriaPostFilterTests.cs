@@ -94,6 +94,16 @@ public sealed class SearchCriteriaPostFilterTests
         SearchCriteriaPostFilter.BulkExportCriteria(resourceType, resourceCriteria, apiCriteria).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("identifier:exact=A", "identifier=B&gender=male", "identifier:exact=A&gender=male")]
+    [InlineData("identifier=A", "identifier:exact=B", "identifier=A")]
+    [InlineData("status:not=entered-in-error", "status=final&code=1234-5", "status:not=entered-in-error&code=1234-5")]
+    public void Combining_criteria_treats_a_modified_parameter_as_the_same_parameter(string higher, string lower, string expected)
+    {
+        // Sending identifier:exact=A AND identifier=B is a repeated identifier, which Epic rejects outright.
+        SearchCriteriaPostFilter.CombineCriteria(higher, lower).Should().Be(expected);
+    }
+
     private static ResourceEnvelope Observation(string id, string status) =>
         new("Observation", id, $$"""{"resourceType":"Observation","id":"{{id}}","status":"{{status}}"}""", null, null);
 }

@@ -195,11 +195,16 @@ export class ExecuteV2DialogComponent implements OnInit {
     if (!options) return;
     if (!options.supportsHospitalSwitch && this.selected()) return;
 
-    // Group ID applies to a bulk export, Search Criteria to a search-REST workflow; only the applicable one is sent.
+    // Group ID applies to a bulk export, Search Criteria to a search-REST workflow; only the applicable one is sent,
+    // and only when the user changed it. An untouched field sent as "" told the server "clear it for this run", so an
+    // ordinary run was recorded as an overridden one.
     const v2: ExecuteV2RunOptions = { targetEhrEndpointId: this.selected()?.id ?? null };
     if (options.supportsRunCriteria) {
-      if (this.isBulkExport()) v2.groupIdOverride = this.groupId().trim();
-      else v2.searchCriteriaOverride = this.searchCriteria().trim();
+      if (this.isBulkExport()) {
+        if (this.groupIdChanged()) v2.groupIdOverride = this.groupId().trim();
+      } else if (this.searchCriteriaChanged()) {
+        v2.searchCriteriaOverride = this.searchCriteria().trim();
+      }
     }
 
     // Only rows the user changed or added are sent; an untouched row keeps using its saved criteria server-side.
