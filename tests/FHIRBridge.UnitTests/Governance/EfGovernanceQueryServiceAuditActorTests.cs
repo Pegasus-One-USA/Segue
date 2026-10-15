@@ -166,4 +166,65 @@ public sealed class EfGovernanceQueryServiceAuditActorTests
         options.Actors.Select(x => x.Name).Should().BeInAscendingOrder(StringComparer.OrdinalIgnoreCase);
         options.Actors.Select(x => x.Value).Should().Contain(bob.Id.ToString());
     }
+
+    [Fact]
+    public async Task A_user_with_blank_names_is_shown_by_email_in_the_list_and_the_filter_alike()
+    {
+        var correlationId = Guid.NewGuid().ToString();
+        var user = new User("ext-blank", "blank@example.com", "  ", Guid.NewGuid());
+        user.UpdateName("", " ");
+        user.ApplyCreated("seed", DateTime.UtcNow);
+
+        await using (var context = CreateContext())
+        {
+            context.Users.Add(user);
+            context.AuditLogs.Add(Row(user.Id.ToString(), correlationId));
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var sut = CreateSut(context);
+            var listed = await sut.GetAuditLogsAsync(correlationId, null, null, 0, 50, default);
+            var sorted = await sut.GetAuditLogsAsync(correlationId, null, null, 0, 50, default, "actor", "asc");
+            var options = await sut.GetAuditLogFilterOptionsAsync(default);
+
+            listed.Items.Single().Actor.Should().Be("blank@example.com");
+            sorted.Items.Single().Actor.Should().Be("blank@example.com");
+            options.Actors.Should().Contain(new AuditLogActorOptionDto(user.Id.ToString(), "blank@example.com"));
+        }
+    }
+
+    [Fact]
+    public async Task Rows_stored_under_a_users_legacy_email_count_as_that_user()
+    {
+        // Rows written before actors were stored as ids carry the e-mail; the same person must appear once in the
+        // Actor filter, be named the same way, and filtering by them must return both kinds of row.
+        var correlationId = Guid.NewGuid().ToString();
+        var user = new User("ext-legacy", "legacy-user@example.com", "Legacy User", Guid.NewGuid());
+        user.ApplyCreated("seed", DateTime.UtcNow);
+
+        await using (var context = CreateContext())
+        {
+            context.Users.Add(user);
+            context.AuditLogs.AddRange(
+                Row(user.Id.ToString(), correlationId, "Role", "Updated", DateTime.UtcNow),
+                Row("legacy-user@example.com", correlationId, "Role", "Created", DateTime.UtcNow.AddDays(-400)));
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var sut = CreateSut(context);
+
+            var options = await sut.GetAuditLogFilterOptionsAsync(default);
+            options.Actors.Where(x => x.Name == "Legacy User").Should().ContainSingle()
+                .Which.Value.Should().Be(user.Id.ToString());
+
+            var filtered = await sut.GetAuditLogsAsync(
+                correlationId, null, null, 0, 50, default, filter: new AuditLogFilter(Actor: user.Id.ToString()));
+            filtered.Items.Select(x => x.Action).Should().BeEquivalentTo(["Updated", "Created"]);
+            filtered.Items.Select(x => x.Actor).Should().AllBe("Legacy User");
+        }
+    }
 }

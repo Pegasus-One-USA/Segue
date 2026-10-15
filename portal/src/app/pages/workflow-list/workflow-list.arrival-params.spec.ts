@@ -93,6 +93,37 @@ describe('WorkflowList — arriving from a builder Save', () => {
     expect(list.highlightedId()).toBeNull();
   }));
 
+  it('drops the highlight when the list fails to load, instead of leaving it for a later list', () => {
+    summary.and.returnValue(throwError(() => new Error('500')));
+
+    const list = create({ search: 'a', highlight: 'wf-123' });
+
+    expect(list.highlightedId()).toBeNull();
+  });
+
+  it('drops the highlight as soon as the user moves on (sort, page, filter, search)', () => {
+    const list = create({ search: 'a', highlight: 'wf-123' });
+    expect(list.highlightedId()).toBe('wf-123');
+
+    list.onSort('name');
+
+    expect(list.highlightedId()).toBeNull();
+  });
+
+  it('does not wait on a slow lookup: it searches by name once the limit passes', fakeAsync(() => {
+    const pending = new Subject<never>();
+    load.and.returnValue(pending.asObservable());
+
+    const list = create({ search: 'Slow flow', highlight: 'wf-123' });
+    expect(summary).not.toHaveBeenCalled();
+
+    tick(1500);
+
+    expect(list.searchQuery()).toBe('Slow flow');
+    expect(firstSearch().search).toBe('Slow flow');
+    tick(3000);
+  }));
+
   it('opens the full, unfiltered list when reached any other way', () => {
     const list = create({});
 

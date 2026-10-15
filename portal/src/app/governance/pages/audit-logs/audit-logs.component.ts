@@ -40,6 +40,12 @@ interface FilterDraft {
   toDate: string;
 }
 
+/** The filters a list was loaded with, plus the moment they were applied. A preset period counts back from that
+ *  moment, not from each load, so paging and sorting stay on the same time window. */
+interface AppliedFilters extends FilterDraft {
+  appliedAtMs: number;
+}
+
 const EMPTY_DRAFT: FilterDraft = {
   correlationId: '', module: '', actor: '', action: '', period: DEFAULT_PERIOD, fromDate: '', toDate: '',
 };
@@ -81,7 +87,10 @@ export class AuditLogsComponent implements OnInit {
   readonly actions = AUDIT_ACTIONS;
 
   /** The filters the current list was loaded with. Paging and sorting keep using these until Search is pressed. */
-  private readonly applied = signal<FilterDraft>({ ...EMPTY_DRAFT });
+  private readonly applied = signal<AppliedFilters>({ ...EMPTY_DRAFT, appliedAtMs: Date.now() });
+
+  /** Shown instead of searching when the filter bar cannot be applied as it stands. */
+  readonly filterError = signal('');
 
   /** True when the filter bar differs from what the list is showing, i.e. Search has not been pressed yet. */
   readonly dirty = computed(() => {
@@ -113,7 +122,7 @@ export class AuditLogsComponent implements OnInit {
     this.correlationId.set(params.get('correlationId') ?? '');
     this.entityType.set(params.get('entityType') ?? '');
     this.entityId.set(params.get('entityId') ?? '');
-    this.applied.set(this.draft());
+    this.applied.set({ ...this.draft(), appliedAtMs: Date.now() });
     this.api.auditLogFilterOptions().subscribe({
       next: options => this.filterOptions.set(options),
       // The list still works without the dropdown values; the filters just offer nothing to pick.
@@ -167,10 +176,12 @@ export class AuditLogsComponent implements OnInit {
   /** Filter controls only edit the filter bar; Search applies them (together with the correlation id). */
   onFilterChange(key: 'module' | 'actor' | 'action' | 'fromDate' | 'toDate', value: string): void {
     this[key].set(value);
+    this.filterError.set('');
   }
 
   onPeriodChange(value: Period): void {
     this.period.set(value);
+    this.filterError.set('');
     if (value !== 'custom') {
       this.fromDate.set('');
       this.toDate.set('');
@@ -179,7 +190,13 @@ export class AuditLogsComponent implements OnInit {
 
   /** Applies everything in the filter bar and goes back to the first page. */
   search(): void {
-    this.applied.set(this.draft());
+    // A custom range with no start would load the trail's whole history.
+    if (this.period() === 'custom' && !this.fromDate()) {
+      this.filterError.set('Choose a From date for the custom range.');
+      return;
+    }
+    this.filterError.set('');
+    this.applied.set({ ...this.draft(), appliedAtMs: Date.now() });
     this.pageIndex.set(0);
     this.load();
   }
@@ -201,7 +218,8 @@ export class AuditLogsComponent implements OnInit {
     this.period.set(DEFAULT_PERIOD);
     this.fromDate.set('');
     this.toDate.set('');
-    this.applied.set({ ...EMPTY_DRAFT });
+    this.filterError.set('');
+    this.applied.set({ ...EMPTY_DRAFT, appliedAtMs: Date.now() });
   }
 
   private draft(): FilterDraft {
@@ -217,8 +235,8 @@ export class AuditLogsComponent implements OnInit {
   }
 
   /** Builds the request filter. Custom dates are whole local days: From at its start, To up to the end of that day.
-   *  A preset period counts back from the moment of each load. */
-  private toRequestFilter(applied: FilterDraft): AuditLogFilter {
+   *  A preset period counts back from the moment the filters were applied. */
+  private toRequestFilter(applied: AppliedFilters): AuditLogFilter {
     const filter: AuditLogFilter = {
       module: applied.module || undefined,
       actor: applied.actor || undefined,
@@ -235,7 +253,7 @@ export class AuditLogsComponent implements OnInit {
         filter.toUtc = end.toISOString();
       }
     } else {
-      filter.fromUtc = new Date(Date.now() - PERIOD_HOURS[applied.period] * 60 * 60 * 1000).toISOString();
+      filter.fromUtc = new Date(applied.appliedAtMs - PERIOD_HOURS[applied.period] * 60 * 60 * 1000).toISOString();
     }
 
     return filter;

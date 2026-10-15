@@ -70,8 +70,11 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     public string? PasswordHash { get; private set; }
     public bool IsLocalLoginEnabled { get; private set; }
     public bool MustChangePassword { get; private set; }
-    [AuditRedact]
+    // A reset request can be made by anyone who knows an e-mail address, before signing in; recording it would let an
+    // anonymous caller grow the append-only trail at will. The reset that follows changes PasswordHash, which is.
+    [AuditIgnore]
     public string? PasswordResetTokenHash { get; private set; }
+    [AuditIgnore]
     public DateTime? PasswordResetTokenExpiresOnUtc { get; private set; }
 
     /// <summary>Hash of the short-lived, single-use passwordless "magic link" sign-in token.</summary>
@@ -91,8 +94,11 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     [AuditIgnore]
     public DateTime? LastLoginOnUtc { get; private set; }
 
-    // Security hardening columns.
+    // Security hardening columns. Failed attempts and lockouts are recorded in the authentication log and as security
+    // events; in the change trail every wrong password would add a row an unauthenticated caller controls.
+    [AuditIgnore]
     public int FailedLoginCount { get; private set; }
+    [AuditIgnore]
     public DateTime? LockoutEndUtc { get; private set; }
     public DateTime? LastPasswordChangedOnUtc { get; private set; }
     public DateTime? PasswordExpiresOnUtc { get; private set; }

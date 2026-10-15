@@ -1,14 +1,6 @@
-﻿import {
-  Component,
-  OnInit,
-  OnDestroy,
-  HostListener,
-  DestroyRef,
-  inject,
-  signal,
-  computed,
-} from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { timeout } from 'rxjs';
 import { CommonModule, DatePipe } from '@angular/common';
 import { HttpResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -47,6 +39,8 @@ import {
 const SEARCH_DEBOUNCE_MS = 300;
 /** How long the just-saved workflow's row stays highlighted after arriving from the builder. */
 const HIGHLIGHT_DURATION_MS = 3000;
+/** How long the arrival waits for the saved workflow's number before searching by its name instead. */
+const ARRIVAL_LOOKUP_TIMEOUT_MS = 1500;
 
 interface LaunchModal {
   name: string;
@@ -63,37 +57,15 @@ interface DataModal {
   error: string | null;
 }
 
-type SortColumn =
-  | 'name'
-  | 'source'
-  | 'audience'
-  | 'status'
-  | 'lastRun'
-  | 'actionOn';
+type SortColumn = 'name' | 'source' | 'audience' | 'status' | 'lastRun' | 'actionOn';
 type SortDirection = 'asc' | 'desc';
 /** Multi-select filter categories shown in the filter bar — see filterDefs/signalFor. */
-type FilterCategory =
-  | 'status'
-  | 'audience'
-  | 'source'
-  | 'destination'
-  | 'lastRunStatus'
-  | 'resourceType';
+type FilterCategory = 'status' | 'audience' | 'source' | 'destination' | 'lastRunStatus' | 'resourceType';
 
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [
-    CommonModule,
-    DatePipe,
-    FormsModule,
-    MatButtonModule,
-    MatIconModule,
-    MatMenuModule,
-    MatDividerModule,
-    RouterLink,
-    NewWorkflowDialogComponent,
-  ],
+  imports: [CommonModule, DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule, RouterLink, NewWorkflowDialogComponent],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })
@@ -111,27 +83,17 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   // ── RBAC: workflow.view (the route guard already reached here) only grants VIEW access — these four
   // are what actually gate each action-specific button/menu-item below, kept independent of one another
   // and of the source/destination-type permissions (which are unrelated — see sources/transforms filters).
-  protected readonly canCreate = computed(() =>
-    this.permissions.hasPermission('workflow.create'),
-  );
-  protected readonly canEdit = computed(() =>
-    this.permissions.hasPermission('workflow.edit'),
-  );
-  protected readonly canDelete = computed(() =>
-    this.permissions.hasPermission('workflow.delete'),
-  );
-  protected readonly canRun = computed(() =>
-    this.permissions.hasPermission('workflow.run'),
-  );
+  protected readonly canCreate = computed(() => this.permissions.hasPermission('workflow.create'));
+  protected readonly canEdit   = computed(() => this.permissions.hasPermission('workflow.edit'));
+  protected readonly canDelete = computed(() => this.permissions.hasPermission('workflow.delete'));
+  protected readonly canRun    = computed(() => this.permissions.hasPermission('workflow.run'));
 
   /** Gates the two overflow-menu items that expose the workflow's own wiring rather than act on it:
    *  "Integration Details" (the URLs, ids and headers a third party needs to drive this workflow) and
    *  "Download Configuration" (every configuration table it touches, dumped for offline analysis).
    *  Both are disclosure, not action, so they are restricted to SuperAdmin rather than to any
    *  workflow.* permission — deliberately NOT authStore.isAdmin(), which also admits a plain Admin. */
-  protected readonly canViewConfiguration = computed(() =>
-    this.authStore.hasRole('SuperAdmin'),
-  );
+  protected readonly canViewConfiguration = computed(() => this.authStore.hasRole('SuperAdmin'));
 
   readonly summaries = signal<WorkflowSummary[]>([]);
   readonly loading = signal(true);
@@ -143,6 +105,8 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Workflow id whose row is briefly highlighted after a save in the builder — see applyArrivalParams. */
   readonly highlightedId = signal<string | null>(null);
   private highlightHandle: ReturnType<typeof setTimeout> | undefined;
+  /** True from a builder-Save arrival until its first list result (or failure); see reload. */
+  private arrivalInFlight = false;
 
   /** Workflow id currently running/launching — disables its action button. Not set for an async ("background") run,
    *  which returns immediately so the row stays interactive; see runAsync. */
@@ -179,17 +143,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  `paged()` calls don't need to change even though pagination moved server-side. */
   readonly paged = computed(() => this.summaries());
 
-  readonly totalPages = computed(() =>
-    Math.max(1, Math.ceil(this.totalCount() / this.pageSize())),
-  );
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalCount() / this.pageSize())));
 
   /** First/last row numbers shown for the current page, for "Showing X–Y of Z". */
-  readonly rangeStart = computed(() =>
-    this.totalCount() === 0 ? 0 : this.pageIndex() * this.pageSize() + 1,
-  );
-  readonly rangeEnd = computed(() =>
-    Math.min(this.totalCount(), this.rangeStart() + this.pageSize() - 1),
-  );
+  readonly rangeStart = computed(() => (this.totalCount() === 0 ? 0 : this.pageIndex() * this.pageSize() + 1));
+  readonly rangeEnd = computed(() => Math.min(this.totalCount(), this.rangeStart() + this.pageSize() - 1));
 
   private searchDebounceHandle: ReturnType<typeof setTimeout> | undefined;
 
@@ -207,26 +165,23 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   // current rows meant the Destination filter listed five types while Destination Connections listed twenty,
   // and a vendor with no connection yet was unfilterable. Gated exactly as the masters gate their dropdowns
   // (phase config + the vendor's own `{prefix}.view`), so a role never sees a vendor it cannot access.
-  private readonly hasPermission = (code: string) =>
-    this.permissions.hasPermission(code);
+  private readonly hasPermission = (code: string) => this.permissions.hasPermission(code);
 
   readonly availableSources = computed(() =>
     sourceTypeOptions({
       isEnabled: (id: string) => this.phaseCfg.isSourceEnabled(id),
       hasPermission: this.hasPermission,
-    }).map((o) => o.value),
+    }).map(o => o.value),
   );
 
   readonly availableDestinations = computed(() =>
     destinationTypeOptions({
       isEnabled: (id: string) => this.phaseCfg.isTransformEnabled(id),
       hasPermission: this.hasPermission,
-    }).map((o) => o.value),
+    }).map(o => o.value),
   );
 
-  readonly availableResourceTypes = computed(() =>
-    resourceTypeOptions().map((o) => o.value),
-  );
+  readonly availableResourceTypes = computed(() => resourceTypeOptions().map(o => o.value));
 
   readonly selectedStatuses = signal<Set<string>>(new Set());
   readonly selectedAudiences = signal<Set<string>>(new Set());
@@ -255,16 +210,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.runStatusHub.ensureConnected();
     this.runStatusHub.runStatusChanged$
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((event) => {
-        this.summaries.update((rows) =>
-          rows.map((w) =>
+      .subscribe(event => {
+        this.summaries.update(rows =>
+          rows.map(w =>
             w.workflowId === event.workflowDefinitionId
-              ? {
-                  ...w,
-                  lastRun: event.status,
-                  lastRunAt: event.occurredAt,
-                  lastRunErrorReferenceId: event.errorReferenceId,
-                }
+              ? { ...w, lastRun: event.status, lastRunAt: event.occurredAt, lastRunErrorReferenceId: event.errorReferenceId }
               : w,
           ),
         );
@@ -311,26 +261,25 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     }
 
     this.highlightedId.set(highlight);
-    this.api.load(highlight).subscribe({
-      next: (workflow) => searchFor(workflow.workflowNumber?.trim() || name),
-      error: () => searchFor(name),
-    });
+    this.arrivalInFlight = true;
+    // Bounded, so a slow lookup cannot hold up the first list: past the limit it searches by name, as on a failure.
+    this.api
+      .load(highlight)
+      .pipe(timeout({ first: ARRIVAL_LOOKUP_TIMEOUT_MS }))
+      .subscribe({
+        next: (workflow) => searchFor(workflow.workflowNumber?.trim() || name),
+        error: () => searchFor(name),
+      });
   }
 
   optionsFor(category: FilterCategory): string[] {
     switch (category) {
-      case 'status':
-        return this.availableStatuses();
-      case 'audience':
-        return this.availableAudiences();
-      case 'source':
-        return this.availableSources();
-      case 'destination':
-        return this.availableDestinations();
-      case 'lastRunStatus':
-        return this.availableLastRunStatuses();
-      case 'resourceType':
-        return this.availableResourceTypes();
+      case 'status':        return this.availableStatuses();
+      case 'audience':      return this.availableAudiences();
+      case 'source':        return this.availableSources();
+      case 'destination':   return this.availableDestinations();
+      case 'lastRunStatus': return this.availableLastRunStatuses();
+      case 'resourceType':  return this.availableResourceTypes();
     }
   }
 
@@ -362,35 +311,23 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   selectedSetFor(category: FilterCategory): Set<string> {
     switch (category) {
-      case 'status':
-        return this.selectedStatuses();
-      case 'audience':
-        return this.selectedAudiences();
-      case 'source':
-        return this.selectedSources();
-      case 'destination':
-        return this.selectedDestinations();
-      case 'lastRunStatus':
-        return this.selectedLastRunStatuses();
-      case 'resourceType':
-        return this.selectedResourceTypes();
+      case 'status':        return this.selectedStatuses();
+      case 'audience':      return this.selectedAudiences();
+      case 'source':        return this.selectedSources();
+      case 'destination':   return this.selectedDestinations();
+      case 'lastRunStatus': return this.selectedLastRunStatuses();
+      case 'resourceType':  return this.selectedResourceTypes();
     }
   }
 
   private signalForCategory(category: FilterCategory) {
     switch (category) {
-      case 'status':
-        return this.selectedStatuses;
-      case 'audience':
-        return this.selectedAudiences;
-      case 'source':
-        return this.selectedSources;
-      case 'destination':
-        return this.selectedDestinations;
-      case 'lastRunStatus':
-        return this.selectedLastRunStatuses;
-      case 'resourceType':
-        return this.selectedResourceTypes;
+      case 'status':        return this.selectedStatuses;
+      case 'audience':      return this.selectedAudiences;
+      case 'source':        return this.selectedSources;
+      case 'destination':   return this.selectedDestinations;
+      case 'lastRunStatus': return this.selectedLastRunStatuses;
+      case 'resourceType':  return this.selectedResourceTypes;
     }
   }
 
@@ -403,9 +340,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   }
 
   toggleFilterMenu(category: FilterCategory): void {
-    this.openFilterMenu.set(
-      this.openFilterMenu() === category ? null : category,
-    );
+    this.openFilterMenu.set(this.openFilterMenu() === category ? null : category);
     // Each panel opens with an empty box — a term left over from the last time this filter was opened would
     // silently hide options the user never chose to exclude.
     this.filterOptionSearch.set('');
@@ -421,10 +356,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   readonly filterOptionSearch = signal('');
 
   showOptionSearch(category: FilterCategory): boolean {
-    return (
-      this.optionsFor(category).length >
-      WorkflowListComponent.OPTION_SEARCH_THRESHOLD
-    );
+    return this.optionsFor(category).length > WorkflowListComponent.OPTION_SEARCH_THRESHOLD;
   }
 
   /** The options actually rendered in the open panel — matched on the LABEL the user can see, not the raw enum
@@ -435,11 +367,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     const options = this.optionsFor(category);
     const term = this.filterOptionSearch().trim().toLowerCase();
     if (!term || !this.showOptionSearch(category)) return options;
-    return options.filter(
-      (value) =>
-        this.isFilterSelected(category, value) ||
-        this.displayLabelFor(category, value).toLowerCase().includes(term),
-    );
+    return options.filter(value =>
+      this.isFilterSelected(category, value)
+      || this.displayLabelFor(category, value).toLowerCase().includes(term));
   }
 
   // Centralized "click outside closes it" check — reads the click's actual target instead of relying
@@ -456,10 +386,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   }
 
   toggleFilterValue(category: FilterCategory, value: string): void {
-    this.signalForCategory(category).update((current) => {
+    this.signalForCategory(category).update(current => {
       const next = new Set(current);
-      if (next.has(value)) next.delete(value);
-      else next.add(value);
+      if (next.has(value)) next.delete(value); else next.add(value);
       return next;
     });
     this.pageIndex.set(0);
@@ -488,7 +417,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   onSort(column: SortColumn): void {
     if (this.sortColumn() === column) {
-      this.sortDirection.update((d) => (d === 'asc' ? 'desc' : 'asc'));
+      this.sortDirection.update(d => (d === 'asc' ? 'desc' : 'asc'));
     } else {
       this.sortColumn.set(column);
       this.sortDirection.set('asc');
@@ -505,13 +434,13 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   prevPage(): void {
     if (this.pageIndex() === 0) return;
-    this.pageIndex.update((i) => i - 1);
+    this.pageIndex.update(i => i - 1);
     this.reload();
   }
 
   nextPage(): void {
     if (this.pageIndex() >= this.totalPages() - 1) return;
-    this.pageIndex.update((i) => i + 1);
+    this.pageIndex.update(i => i + 1);
     this.reload();
   }
 
@@ -519,14 +448,23 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
     }
-    if (this.highlightHandle) {
-      clearTimeout(this.highlightHandle);
-    }
+    clearTimeout(this.highlightHandle);
+  }
+
+  private clearHighlight(): void {
+    clearTimeout(this.highlightHandle);
+    this.highlightHandle = undefined;
+    this.highlightedId.set(null);
   }
 
   /** `silent` (only ever passed from onSearch's debounce) skips the app-wide global loader for this request —
    *  see WorkflowApiService.summary for why: without it, every debounced keystroke blurs the search box mid-type. */
   reload(silent = false): void {
+    // The highlight marks the arrival's own result. Any later reload (page, sort, filter, search, a row action)
+    // means the user has moved on, and the row may no longer be the one on screen.
+    if (!this.arrivalInFlight) {
+      this.clearHighlight();
+    }
     this.loading.set(true);
     if (silent) this.searching.set(true);
     this.api
@@ -547,37 +485,39 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         silent,
       )
       .subscribe({
-        next: (result) => {
+        next: result => {
           this.summaries.set(result.items);
           this.totalCount.set(result.totalCount);
           this.availableStatuses.set(result.availableStatuses);
           this.availableAudiences.set(result.availableApplicationTypes);
-          this.availableLastRunStatuses.set(
-            result.availableLastRunStatuses ?? [],
-          );
+          this.availableLastRunStatuses.set(result.availableLastRunStatuses ?? []);
           this.loading.set(false);
           this.searching.set(false);
-          // Start the highlight's countdown only once the rows are on screen, not while a cold load is in flight.
-          if (this.highlightedId() && !this.highlightHandle) {
-            this.highlightHandle = setTimeout(
-              () => this.highlightedId.set(null),
-              HIGHLIGHT_DURATION_MS,
-            );
+          // Start the highlight's countdown only once the arrival's rows are on screen, not while a cold load is
+          // in flight.
+          if (this.arrivalInFlight) {
+            this.arrivalInFlight = false;
+            if (this.highlightedId()) {
+              this.highlightHandle = setTimeout(
+                () => this.clearHighlight(),
+                HIGHLIGHT_DURATION_MS,
+              );
+            }
           }
           // A delete/copy (or a filter/page-size change) can shrink the matching set out from under a page index
           // that pointed past the new last page — snap back and refetch rather than showing an empty page.
-          const lastPageIndex = Math.max(
-            0,
-            Math.ceil(result.totalCount / this.pageSize()) - 1,
-          );
+          const lastPageIndex = Math.max(0, Math.ceil(result.totalCount / this.pageSize()) - 1);
           if (this.pageIndex() > lastPageIndex) {
             this.pageIndex.set(lastPageIndex);
             this.reload(silent);
           }
         },
-        error: (err) => {
+        error: err => {
           this.loading.set(false);
           this.searching.set(false);
+          // No rows to point at: drop the highlight rather than leave it to land on a later, unrelated list.
+          this.arrivalInFlight = false;
+          this.clearHighlight();
           this.toast.error(this.messageOf(err, 'Failed to load workflows.'));
         },
       });
@@ -589,10 +529,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
     }
-    this.searchDebounceHandle = setTimeout(
-      () => this.reload(true),
-      SEARCH_DEBOUNCE_MS,
-    );
+    this.searchDebounceHandle = setTimeout(() => this.reload(true), SEARCH_DEBOUNCE_MS);
   }
 
   // ── New workflow (name + description first) — NewWorkflowDialogComponent, shared with the Dashboard ──
@@ -626,7 +563,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (row.action === 'Launch') {
       this.busyId.set(row.workflowId);
       this.api.launchUrl(row.workflowId).subscribe({
-        next: (result) => {
+        next: result => {
           this.busyId.set(null);
           this.launchModal.set({
             name: row.name,
@@ -635,11 +572,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
             mode: result.mode ?? 'ehr-launch',
           });
         },
-        error: (err) => {
+        error: err => {
           this.busyId.set(null);
-          this.toast.error(
-            this.messageOf(err, 'Could not generate a launch URL.'),
-          );
+          this.toast.error(this.messageOf(err, 'Could not generate a launch URL.'));
         },
       });
       return;
@@ -659,7 +594,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         this.toast.success('Workflow run', `"${row.name}" was triggered.`);
         this.reload();
       },
-      error: (err) => {
+      error: err => {
         this.busyId.set(null);
         this.toast.error(this.runFailureMessage(err));
       },
@@ -678,30 +613,23 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  (RunStatusHubService.runStatusChanged$, wired in the constructor above) rather than polling here. */
   private runAsync(row: WorkflowSummary): void {
     this.api.run(row.workflowId, true).subscribe({
-      next: (result) => {
+      next: result => {
         const correlationId = (result as WorkflowRunStatus).correlationId;
         this.toast.success(
           'Running in background',
-          `"${row.name}" is running — you can navigate away, it keeps running on the server.` +
-            (correlationId ? ` Correlation ID: ${correlationId}` : ''),
+          `"${row.name}" is running — you can navigate away, it keeps running on the server.`
+            + (correlationId ? ` Correlation ID: ${correlationId}` : ''),
         );
-        this.summaries.update((rows) =>
-          rows.map((w) =>
+        this.summaries.update(rows =>
+          rows.map(w =>
             w.workflowId === row.workflowId
-              ? {
-                  ...w,
-                  lastRun: 'Running',
-                  lastRunAt: new Date().toISOString(),
-                }
+              ? { ...w, lastRun: 'Running', lastRunAt: new Date().toISOString() }
               : w,
           ),
         );
       },
-      error: (err) => {
-        this.toast.error(
-          'Workflow run',
-          this.messageOf(err, 'The background run could not be started.'),
-        );
+      error: err => {
+        this.toast.error('Workflow run', this.messageOf(err, 'The background run could not be started.'));
       },
     });
   }
@@ -716,18 +644,12 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     });
 
     this.api.destinationData(row.workflowId).subscribe({
-      next: (data) =>
-        this.dataModal.update((m) =>
-          m ? { ...m, loading: false, data, error: data.error } : m,
-        ),
-      error: (err) =>
-        this.dataModal.update((m) =>
+      next: data =>
+        this.dataModal.update(m => (m ? { ...m, loading: false, data, error: data.error } : m)),
+      error: err =>
+        this.dataModal.update(m =>
           m
-            ? {
-                ...m,
-                loading: false,
-                error: this.messageOf(err, 'Could not read destination data.'),
-              }
+            ? { ...m, loading: false, error: this.messageOf(err, 'Could not read destination data.') }
             : m,
         ),
     });
@@ -746,9 +668,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   }
 
   private openBuilder(workflowId: string): void {
-    this.router.navigate(['/workflow-builder-v2'], {
-      queryParams: { id: workflowId },
-    });
+    this.router.navigate(['/workflow-builder-v2'], { queryParams: { id: workflowId } });
   }
 
   /** Enable/disable toggle via the activate/deactivate endpoints. */
@@ -756,39 +676,25 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (this.rowBusyId() || !this.canEdit()) return;
     this.rowBusyId.set(row.workflowId);
     const enabling = row.status === 'Disabled';
-    const call = enabling
-      ? this.api.activate(row.workflowId)
-      : this.api.deactivate(row.workflowId);
+    const call = enabling ? this.api.activate(row.workflowId) : this.api.deactivate(row.workflowId);
     call.subscribe({
       next: () => {
         this.rowBusyId.set(null);
         // Re-enabling does not simply restore "Enabled" — Draft/Ready is derived from the graph, so a
         // workflow with no destination wired up goes back to Draft, exactly as the server would report it
         // on the next reload. Getting this wrong would show a stale "Ready" until the list refreshed.
-        this.summaries.update((rows) =>
-          rows.map((w) =>
+        this.summaries.update(rows =>
+          rows.map(w =>
             w.workflowId === row.workflowId
-              ? {
-                  ...w,
-                  status: enabling
-                    ? w.hasDestination
-                      ? 'Ready'
-                      : 'Draft'
-                    : 'Disabled',
-                }
+              ? { ...w, status: enabling ? (w.hasDestination ? 'Ready' : 'Draft') : 'Disabled' }
               : w,
           ),
         );
-        this.toast.success(
-          enabling ? 'Enabled' : 'Disabled',
-          `"${row.name}" is now ${enabling ? 'enabled' : 'disabled'}.`,
-        );
+        this.toast.success(enabling ? 'Enabled' : 'Disabled', `"${row.name}" is now ${enabling ? 'enabled' : 'disabled'}.`);
       },
-      error: (err) => {
+      error: err => {
         this.rowBusyId.set(null);
-        this.toast.error(
-          this.messageOf(err, 'Could not change the workflow state.'),
-        );
+        this.toast.error(this.messageOf(err, 'Could not change the workflow state.'));
       },
     });
   }
@@ -800,17 +706,13 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (this.rowBusyId() || !this.canEdit()) return;
     this.rowBusyId.set(row.workflowId);
     const enabling = !row.isPubliclyLaunchable;
-    const call = enabling
-      ? this.api.enablePublicLaunch(row.workflowId)
-      : this.api.disablePublicLaunch(row.workflowId);
+    const call = enabling ? this.api.enablePublicLaunch(row.workflowId) : this.api.disablePublicLaunch(row.workflowId);
     call.subscribe({
       next: () => {
         this.rowBusyId.set(null);
-        this.summaries.update((rows) =>
-          rows.map((w) =>
-            w.workflowId === row.workflowId
-              ? { ...w, isPubliclyLaunchable: enabling }
-              : w,
+        this.summaries.update(rows =>
+          rows.map(w =>
+            w.workflowId === row.workflowId ? { ...w, isPubliclyLaunchable: enabling } : w,
           ),
         );
         this.toast.success(
@@ -820,11 +722,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
             : `"${row.name}" can no longer be launched anonymously.`,
         );
       },
-      error: (err) => {
+      error: err => {
         this.rowBusyId.set(null);
-        this.toast.error(
-          this.messageOf(err, 'Could not change the public-launch state.'),
-        );
+        this.toast.error(this.messageOf(err, 'Could not change the public-launch state.'));
       },
     });
   }
@@ -849,7 +749,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         this.reload();
         this.toast.success('Deleted', `"${row.name}" was deleted.`);
       },
-      error: (err) => {
+      error: err => {
         this.rowBusyId.set(null);
         this.confirmDelete.set(null);
         this.toast.error(this.messageOf(err, 'Could not delete the workflow.'));
@@ -873,12 +773,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   openIntegrationDetails(row: WorkflowSummary): void {
     this.integrationModal.set(
-      buildIntegrationDetails(
-        row,
-        this.apiOrigin(),
-        this.audienceLabel(row.applicationType),
-      ),
-    );
+      buildIntegrationDetails(row, this.apiOrigin(), this.audienceLabel(row.applicationType)));
   }
 
   closeIntegrationDetails(): void {
@@ -893,7 +788,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
 
   /** True when any readiness check is blocking — drives the panel's warning banner. */
   hasBlockingChecks(modal: IntegrationDetails): boolean {
-    return modal.checks.some((check) => check.state === 'blocked');
+    return modal.checks.some(check => check.state === 'blocked');
   }
 
   /** Copies the whole panel as plain text, so an admin can paste it straight into an email to the partner. */
@@ -913,28 +808,19 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     this.exportingId.set(row.workflowId);
 
     this.api.configurationExport(row.workflowId).subscribe({
-      next: (response) => {
+      next: response => {
         this.exportingId.set(null);
         const blob = response.body;
         if (!blob) {
           this.toast.error('Download', 'The export came back empty.');
           return;
         }
-        this.saveBlob(
-          blob,
-          this.fileNameFrom(response, `workflow-config-${row.workflowId}.txt`),
-        );
-        this.toast.success(
-          'Configuration exported',
-          `The configuration for "${row.name}" was downloaded.`,
-        );
+        this.saveBlob(blob, this.fileNameFrom(response, `workflow-config-${row.workflowId}.txt`));
+        this.toast.success('Configuration exported', `The configuration for "${row.name}" was downloaded.`);
       },
-      error: (err) => {
+      error: err => {
         this.exportingId.set(null);
-        this.toast.error(
-          'Download',
-          this.messageOf(err, 'Could not export the workflow configuration.'),
-        );
+        this.toast.error('Download', this.messageOf(err, 'Could not export the workflow configuration.'));
       },
     });
   }
@@ -959,9 +845,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  ExecutionHistoryListComponent's workflowIdFilter/?workflowId= handling) — same backend param the
    *  Dashboard's ?status= tile links already established the pattern for. */
   onViewExecutionHistory(row: WorkflowSummary): void {
-    this.router.navigate(['/execution-history'], {
-      queryParams: { workflowId: row.workflowId },
-    });
+    this.router.navigate(['/execution-history'], { queryParams: { workflowId: row.workflowId } });
   }
 
   /** Opens the duplicate-workflow modal, pre-filling a "<name> (copy)" suggestion. Duplicating produces a
@@ -1023,12 +907,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         this.rowBusyId.set(null);
         this.closeCopyWorkflow();
         this.reload();
-        this.toast.success(
-          'Workflow copied',
-          `"${name}" was created (disabled). Enable it when you're ready.`,
-        );
+        this.toast.success('Workflow copied', `"${name}" was created (disabled). Enable it when you're ready.`);
       },
-      error: (err) => {
+      error: err => {
         this.rowBusyId.set(null);
         this.toast.error(this.messageOf(err, 'Could not copy the workflow.'));
       },
@@ -1038,16 +919,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Friendly SMART application-type label for the Audience column. */
   audienceLabel(applicationType: string | null): string {
     switch (applicationType) {
-      case 'EhrLaunch':
-        return 'EHR Launch (Provider)';
-      case 'Standalone':
-        return 'Provider Standalone';
-      case 'Patient':
-        return 'Patient Standalone';
-      case 'Backend':
-        return 'Backend Service';
-      default:
-        return '—';
+      case 'EhrLaunch':  return 'EHR Launch (Provider)';
+      case 'Standalone': return 'Provider Standalone';
+      case 'Patient':    return 'Patient Standalone';
+      case 'Backend':    return 'Backend Service';
+      default:           return '—';
     }
   }
 
@@ -1069,11 +945,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** Tooltip for the lifecycle badge — "Draft" on its own does not say why the workflow cannot run. */
   statusHint(status: WorkflowLifecycleStatus): string {
     return {
-      Draft:
-        'No destination configured yet, so this workflow cannot run. Add one to make it Ready.',
+      Draft: 'No destination configured yet, so this workflow cannot run. Add one to make it Ready.',
       Ready: 'Source and destination are configured — this workflow will run.',
-      Disabled:
-        'Deliberately paused. Enable it from the row menu to make it runnable again.',
+      Disabled: 'Deliberately paused. Enable it from the row menu to make it runnable again.',
     }[status];
   }
 
@@ -1126,10 +1000,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   }
 
   private messageOf(err: unknown, fallback: string): string {
-    const e = err as {
-      error?: { title?: string; error_description?: string } | string;
-      message?: string;
-    };
+    const e = err as { error?: { title?: string; error_description?: string } | string; message?: string };
     const body = e?.error;
     if (body && typeof body === 'object') {
       return body.error_description || body.title || e?.message || fallback;
@@ -1140,9 +1011,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   /** The backend's Error Reference ID (ERR-…) when a run failed technically — quotable to support. */
   private refOf(err: unknown): string | null {
     const body = (err as { error?: { errorReferenceId?: string } })?.error;
-    return body && typeof body === 'object'
-      ? (body.errorReferenceId ?? null)
-      : null;
+    return body && typeof body === 'object' ? body.errorReferenceId ?? null : null;
   }
 
   /** A generic, PHI-safe failure message for a run — with the reference id appended when present so it can be

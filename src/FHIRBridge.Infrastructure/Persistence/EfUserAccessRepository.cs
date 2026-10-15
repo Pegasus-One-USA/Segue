@@ -364,8 +364,12 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
     }
 
     /// <summary>Runs the work in one database transaction, so a permission change made in more than one save is
-    /// applied completely or not at all. Joins a transaction that is already open; runs as-is on a non-relational provider
-    /// (the in-memory store used by tests has no transactions).</summary>
+    /// applied completely or not at all. Joins a transaction that is already open; runs as-is on a non-relational
+    /// provider (the in-memory store used by tests has no transactions).
+    /// <para>Runs through the context's execution strategy: a retrying strategy (EnableRetryOnFailure, common on Azure
+    /// SQL) rejects a transaction started outside it, and may run the whole unit again after a transient failure.
+    /// Each attempt therefore starts with no permission allocations tracked, and re-reads them; the work computes
+    /// its changes from what it reads.</para></summary>
     private async Task InTransactionAsync(Func<Task> work, CancellationToken cancellationToken)
     {
         if (!_dbContext.Database.IsRelational() || _dbContext.Database.CurrentTransaction is not null)
@@ -374,9 +378,18 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
             return;
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        await work();
-        await transaction.CommitAsync(cancellationToken);
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            foreach (var entry in _dbContext.ChangeTracker.Entries<PermissionAllocation>().ToList())
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+            await work();
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
     public async Task<IReadOnlyList<Role>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken)

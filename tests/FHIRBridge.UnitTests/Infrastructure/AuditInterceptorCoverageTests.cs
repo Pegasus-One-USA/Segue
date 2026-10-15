@@ -174,6 +174,39 @@ public sealed class AuditInterceptorCoverageTests
     }
 
     [Fact]
+    public async Task Failed_sign_ins_and_password_reset_requests_write_no_audit_row()
+    {
+        // Both can be triggered by an anonymous caller; the authentication log and security events record them.
+        // In the append-only trail every attempt would be a row an attacker controls.
+        var user = new User("ext-4", "attempts@example.com", "Attempts", Guid.NewGuid());
+
+        await using (var context = CreateContext())
+        {
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var tracked = await context.Users.SingleAsync(x => x.Id == user.Id);
+            for (var i = 0; i < 6; i++)
+            {
+                tracked.RegisterFailedLogin(maxAttempts: 5, lockoutDuration: TimeSpan.FromMinutes(15));
+                await context.SaveChangesAsync();
+            }
+
+            tracked.SetPasswordResetToken("reset-token-hash", DateTime.UtcNow.AddHours(1));
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            (await context.AuditLogs.CountAsync(x => x.EntityType == nameof(User) && x.Action == "Updated"))
+                .Should().Be(0);
+        }
+    }
+
+    [Fact]
     public async Task Disabling_mfa_is_still_audited_but_without_the_secret()
     {
         // A real account change must keep its row; only the credential value is withheld.

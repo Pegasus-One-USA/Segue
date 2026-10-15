@@ -1,20 +1,13 @@
 ﻿<div class="list-page">
+
   <!-- Header -->
   <div class="page-head">
     <div>
       <h1 class="page-title">Workflows</h1>
-      <p class="page-sub">
-        Launch interactive (EHR / patient) workflows, run backend workflows, and
-        inspect what they wrote.
-      </p>
+      <p class="page-sub">Launch interactive (EHR / patient) workflows, run backend workflows, and inspect what they wrote.</p>
     </div>
     <div class="page-head-actions">
-      <button
-        class="btn-secondary"
-        type="button"
-        (click)="reload()"
-        [disabled]="loading()"
-      >
+      <button class="btn-secondary" type="button" (click)="reload()" [disabled]="loading()">
         <span class="ico-refresh" [class.spin]="loading()">&#8635;</span>
         Refresh
       </button>
@@ -33,20 +26,9 @@
   <!-- Filter -->
   <div class="filter-card">
     <div class="search-wrap">
-      <svg
-        class="search-ico"
-        width="16"
-        height="16"
-        viewBox="0 0 20 20"
-        fill="none"
-      >
-        <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6" />
-        <path
-          d="M13.5 13.5 17 17"
-          stroke="currentColor"
-          stroke-width="1.6"
-          stroke-linecap="round"
-        />
+      <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
       </svg>
       <input
         type="search"
@@ -66,32 +48,15 @@
           <button
             type="button"
             class="filter-dropdown-btn"
-            [class.filter-dropdown-btn--active]="
-              selectedCountFor(def.category) > 0
-            "
+            [class.filter-dropdown-btn--active]="selectedCountFor(def.category) > 0"
             (click)="toggleFilterMenu(def.category)"
           >
             {{ def.label }}
             @if (selectedCountFor(def.category) > 0) {
-              <span class="filter-count-badge">{{
-                selectedCountFor(def.category)
-              }}</span>
+              <span class="filter-count-badge">{{ selectedCountFor(def.category) }}</span>
             }
-            <svg
-              class="select-chevron"
-              width="10"
-              height="6"
-              viewBox="0 0 10 6"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M1 1l4 4 4-4"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
+            <svg class="select-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
 
@@ -123,13 +88,7 @@
                 }
               }
               @if (selectedCountFor(def.category) > 0) {
-                <button
-                  type="button"
-                  class="filter-clear-btn"
-                  (click)="clearFilter(def.category)"
-                >
-                  Clear
-                </button>
+                <button type="button" class="filter-clear-btn" (click)="clearFilter(def.category)">Clear</button>
               }
             </div>
           }
@@ -137,16 +96,7 @@
       }
 
       <button class="btn-reset" type="button" (click)="reset()">
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
           <path d="M3 3v5h5"></path>
         </svg>
@@ -164,83 +114,41 @@
             <th class="col-menu"></th>
             <th class="col-sortable" (click)="onSort('name')">
               Workflow
-              <span
-                class="sort-ico"
-                [class.sort-ico--active]="sortColumn() === 'name'"
-              >
-                {{
-                  sortColumn() === "name" && sortDirection() === "desc"
-                    ? "↓"
-                    : "↑"
-                }}
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'name'">
+                {{ sortColumn() === 'name' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
             <th class="col-sortable" (click)="onSort('source')">
               Source
-              <span
-                class="sort-ico"
-                [class.sort-ico--active]="sortColumn() === 'source'"
-              >
-                {{
-                  sortColumn() === "source" && sortDirection() === "desc"
-                    ? "↓"
-                    : "↑"
-                }}
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'source'">
+                {{ sortColumn() === 'source' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
             <th class="col-sortable" (click)="onSort('audience')">
               Audience
-              <span
-                class="sort-ico"
-                [class.sort-ico--active]="sortColumn() === 'audience'"
-              >
-                {{
-                  sortColumn() === "audience" && sortDirection() === "desc"
-                    ? "↓"
-                    : "↑"
-                }}
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'audience'">
+                {{ sortColumn() === 'audience' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
             <th class="col-sortable" (click)="onSort('status')">
               Status
-              <span
-                class="sort-ico"
-                [class.sort-ico--active]="sortColumn() === 'status'"
-              >
-                {{
-                  sortColumn() === "status" && sortDirection() === "desc"
-                    ? "↓"
-                    : "↑"
-                }}
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'status'">
+                {{ sortColumn() === 'status' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
             <!-- <th class="col-num">Nodes</th> -->
             <!-- <th class="col-num">Edges</th> -->
             <th class="col-sortable" (click)="onSort('lastRun')">
               Last Run
-              <span
-                class="sort-ico"
-                [class.sort-ico--active]="sortColumn() === 'lastRun'"
-              >
-                {{
-                  sortColumn() === "lastRun" && sortDirection() === "desc"
-                    ? "↓"
-                    : "↑"
-                }}
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'lastRun'">
+                {{ sortColumn() === 'lastRun' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
             <th>Action by</th>
             <th class="col-sortable" (click)="onSort('actionOn')">
               Action on
-              <span
-                class="sort-ico"
-                [class.sort-ico--active]="sortColumn() === 'actionOn'"
-              >
-                {{
-                  sortColumn() === "actionOn" && sortDirection() === "desc"
-                    ? "↓"
-                    : "↑"
-                }}
+              <span class="sort-ico" [class.sort-ico--active]="sortColumn() === 'actionOn'">
+                {{ sortColumn() === 'actionOn' && sortDirection() === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
           </tr>
@@ -259,9 +167,7 @@
                   title="More actions"
                   [matMenuTriggerFor]="rowMenu"
                   (click)="$event.stopPropagation()"
-                >
-                  <mat-icon>more_vert</mat-icon>
-                </button>
+                ><mat-icon>more_vert</mat-icon></button>
 
                 <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
                   <!-- Run is offered only for a Ready workflow. 'action' distinguishes backend Run from
@@ -269,13 +175,11 @@
                        the workflow can actually run — a Draft has no destination wired up, and a Disabled one
                        is deliberately paused. Both are shown disabled rather than hidden, with the reason in
                        the tooltip, so the menu doesn't silently change shape between rows. -->
-                  @if (w.action === "Run" && canRun()) {
+                  @if (w.action === 'Run' && canRun()) {
                     <button
                       mat-menu-item
                       type="button"
-                      [disabled]="
-                        busyId() === w.workflowId || w.status !== 'Ready'
-                      "
+                      [disabled]="busyId() === w.workflowId || w.status !== 'Ready'"
                       [title]="runDisabledHint(w)"
                       (click)="onAction(w, 'async')"
                     >
@@ -288,15 +192,11 @@
                        Save button (gated on workflow.edit there) decides whether anything can actually
                        be changed. Relabeled so a view-only role isn't told it can "Edit". -->
                   <button mat-menu-item type="button" (click)="onEdit(w)">
-                    <mat-icon>{{ canEdit() ? "edit" : "visibility" }}</mat-icon>
-                    {{ canEdit() ? "Edit" : "View" }}
+                    <mat-icon>{{ canEdit() ? 'edit' : 'visibility' }}</mat-icon>
+                    {{ canEdit() ? 'Edit' : 'View' }}
                   </button>
 
-                  <button
-                    mat-menu-item
-                    type="button"
-                    (click)="onViewExecutionHistory(w)"
-                  >
+                  <button mat-menu-item type="button" (click)="onViewExecutionHistory(w)">
                     <mat-icon>history</mat-icon> Execution History
                   </button>
 
@@ -307,10 +207,8 @@
                       [disabled]="rowBusyId() === w.workflowId"
                       (click)="onToggleEnabled(w)"
                     >
-                      <mat-icon>{{
-                        w.status === "Disabled" ? "play_arrow" : "pause"
-                      }}</mat-icon>
-                      {{ w.status === "Disabled" ? "Enable" : "Disable" }}
+                      <mat-icon>{{ w.status === 'Disabled' ? 'play_arrow' : 'pause' }}</mat-icon>
+                      {{ w.status === 'Disabled' ? 'Enable' : 'Disable' }}
                     </button>
                   }
 
@@ -319,21 +217,13 @@
                       mat-menu-item
                       type="button"
                       [disabled]="rowBusyId() === w.workflowId"
-                      [title]="
-                        w.isPubliclyLaunchable
-                          ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously.'
-                          : 'Not publicly launchable. Lets a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'
-                      "
+                      [title]="w.isPubliclyLaunchable
+                        ? 'Publicly launchable — a third-party app can mint an Epic-login link for this workflow anonymously.'
+                        : 'Not publicly launchable. Lets a third-party app (e.g. a hospital picker) mint an anonymous Epic-login link for this workflow.'"
                       (click)="onTogglePublicLaunch(w)"
                     >
-                      <mat-icon>{{
-                        w.isPubliclyLaunchable ? "public" : "lock"
-                      }}</mat-icon>
-                      {{
-                        w.isPubliclyLaunchable
-                          ? "Revoke public launch"
-                          : "Allow public launch"
-                      }}
+                      <mat-icon>{{ w.isPubliclyLaunchable ? 'public' : 'lock' }}</mat-icon>
+                      {{ w.isPubliclyLaunchable ? 'Revoke public launch' : 'Allow public launch' }}
                     </button>
                   }
 
@@ -371,8 +261,7 @@
                       title="Show the URLs and values a third-party app needs to run this workflow."
                       (click)="openIntegrationDetails(w)"
                     >
-                      <mat-icon>integration_instructions</mat-icon> Integration
-                      Details
+                      <mat-icon>integration_instructions</mat-icon> Integration Details
                     </button>
 
                     <!-- Read-only dump of every configuration table this workflow touches, for offline analysis. -->
@@ -384,11 +273,7 @@
                       (click)="onDownloadConfiguration(w)"
                     >
                       <mat-icon>download</mat-icon>
-                      {{
-                        exportingId() === w.workflowId
-                          ? "Preparing…"
-                          : "Download Configuration"
-                      }}
+                      {{ exportingId() === w.workflowId ? 'Preparing…' : 'Download Configuration' }}
                     </button>
                   }
 
@@ -412,9 +297,7 @@
                   <div class="name-block">
                     <span class="cell-primary">{{ w.name }}</span>
                     @if (w.description) {
-                      <span class="cell-desc" [title]="w.description">{{
-                        w.description
-                      }}</span>
+                      <span class="cell-desc" [title]="w.description">{{ w.description }}</span>
                     }
                     <!-- Number rides the existing meta line rather than taking its own column: the table is
                          already 8 columns wide (Nodes/Edges were commented out for width), and pairing the
@@ -424,29 +307,19 @@
                         <span class="cell-number">{{ w.workflowNumber }}</span>
                         <span class="cell-meta-sep">·</span>
                       }
-                      {{
-                        w.action === "Launch"
-                          ? "Interactive launch"
-                          : "Backend / on-demand"
-                      }}
+                      {{ w.action === 'Launch' ? 'Interactive launch' : 'Backend / on-demand' }}
                     </span>
                   </div>
                 </div>
               </td>
               <td>
                 @if (w.sourceSystemType) {
-                  <span class="tag">{{
-                    sourceSystemLabel(w.sourceSystemType)
-                  }}</span>
+                  <span class="tag">{{ sourceSystemLabel(w.sourceSystemType) }}</span>
                 } @else {
                   <span class="cell-muted">—</span>
                 }
               </td>
-              <td>
-                <span class="cell-muted">{{
-                  audienceLabel(w.applicationType)
-                }}</span>
-              </td>
+              <td><span class="cell-muted">{{ audienceLabel(w.applicationType) }}</span></td>
               <td>
                 <span
                   class="badge"
@@ -463,40 +336,24 @@
               <td>
                 @if (w.lastRun) {
                   <div class="lastrun">
-                    <span [class]="runStatusClass(w.lastRun)">{{
-                      runStatusLabel(w.lastRun)
-                    }}</span>
-                    <span class="cell-meta">{{
-                      w.lastRunAt | date: "MMM d, h:mm a"
-                    }}</span>
+                    <span [class]="runStatusClass(w.lastRun)">{{ runStatusLabel(w.lastRun) }}</span>
+                    <span class="cell-meta">{{ w.lastRunAt | date:'MMM d, h:mm a' }}</span>
                     @if (w.lastRunErrorReferenceId) {
                       <a
                         class="mono link error-reference-link"
                         [routerLink]="['/operations/errors']"
-                        [queryParams]="{
-                          errorReferenceId: w.lastRunErrorReferenceId,
-                        }"
+                        [queryParams]="{ errorReferenceId: w.lastRunErrorReferenceId }"
                         (click)="$event.stopPropagation()"
                         title="View this error in Operations → Errors"
-                        >{{ w.lastRunErrorReferenceId }}</a
-                      >
+                      >{{ w.lastRunErrorReferenceId }}</a>
                     }
                   </div>
                 } @else {
                   <span class="cell-muted">Never run</span>
                 }
               </td>
-              <td>
-                <span class="cell-muted">{{
-                  (w.modifiedBy || w.createdBy) ?? "—"
-                }}</span>
-              </td>
-              <td>
-                <span class="cell-muted">{{
-                  (w.modifiedOnUtc || w.createdOnUtc | date: "MMM d, h:mm a") ??
-                    "—"
-                }}</span>
-              </td>
+              <td><span class="cell-muted">{{ (w.modifiedBy || w.createdBy) ?? '—' }}</span></td>
+              <td><span class="cell-muted">{{ ((w.modifiedOnUtc || w.createdOnUtc) | date:'MMM d, h:mm a') ?? '—' }}</span></td>
             </tr>
           }
         </tbody>
@@ -509,20 +366,8 @@
     } @else if (totalCount() === 0) {
       <div class="state-block">
         <div class="empty-icon">&#9889;</div>
-        <h3>
-          {{
-            searchQuery()
-              ? "No workflows matched your search"
-              : "No workflows yet"
-          }}
-        </h3>
-        <p>
-          {{
-            searchQuery()
-              ? "Try a different search term."
-              : "Create your first workflow to see it here."
-          }}
-        </p>
+        <h3>{{ searchQuery() ? 'No workflows matched your search' : 'No workflows yet' }}</h3>
+        <p>{{ searchQuery() ? 'Try a different search term.' : 'Create your first workflow to see it here.' }}</p>
         @if (!searchQuery() && canCreate()) {
           <button class="btn-cta" type="button" (click)="onNewWorkflow()">
             New
@@ -539,72 +384,24 @@
               (change)="onPageSizeChange(+$any($event.target).value)"
             >
               @for (size of pageSizeOptions; track size) {
-                <option [value]="size" [selected]="size === pageSize()">
-                  {{ size }}
-                </option>
+                <option [value]="size" [selected]="size === pageSize()">{{ size }}</option>
               }
             </select>
-            <svg
-              class="select-chevron"
-              width="10"
-              height="6"
-              viewBox="0 0 10 6"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M1 1l4 4 4-4"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
+            <svg class="select-chevron" width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
         </div>
 
-        <span class="range-info"
-          >Showing <strong>{{ rangeStart() }}–{{ rangeEnd() }}</strong> of
-          <strong>{{ totalCount() }}</strong></span
-        >
+        <span class="range-info">Showing <strong>{{ rangeStart() }}–{{ rangeEnd() }}</strong> of <strong>{{ totalCount() }}</strong></span>
 
         <div class="page-nav">
-          <button
-            class="page-nav-btn"
-            type="button"
-            [disabled]="pageIndex() === 0"
-            (click)="prevPage()"
-            aria-label="Previous page"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path
-                d="M10 12 6 8l4-4"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+          <button class="page-nav-btn" type="button" [disabled]="pageIndex() === 0" (click)="prevPage()" aria-label="Previous page">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12 6 8l4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <span class="page-of"
-            >Page {{ pageIndex() + 1 }} of {{ totalPages() }}</span
-          >
-          <button
-            class="page-nav-btn"
-            type="button"
-            [disabled]="pageIndex() >= totalPages() - 1"
-            (click)="nextPage()"
-            aria-label="Next page"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path
-                d="M6 4l4 4-4 4"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+          <span class="page-of">Page {{ pageIndex() + 1 }} of {{ totalPages() }}</span>
+          <button class="page-nav-btn" type="button" [disabled]="pageIndex() >= totalPages() - 1" (click)="nextPage()" aria-label="Next page">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
         </div>
       </div>
@@ -618,45 +415,29 @@
     <div class="modal" (click)="$event.stopPropagation()">
       <div class="modal-head">
         <h2>Launch URL</h2>
-        <button class="modal-close" type="button" (click)="closeLaunchModal()">
-          &times;
-        </button>
+        <button class="modal-close" type="button" (click)="closeLaunchModal()">&times;</button>
       </div>
       <div class="modal-body">
         @if (m.opensDirectly) {
           <p class="modal-sub">
-            Share this link to launch <strong>{{ m.name }}</strong
-            >. The {{ m.mode === "patient" ? "patient" : "clinician" }} opens it
-            directly and signs in — no EHR launch needed.
+            Share this link to launch <strong>{{ m.name }}</strong>. The
+            {{ m.mode === 'patient' ? 'patient' : 'clinician' }} opens it directly and signs in —
+            no EHR launch needed.
           </p>
         } @else {
           <p class="modal-sub">
-            Register this URL as the <strong>Launch URL</strong> of your Epic
-            app for <strong>{{ m.name }}</strong
-            >. It is invoked <strong>by Epic</strong> (which appends
-            <code>iss</code> + <code>launch</code>) — opening it directly will
-            return “Missing iss or launch”.
+            Register this URL as the <strong>Launch URL</strong> of your Epic app for <strong>{{ m.name }}</strong>.
+            It is invoked <strong>by Epic</strong> (which appends <code>iss</code> + <code>launch</code>) — opening it
+            directly will return “Missing iss or launch”.
           </p>
         }
         <div class="url-box">
           <code>{{ m.url }}</code>
         </div>
         <div class="modal-actions">
-          <button
-            class="btn-secondary"
-            type="button"
-            (click)="copy(m.url, 'Launch URL')"
-          >
-            Copy URL
-          </button>
+          <button class="btn-secondary" type="button" (click)="copy(m.url, 'Launch URL')">Copy URL</button>
           @if (m.opensDirectly) {
-            <a
-              class="btn-primary is-launch"
-              [href]="m.url"
-              target="_blank"
-              rel="noopener"
-              >Open</a
-            >
+            <a class="btn-primary is-launch" [href]="m.url" target="_blank" rel="noopener">Open</a>
           }
         </div>
       </div>
@@ -669,27 +450,12 @@
   <!-- Escape rather than a backdrop click: a click handler on a plain div needs a keyboard equivalent to be
        operable without a mouse (@angular-eslint/template/click-events-have-key-events), and this dialog is
        read-only, so dismissal is × or Escape — the same pattern the new/copy-workflow modals below use. -->
-  <div
-    class="modal-overlay"
-    (keydown.escape)="closeIntegrationDetails()"
-    tabindex="-1"
-  >
-    <div
-      class="modal modal-wide"
-      role="dialog"
-      aria-modal="true"
-      (keydown.escape)="closeIntegrationDetails()"
-      tabindex="-1"
-    >
+  <div class="modal-overlay" (keydown.escape)="closeIntegrationDetails()" tabindex="-1">
+    <div class="modal modal-wide" role="dialog" aria-modal="true"
+         (keydown.escape)="closeIntegrationDetails()" tabindex="-1">
       <div class="modal-head">
         <h2>Integration Details</h2>
-        <button
-          class="modal-close"
-          type="button"
-          (click)="closeIntegrationDetails()"
-        >
-          &times;
-        </button>
+        <button class="modal-close" type="button" (click)="closeIntegrationDetails()">&times;</button>
       </div>
       <div class="modal-body">
         <p class="modal-sub">
@@ -699,8 +465,7 @@
 
         @if (hasBlockingChecks(m)) {
           <div class="integration-banner">
-            This workflow is not ready yet. The calls below will fail until the
-            items marked
+            This workflow is not ready yet. The calls below will fail until the items marked
             <strong>Action needed</strong> are resolved.
           </div>
         }
@@ -717,18 +482,10 @@
           <div class="integration-value">
             <div class="integration-value-head">
               <span class="integration-label">{{ value.label }}</span>
-              <button
-                class="btn-link"
-                type="button"
-                (click)="copy(value.value, value.label)"
-              >
-                Copy
-              </button>
+              <button class="btn-link" type="button" (click)="copy(value.value, value.label)">Copy</button>
             </div>
             @if (value.code) {
-              <div class="url-box">
-                <code>{{ value.value }}</code>
-              </div>
+              <div class="url-box"><code>{{ value.value }}</code></div>
             } @else {
               <div class="integration-plain">{{ value.value }}</div>
             }
@@ -743,13 +500,7 @@
           @for (check of m.checks; track check.label) {
             <li class="integration-check" [class]="'is-' + check.state">
               <span class="integration-check-badge">
-                {{
-                  check.state === "ok"
-                    ? "Ready"
-                    : check.state === "blocked"
-                      ? "Action needed"
-                      : "Note"
-                }}
+                {{ check.state === 'ok' ? 'Ready' : check.state === 'blocked' ? 'Action needed' : 'Note' }}
               </span>
               <span class="integration-check-body">
                 <strong>{{ check.label }}</strong>
@@ -760,20 +511,8 @@
         </ul>
 
         <div class="modal-actions">
-          <button
-            class="btn-secondary"
-            type="button"
-            (click)="copyIntegrationDetails(m)"
-          >
-            Copy all
-          </button>
-          <button
-            class="btn-primary"
-            type="button"
-            (click)="closeIntegrationDetails()"
-          >
-            Close
-          </button>
+          <button class="btn-secondary" type="button" (click)="copyIntegrationDetails(m)">Copy all</button>
+          <button class="btn-primary" type="button" (click)="closeIntegrationDetails()">Close</button>
         </div>
       </div>
     </div>
@@ -786,32 +525,19 @@
     <div class="modal" (click)="$event.stopPropagation()">
       <div class="modal-head">
         <h2>Delete workflow</h2>
-        <button class="modal-close" type="button" (click)="cancelDelete()">
-          &times;
-        </button>
+        <button class="modal-close" type="button" (click)="cancelDelete()">&times;</button>
       </div>
       <div class="modal-body">
         <p class="modal-sub">
           <!-- The number is quoted here because workflow names are NOT unique (no unique constraint on
                WorkflowDefinitions.Name) — on a destructive, irreversible action it is the only thing that
                tells two same-named workflows apart. -->
-          Delete <strong>{{ w.name }}</strong>
-          @if (w.workflowNumber) {
-            <span class="cell-number">({{ w.workflowNumber }})</span>
-          }
-          ? This removes the workflow graph permanently. The source, destination
-          and mapping records it references are <strong>not</strong> deleted.
+          Delete <strong>{{ w.name }}</strong>@if (w.workflowNumber) { <span class="cell-number">({{ w.workflowNumber }})</span> }? This removes the workflow graph permanently.
+          The source, destination and mapping records it references are <strong>not</strong> deleted.
         </p>
         <div class="modal-actions">
-          <button class="btn-secondary" type="button" (click)="cancelDelete()">
-            Cancel
-          </button>
-          <button
-            class="btn-danger"
-            type="button"
-            [disabled]="rowBusyId() === w.workflowId"
-            (click)="confirmDeleteWorkflow()"
-          >
+          <button class="btn-secondary" type="button" (click)="cancelDelete()">Cancel</button>
+          <button class="btn-danger" type="button" [disabled]="rowBusyId() === w.workflowId" (click)="confirmDeleteWorkflow()">
             Delete
           </button>
         </div>
@@ -829,27 +555,16 @@
 @if (confirmCopy(); as w) {
   <!-- No backdrop close: same rule as the New-workflow modal — a stray click outside must not discard
        an edited name. ×, Cancel and Escape all route through cancelCopyWorkflow(), which confirms first. -->
-  <div
-    class="modal-overlay"
-    (keydown.escape)="cancelCopyWorkflow()"
-    tabindex="-1"
-  >
+  <div class="modal-overlay" (keydown.escape)="cancelCopyWorkflow()" tabindex="-1">
     <div class="modal" (keydown.escape)="cancelCopyWorkflow()" tabindex="-1">
       <div class="modal-head">
         <h2>Copy workflow</h2>
-        <button
-          class="modal-close"
-          type="button"
-          (click)="cancelCopyWorkflow()"
-        >
-          &times;
-        </button>
+        <button class="modal-close" type="button" (click)="cancelCopyWorkflow()">&times;</button>
       </div>
       <div class="modal-body">
         <p class="modal-sub">
-          Duplicate <strong>{{ w.name }}</strong> — every node, edge and config
-          is copied exactly under a new name. The copy is created
-          <strong>disabled</strong>; enable it once you've reviewed it.
+          Duplicate <strong>{{ w.name }}</strong> — every node, edge and config is copied exactly under a new name.
+          The copy is created <strong>disabled</strong>; enable it once you've reviewed it.
         </p>
         <input
           class="text-input"
@@ -860,13 +575,7 @@
           (keydown.enter)="confirmCopyWorkflow()"
         />
         <div class="modal-actions">
-          <button
-            class="btn-secondary"
-            type="button"
-            (click)="cancelCopyWorkflow()"
-          >
-            Cancel
-          </button>
+          <button class="btn-secondary" type="button" (click)="cancelCopyWorkflow()">Cancel</button>
           <button
             class="btn-cta"
             type="button"
@@ -883,49 +592,20 @@
   <!-- Discard confirmation, layered over the Copy modal (nested inside its @if so "Keep editing"
        returns to the form with the typed name intact). -->
   @if (confirmDiscardCopyWorkflow()) {
-    <div
-      class="modal-overlay modal-overlay--stacked"
-      (keydown.escape)="keepEditingCopyWorkflow()"
-      tabindex="-1"
-    >
-      <div
-        class="modal modal--sm"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="discard-copy-workflow-title"
-        (keydown.escape)="keepEditingCopyWorkflow()"
-        tabindex="-1"
-      >
+    <div class="modal-overlay modal-overlay--stacked" (keydown.escape)="keepEditingCopyWorkflow()" tabindex="-1">
+      <div class="modal modal--sm" role="alertdialog" aria-modal="true" aria-labelledby="discard-copy-workflow-title"
+           (keydown.escape)="keepEditingCopyWorkflow()" tabindex="-1">
         <div class="modal-head">
           <h3 id="discard-copy-workflow-title">Discard this copy?</h3>
-          <button
-            class="modal-close"
-            type="button"
-            (click)="keepEditingCopyWorkflow()"
-          >
-            &times;
-          </button>
+          <button class="modal-close" type="button" (click)="keepEditingCopyWorkflow()">&times;</button>
         </div>
         <div class="modal-body">
           <p class="modal-sub">
-            You have unsaved changes that will be lost. The copy has not been
-            created yet.
+            You have unsaved changes that will be lost. The copy has not been created yet.
           </p>
           <div class="modal-actions">
-            <button
-              class="btn-secondary"
-              type="button"
-              (click)="keepEditingCopyWorkflow()"
-            >
-              Keep editing
-            </button>
-            <button
-              class="btn-danger"
-              type="button"
-              (click)="discardCopyWorkflow()"
-            >
-              Discard
-            </button>
+            <button class="btn-secondary" type="button" (click)="keepEditingCopyWorkflow()">Keep editing</button>
+            <button class="btn-danger" type="button" (click)="discardCopyWorkflow()">Discard</button>
           </div>
         </div>
       </div>
@@ -939,45 +619,33 @@
     <div class="modal modal-wide" (click)="$event.stopPropagation()">
       <div class="modal-head">
         <h2>Destination data — {{ m.name }}</h2>
-        <button class="modal-close" type="button" (click)="closeDataModal()">
-          &times;
-        </button>
+        <button class="modal-close" type="button" (click)="closeDataModal()">&times;</button>
       </div>
       <div class="modal-body">
         @if (m.loading) {
-          <div class="state-block">
-            <span class="spinner"></span>
-            <p>Reading rows…</p>
-          </div>
+          <div class="state-block"><span class="spinner"></span><p>Reading rows…</p></div>
         } @else if (m.error) {
           <div class="notice notice-warn">{{ m.error }}</div>
         } @else if (m.data) {
           <div class="data-meta">
             <span class="mono">{{ m.data.table }}</span>
-            <span class="cell-muted"
-              >{{ m.data.rowCount }}
-              {{ m.data.rowCount === 1 ? "row" : "rows" }} (sample)</span
-            >
+            <span class="cell-muted">{{ m.data.rowCount }} {{ m.data.rowCount === 1 ? 'row' : 'rows' }} (sample)</span>
           </div>
           @if (m.data.rowCount === 0) {
-            <div class="notice">
-              No rows have been written to this table yet.
-            </div>
+            <div class="notice">No rows have been written to this table yet.</div>
           } @else {
             <div class="data-scroll">
               <table class="data-table compact">
                 <thead>
                   <tr>
-                    @for (col of m.data.columns; track col) {
-                      <th>{{ col }}</th>
-                    }
+                    @for (col of m.data.columns; track col) { <th>{{ col }}</th> }
                   </tr>
                 </thead>
                 <tbody>
                   @for (row of m.data.rows; track $index) {
                     <tr>
                       @for (cell of row; track $index) {
-                        <td>{{ cell === null ? "" : cell }}</td>
+                        <td>{{ cell === null ? '' : cell }}</td>
                       }
                     </tr>
                   }

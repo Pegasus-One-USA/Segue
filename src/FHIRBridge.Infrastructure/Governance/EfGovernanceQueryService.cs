@@ -35,6 +35,8 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken,
         string? sortColumn = null, string? sortDirection = null, AuditLogFilter? filter = null)
     {
+        var actors = await LoadActorResolverAsync(cancellationToken);
+
         var query = _dbContext.AuditLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
         {
@@ -54,7 +56,9 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         }
         if (!string.IsNullOrWhiteSpace(filter?.Actor))
         {
-            query = query.Where(x => x.Actor == filter.Actor);
+            // One person can be stored under their user id and, on rows written before ids were stored, their e-mail.
+            var storedValues = actors.StoredValuesFor(filter.Actor);
+            query = query.Where(x => storedValues.Contains(x.Actor));
         }
         if (!string.IsNullOrWhiteSpace(filter?.Action))
         {
@@ -73,17 +77,39 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
 
         var normalizedTake = NormalizeTake(take);
         var totalCount = await query.CountAsync(cancellationToken);
+        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
         // ThenBy: many rows share an actor, module or action; without a tie-break, paging through them can repeat
         // or skip rows.
-        var items = await ApplyAuditLogSort(WithActorName(query), sortColumn, sortDirection)
-            .ThenByDescending(x => x.Log.SequenceNumber)
-            .Skip(NormalizeSkip(skip))
-            .Take(normalizedTake)
+        List<AuditLog> rows;
+        if (sortColumn == "actor")
+        {
+            // Only sorting by actor needs the name inside the query, so the order holds across pages.
+            var withName = WithActorName(query);
+            var ordered = descending
+                ? withName.OrderByDescending(x => x.ActorName.ToLower())
+                : withName.OrderBy(x => x.ActorName.ToLower());
+            rows = await ordered
+                .ThenByDescending(x => x.Log.SequenceNumber)
+                .Skip(NormalizeSkip(skip))
+                .Take(normalizedTake)
+                .Select(x => x.Log)
+                .ToListAsync(cancellationToken);
+        }
+        else
+        {
+            rows = await ApplyAuditLogSort(query, sortColumn, descending)
+                .ThenByDescending(x => x.SequenceNumber)
+                .Skip(NormalizeSkip(skip))
+                .Take(normalizedTake)
+                .ToListAsync(cancellationToken);
+        }
+
+        var items = rows
             .Select(x => new AuditLogDto(
-                x.Log.Id, x.Log.OccurredOnUtc, x.ActorName, x.Log.Module, x.Log.Action, x.Log.EntityType,
-                x.Log.EntityId, x.Log.EntityName, x.Log.OldValueJson, x.Log.NewValueJson, x.Log.Status,
-                x.Log.IpAddress, x.Log.CorrelationId))
-            .ToListAsync(cancellationToken);
+                x.Id, x.OccurredOnUtc, actors.Resolve(x.Actor).Name, x.Module, x.Action, x.EntityType, x.EntityId,
+                x.EntityName, x.OldValueJson, x.NewValueJson, x.Status, x.IpAddress, x.CorrelationId))
+            .ToList();
 
         return ToPaged(items, totalCount, skip, normalizedTake);
     }
@@ -96,30 +122,23 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             .OrderBy(x => x)
             .ToListAsync(cancellationToken);
 
+        // The set of distinct actors is small (the users, plus "anonymous"/"system"), even when the trail is large.
         var actorValues = await _dbContext.AuditLogs.AsNoTracking()
             .Select(x => x.Actor)
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        // Same naming rule as the list (User.EffectiveDisplayName), deleted users included; a value that is not a
-        // user id ("anonymous", "system", an older e-mail) is offered as stored.
-        var userIds = actorValues
-            .Select(value => Guid.TryParse(value, out var id) ? id : (Guid?)null)
-            .OfType<Guid>()
-            .ToList();
-        var names = (await _dbContext.Users.IgnoreQueryFilters().AsNoTracking()
-                .Where(u => userIds.Contains(u.Id))
-                .ToListAsync(cancellationToken))
-            .ToDictionary(u => u.Id, u => u.EffectiveDisplayName);
-
-        var actors = actorValues
-            .Select(value => new AuditLogActorOptionDto(
-                value,
-                Guid.TryParse(value, out var id) && names.TryGetValue(id, out var name) ? name : value))
+        // One option per person: a user's id rows and legacy e-mail rows share their user id as the option value.
+        var actors = await LoadActorResolverAsync(cancellationToken);
+        var options = actorValues
+            .Select(actors.Resolve)
+            .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new AuditLogActorOptionDto(g.First().Key, g.First().Name))
             .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Value, StringComparer.Ordinal)
             .ToList();
 
-        return new AuditLogFilterOptionsDto(modules, actors);
+        return new AuditLogFilterOptionsDto(modules, options);
     }
 
     /// <summary>Treats a timestamp that carries no offset as UTC (as the portal sends it), and converts a local one;
@@ -131,8 +150,61 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
     };
 
-    /// <summary>An audit row with its actor resolved to a person's name inside the query, so the Actor column can be
-    /// both shown and sorted by that name across pages.</summary>
+    private async Task<ActorResolver> LoadActorResolverAsync(CancellationToken cancellationToken) =>
+        new(await _dbContext.Users.IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken));
+
+    /// <summary>
+    /// Maps a stored <c>AuditLog.Actor</c> to the person behind it and their name. The actor is the user's id, or, on
+    /// rows written before ids were stored, their e-mail (or external id). Deleted users are included, since their
+    /// past actions stay in the trail. Anything else ("anonymous", "system") is its own key and name.
+    /// The name is <c>User.EffectiveDisplayName</c>, the same rule <see cref="WithActorName"/> uses in SQL.
+    /// </summary>
+    private sealed class ActorResolver
+    {
+        private readonly Dictionary<Guid, Domain.Entities.User> _byId;
+        private readonly Dictionary<string, Domain.Entities.User> _byLogin = new(StringComparer.OrdinalIgnoreCase);
+
+        public ActorResolver(IReadOnlyCollection<Domain.Entities.User> users)
+        {
+            _byId = users.ToDictionary(u => u.Id);
+            foreach (var user in users)
+            {
+                foreach (var login in new[] { user.Email, user.ExternalUserId })
+                {
+                    if (!string.IsNullOrWhiteSpace(login))
+                    {
+                        _byLogin.TryAdd(login, user);
+                    }
+                }
+            }
+        }
+
+        public (string Key, string Name) Resolve(string actor)
+        {
+            var user = Guid.TryParse(actor, out var id) && _byId.TryGetValue(id, out var byId)
+                ? byId
+                : _byLogin.GetValueOrDefault(actor);
+
+            return user is null ? (actor, actor) : (user.Id.ToString(), user.EffectiveDisplayName);
+        }
+
+        /// <summary>Every stored actor value that belongs to the same person as <paramref name="key"/>.</summary>
+        public IReadOnlyList<string> StoredValuesFor(string key)
+        {
+            if (!Guid.TryParse(key, out var id) || !_byId.TryGetValue(id, out var user))
+            {
+                return [key];
+            }
+
+            return new[] { user.Id.ToString(), user.Email, user.ExternalUserId }
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+    }
+
+    /// <summary>An audit row with its actor's name resolved inside the query, for sorting by actor across pages.</summary>
     private sealed class AuditLogWithActorName
     {
         public AuditLog Log { get; init; } = default!;
@@ -140,10 +212,9 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
     }
 
     /// <summary>
-    /// Resolves <c>AuditLog.Actor</c> (the user's id, stamped from <c>CurrentUserInfo.AuditName</c>) to the same name
-    /// <c>User.EffectiveDisplayName</c> gives: DisplayName, else "FirstName LastName", else Email. Deleted users are
-    /// included, since their past actions stay in the trail. An actor that is not a user id ("anonymous", "system",
-    /// an e-mail on rows written before ids were stored) is shown as stored.
+    /// SQL form of <see cref="ActorResolver.Resolve"/>, used only to sort by actor: matches the user by id, else by
+    /// e-mail or external id, and names them as <c>User.EffectiveDisplayName</c> does (DisplayName, else
+    /// "FirstName LastName", else Email, else external id).
     /// </summary>
     private IQueryable<AuditLogWithActorName> WithActorName(IQueryable<AuditLog> query) =>
         query.Select(x => new AuditLogWithActorName
@@ -151,10 +222,10 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
             Log = x,
             ActorName = _dbContext.Users
                 .IgnoreQueryFilters()
-                .Where(u => u.Id.ToString() == x.Actor)
+                .Where(u => u.Id.ToString() == x.Actor || u.Email == x.Actor || u.ExternalUserId == x.Actor)
                 .Select(u => !string.IsNullOrWhiteSpace(u.DisplayName)
                     ? u.DisplayName
-                    : u.FirstName != null || u.LastName != null
+                    : !(string.IsNullOrWhiteSpace(u.FirstName) && string.IsNullOrWhiteSpace(u.LastName))
                         ? ((u.FirstName ?? string.Empty) + " " + (u.LastName ?? string.Empty)).Trim()
                         : u.Email ?? u.ExternalUserId)
                 .FirstOrDefault() ?? x.Actor,
@@ -164,25 +235,21 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
     // by the hash-chain's own sequence) regardless of sortDirection — version-history mode (see
     // AuditLogsComponent.historyMode/versionByEntryId on the frontend) depends on that exact default and
     // never sends a sortColumn itself, so this stays correct even if a stale sort param somehow arrives.
-    private static IOrderedQueryable<AuditLogWithActorName> ApplyAuditLogSort(
-        IQueryable<AuditLogWithActorName> query, string? sortColumn, string? sortDirection)
+    private static IOrderedQueryable<AuditLog> ApplyAuditLogSort(
+        IQueryable<AuditLog> query, string? sortColumn, bool descending)
     {
-        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
-
-        IOrderedQueryable<AuditLogWithActorName> Order<TKey>(Expression<Func<AuditLogWithActorName, TKey>> keySelector) =>
+        IOrderedQueryable<AuditLog> Order<TKey>(Expression<Func<AuditLog, TKey>> keySelector) =>
             descending ? query.OrderByDescending(keySelector) : query.OrderBy(keySelector);
 
         return sortColumn switch
         {
-            "occurredOnUtc" => Order(x => x.Log.OccurredOnUtc),
-            // Lower-cased: PostgreSQL's default "C" collation would otherwise put every capitalised name first.
-            "actor"         => Order(x => x.ActorName.ToLower()),
-            "module"        => Order(x => x.Log.Module),
-            "action"        => Order(x => x.Log.Action),
-            "entity"        => Order(x => x.Log.EntityName ?? x.Log.EntityId ?? string.Empty),
-            "status"        => Order(x => x.Log.Status),
-            "correlationId" => Order(x => x.Log.CorrelationId ?? string.Empty),
-            _               => query.OrderByDescending(x => x.Log.SequenceNumber),
+            "occurredOnUtc" => Order(x => x.OccurredOnUtc),
+            "module"        => Order(x => x.Module),
+            "action"        => Order(x => x.Action),
+            "entity"        => Order(x => x.EntityName ?? x.EntityId ?? string.Empty),
+            "status"        => Order(x => x.Status),
+            "correlationId" => Order(x => x.CorrelationId ?? string.Empty),
+            _               => query.OrderByDescending(x => x.SequenceNumber),
         };
     }
 

@@ -99,6 +99,37 @@ describe('AuditLogsComponent filters', () => {
     expect(lastFilter()!.toUtc).toBeUndefined();
   });
 
+  it('keeps a preset period on the same time window while paging later', () => {
+    component.onPeriodChange('7d');
+    component.search();
+    const searchedFrom = lastFilter()!.fromUtc;
+
+    jasmine.clock().install();
+    try {
+      jasmine.clock().mockDate(new Date(Date.now() + 5 * 60 * 1000));
+      component.onPageChange({ pageIndex: 1, pageSize: 10 });
+      component.onSort('module');
+    } finally {
+      jasmine.clock().uninstall();
+    }
+
+    expect(lastFilter()!.fromUtc).toBe(searchedFrom);
+  });
+
+  it('will not search a custom range without a From date, and says why', () => {
+    const callsBefore = api.auditLogs.calls.count();
+    component.onPeriodChange('custom');
+    component.onFilterChange('toDate', '2026-10-03');
+
+    component.search();
+
+    expect(api.auditLogs.calls.count()).toBe(callsBefore);
+    expect(component.filterError()).toContain('From date');
+
+    component.onFilterChange('fromDate', '2026-10-01');
+    expect(component.filterError()).toBe('');
+  });
+
   it('treats a custom range as whole local days, the To day included', () => {
     component.onPeriodChange('custom');
     component.onFilterChange('fromDate', '2026-10-01');

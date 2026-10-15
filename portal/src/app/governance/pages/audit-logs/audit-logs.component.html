@@ -115,7 +115,11 @@
       }
     </div>
 
-    @if (!historyMode() && dirty()) {
+    @if (!historyMode() && filterError()) {
+      <div class="filter-footer">
+        <span class="filter-error" role="alert">{{ filterError() }}</span>
+      </div>
+    } @else if (!historyMode() && dirty()) {
       <div class="filter-footer" aria-live="polite">
         <span class="dirty-note">Filters changed. Press <strong>Search</strong> to update the list.</span>
       </div>
