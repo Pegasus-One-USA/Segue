@@ -6,35 +6,14 @@
     </div>
   }
 
-  <details class="info-panel">
-    <summary>What am I looking at?</summary>
-    <div class="info-body">
-      <p class="info-lead">Every row is <strong>one problem that happened somewhere in Segue</strong> — while running a workflow, dispatching a schedule, or handling a webhook. Routine, expected outcomes (a wrong password, a duplicate name) are handled elsewhere and never show up here — everything on this screen is a genuine, unexpected failure.</p>
-
-      <section class="info-section">
-        <h4 class="info-heading">What to do <span class="info-heading-hint">— shown in the "What to do" column</span></h4>
-        <dl class="info-defs">
-          <div class="info-def">
-            <dt><span class="info-tag">Check your configuration</span></dt>
-            <dd>Something in your own environment likely needs attention — an expired connection, an unreachable destination, a bad mapping. Worth investigating yourself first.</dd>
-          </div>
-          <div class="info-def">
-            <dt><span class="info-tag">Contact support</span></dt>
-            <dd>Not something you can fix from here. Click the row, use <strong>"Copy for support"</strong>, and send the reference ID to your support team.</dd>
-          </div>
-        </dl>
-      </section>
-
-      <p class="info-note">Click a row to see the full technical detail (exception type, message, stack trace) — collapsed by default to keep the list readable. The <strong>Correlation ID</strong> links to Correlation Search, showing everything else that happened around the same event.</p>
-    </div>
-  </details>
 
   @if (correlationId()) {
     <p class="filter-note">Showing every error from run <code class="mono">{{ correlationId() }}</code> — <button class="btn-link" type="button" (click)="reset()">clear</button></p>
   }
 
-  <div class="filter-card filter-card--compact-search">
-    <div class="filter-row">
+  <div class="filter-card">
+    <!-- One line: reference id (wider), the two filters at equal widths, then Search/Reset. -->
+    <div class="errors-filter-grid">
       <div class="search-wrap">
         <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
@@ -50,20 +29,30 @@
           (keyup.enter)="search()"
         />
       </div>
-      <select class="type-select" aria-label="Entry type" [value]="severity()" (change)="severity.set($any($event.target).value)">
-        <option value="" [selected]="!severity()">Errors (default)</option>
-        <option value="Critical" [selected]="severity() === 'Critical'">Critical</option>
-        <option value="Error" [selected]="severity() === 'Error'">Error</option>
-        <option value="WorkflowDebug" [selected]="severity() === 'WorkflowDebug'">Workflow debug trace</option>
-        <option value="Warning" [selected]="severity() === 'Warning'">Warnings</option>
-        <option value="Information" [selected]="severity() === 'Information'">Information</option>
-      </select>
-      <select class="type-select" aria-label="Category" [value]="category()" (change)="category.set($any($event.target).value)">
-        <option value="" [selected]="!category()">All categories</option>
-        @for (c of categoryOptions; track c) {
-          <option [value]="c" [selected]="c === category()">{{ c }}</option>
-        }
-      </select>
+      <div class="select-box">
+        <select aria-label="Entry type" [value]="severity()" (change)="severity.set($any($event.target).value)">
+          <option value="" [selected]="!severity()">Errors (default)</option>
+          <option value="Critical" [selected]="severity() === 'Critical'">Critical</option>
+          <option value="Error" [selected]="severity() === 'Error'">Error</option>
+          <option value="WorkflowDebug" [selected]="severity() === 'WorkflowDebug'">Workflow debug trace</option>
+          <option value="Warning" [selected]="severity() === 'Warning'">Warnings</option>
+          <option value="Information" [selected]="severity() === 'Information'">Information</option>
+        </select>
+        <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="select-box">
+        <select aria-label="Category" [value]="category()" (change)="category.set($any($event.target).value)">
+          <option value="" [selected]="!category()">All categories</option>
+          @for (c of categoryOptions; track c) {
+            <option [value]="c" [selected]="c === category()">{{ c }}</option>
+          }
+        </select>
+        <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
       <div class="filter-actions">
         <button class="btn-search" type="button" (click)="search()">Search</button>
         <button class="btn-reset" type="button" (click)="reset()">

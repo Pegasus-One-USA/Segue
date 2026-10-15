@@ -23,6 +23,22 @@ export interface AuditLogEntry {
   correlationId: string | null;
 }
 
+/** Audit Logs screen filters. `actor` is the stored actor value (a user id, or "anonymous"/"system");
+ *  `fromUtc` is inclusive and `toUtc` exclusive, both ISO timestamps. */
+export interface AuditLogFilter {
+  module?: string;
+  actor?: string;
+  action?: string;
+  fromUtc?: string;
+  toUtc?: string;
+}
+
+/** Matches the backend's AuditLogFilterOptionsDto (api/v1/governance/audit-logs/filter-options). */
+export interface AuditLogFilterOptions {
+  modules: string[];
+  actors: { value: string; name: string }[];
+}
+
 /** Matches the backend's DataAccessLogDto (api/v1/governance/data-access-logs). */
 export interface DataAccessLogEntry {
   id: string;

@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Reflection;
 using System.Text.Json;
 using FHIRBridge.Application.Abstractions.Security;
 using FHIRBridge.Domain.Entities.Governance;
@@ -81,7 +83,10 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                     $"{entry.Metadata.ClrType.Name} is append-only and cannot be modified or deleted.");
             }
 
-            if (entry.State == EntityState.Deleted && entry.Entity is ISoftDeletable softDeletable)
+            // IHardDeletable opts out: its Remove() stays a real DELETE (audited by the physical-delete branch in
+            // AppendConfigAuditLogsAsync).
+            if (entry.State == EntityState.Deleted && entry.Entity is ISoftDeletable softDeletable
+                && entry.Entity is not IHardDeletable)
             {
                 entry.State = EntityState.Modified;
                 softDeletable.ApplyDeleted(actor, now);
@@ -215,6 +220,22 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
                 _ => null,
             };
 
+            // Physically removing a row that was already soft-deleted is clean-up, not a new deletion: its "Deleted"
+            // row was written when it was soft-deleted.
+            if (entry.State == EntityState.Deleted
+                && entry.Metadata.FindProperty(nameof(ISoftDeletable.IsDeleted)) is { } isDeleted
+                && entry.OriginalValues[isDeleted] is true)
+            {
+                continue;
+            }
+
+            // Sign-in and session bookkeeping (refresh-token rotation, MFA challenge, last login) is [AuditIgnore]d and
+            // recorded in the authentication log instead; a save that touched nothing else is not a config change.
+            if (action == "Updated" && OnlyIgnoredPropertiesChanged(entry))
+            {
+                continue;
+            }
+
             if (action is not null)
             {
                 pending.Add((entry, action));
@@ -312,23 +333,84 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
     };
 
     /// <summary>
-    /// Properties whose value is replaced with a placeholder in the audit snapshot. The audit trail records
-    /// <em>that</em> a secret was provisioned or rotated, by whom and when — never the material itself.
+    /// A redacted property's value is replaced with this placeholder in the audit snapshot (see
+    /// <see cref="AuditRedactAttribute"/>). The audit trail records <em>that</em> a secret was provisioned or rotated,
+    /// by whom and when, never the material itself.
     /// <para><c>AuditLog</c> is append-only and retained for years, so anything landing here is effectively
     /// permanent: copying even a DataProtection-encrypted value into it widens the blast radius of that key and
     /// undoes <c>ProvisionedSecret</c>'s own "only the protected value is persisted" guarantee. The change is
     /// still fully auditable — a rotation shows old and new as redacted, with the actor and timestamp intact.</para>
     /// </summary>
-    private static readonly HashSet<string> RedactedProperties = new(StringComparer.Ordinal)
+    private const string RedactedPlaceholder = "***redacted***";
+
+    /// <summary>Stamped on every save by <see cref="Stamp"/>, so they never decide on their own whether a change is
+    /// worth an audit row.</summary>
+    private static readonly HashSet<string> ProvenanceProperties = new(StringComparer.Ordinal)
     {
-        "ProtectedValue",
+        "ModifiedOnUtc",
+        "ModifiedBy",
     };
 
-    private const string RedactedPlaceholder = "***redacted***";
+    private enum AuditTreatment
+    {
+        Include,
+        Redact,
+        Ignore,
+    }
+
+    private static readonly ConcurrentDictionary<PropertyInfo, AuditTreatment> TreatmentByProperty = new();
+
+    private static AuditTreatment GetTreatment(IProperty property)
+    {
+        // Shadow properties have no CLR member to carry an attribute; they are always included.
+        if (property.PropertyInfo is not { } propertyInfo)
+        {
+            return AuditTreatment.Include;
+        }
+
+        return TreatmentByProperty.GetOrAdd(propertyInfo, static info =>
+            info.IsDefined(typeof(AuditIgnoreAttribute), inherit: true) ? AuditTreatment.Ignore
+            : info.IsDefined(typeof(AuditRedactAttribute), inherit: true) ? AuditTreatment.Redact
+            : AuditTreatment.Include);
+    }
+
+    private static bool IsUnauditedColumn(IProperty property) =>
+        property.ClrType == typeof(byte[]) || property.Name == "RowVersion";
+
+    /// <summary>
+    /// True when an update changed at least one <see cref="AuditIgnoreAttribute"/> property and nothing else apart
+    /// from the provenance stamps. Requiring an ignored property to have changed keeps the old behaviour for an
+    /// update whose original values are unknown (a detached entity attached with <c>Update</c>): it still gets a row.
+    /// </summary>
+    private static bool OnlyIgnoredPropertiesChanged(EntityEntry entry)
+    {
+        var ignoredPropertyChanged = false;
+
+        foreach (var property in entry.Properties)
+        {
+            if (IsUnauditedColumn(property.Metadata)
+                || ProvenanceProperties.Contains(property.Metadata.Name)
+                || Equals(property.OriginalValue, property.CurrentValue))
+            {
+                continue;
+            }
+
+            if (GetTreatment(property.Metadata) != AuditTreatment.Ignore)
+            {
+                return false;
+            }
+
+            ignoredPropertyChanged = true;
+        }
+
+        return ignoredPropertyChanged;
+    }
 
     /// <summary>
     /// Flattens an entry's own scalar properties to JSON for the audit trail's old/new value columns.
-    /// Skips <c>RowVersion</c> (opaque concurrency token, not a meaningful diff) and any binary column.
+    /// Skips <c>RowVersion</c> (opaque concurrency token, not a meaningful diff), any binary column and any
+    /// <see cref="AuditIgnoreAttribute"/> property, and replaces an <see cref="AuditRedactAttribute"/> value with
+    /// <see cref="RedactedPlaceholder"/>.
     /// </summary>
     private static string SerializeValues(EntityEntry entry, bool useOriginalValues)
     {
@@ -337,12 +419,18 @@ public sealed class AuditingSaveChangesInterceptor : SaveChangesInterceptor
 
         foreach (var property in entry.Properties)
         {
-            if (property.Metadata.ClrType == typeof(byte[]) || property.Metadata.Name == "RowVersion")
+            if (IsUnauditedColumn(property.Metadata))
             {
                 continue;
             }
 
-            if (RedactedProperties.Contains(property.Metadata.Name))
+            var treatment = GetTreatment(property.Metadata);
+            if (treatment == AuditTreatment.Ignore)
+            {
+                continue;
+            }
+
+            if (treatment == AuditTreatment.Redact)
             {
                 // Placeholder only when there was actually a value, so "was unset, now set" stays visible.
                 snapshot[property.Metadata.Name] = values[property.Metadata] is null ? null : RedactedPlaceholder;

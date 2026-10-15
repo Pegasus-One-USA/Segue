@@ -1,6 +1,29 @@
 <div class="hub">
   <div class="page-header">
-    <h1>Errors</h1>
+    <div class="page-title-row">
+      <h1>Errors</h1>
+      <app-page-help heading="How to read Errors">
+        <div class="info-body">
+          <p class="info-lead">Every row is <strong>one problem that happened somewhere in Segue</strong> — while running a workflow, dispatching a schedule, or handling a webhook. Routine, expected outcomes (a wrong password, a duplicate name) are handled elsewhere and never show up here — everything on this screen is a genuine, unexpected failure.</p>
+
+          <section class="info-section">
+            <h4 class="info-heading">What to do <span class="info-heading-hint">— shown in the "What to do" column</span></h4>
+            <dl class="info-defs">
+              <div class="info-def">
+                <dt><span class="info-tag">Check your configuration</span></dt>
+                <dd>Something in your own environment likely needs attention — an expired connection, an unreachable destination, a bad mapping. Worth investigating yourself first.</dd>
+              </div>
+              <div class="info-def">
+                <dt><span class="info-tag">Contact support</span></dt>
+                <dd>Not something you can fix from here. Click the row, use <strong>"Copy for support"</strong>, and send the reference ID to your support team.</dd>
+              </div>
+            </dl>
+          </section>
+
+          <p class="info-note">Click a row to see the full technical detail (exception type, message, stack trace) — collapsed by default to keep the list readable. The <strong>Correlation ID</strong> links to Correlation Search, showing everything else that happened around the same event.</p>
+        </div>
+      </app-page-help>
+    </div>
     <p class="page-sub">Problems that happened while running your workflows or connecting to Segue. Use the Overview to see what is happening and share a report; use All errors to search, filter and resolve individual errors.</p>
   </div>
 

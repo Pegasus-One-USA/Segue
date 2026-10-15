@@ -5,11 +5,12 @@ import { MatTableModule } from '@angular/material/table';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { AuthenticationLogEntry, PagedResult } from '../../models/governance.model';
 import { PaginationBarComponent, PageChangeEvent } from '../../../components/shared/pagination-bar/pagination-bar.component';
+import { PageHelpComponent } from '../../../components/shared/page-help/page-help.component';
 
 @Component({
   selector: 'app-authentication-logs',
   standalone: true,
-  imports: [CommonModule, DatePipe, MatTableModule, PaginationBarComponent],
+  imports: [PageHelpComponent, CommonModule, DatePipe, MatTableModule, PaginationBarComponent],
   templateUrl: './authentication-logs.component.html',
   styleUrl: './authentication-logs.component.scss',
 })

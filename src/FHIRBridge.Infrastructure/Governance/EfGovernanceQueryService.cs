@@ -33,7 +33,7 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
 
     public async Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(
         string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken,
-        string? sortColumn = null, string? sortDirection = null)
+        string? sortColumn = null, string? sortDirection = null, AuditLogFilter? filter = null)
     {
         var query = _dbContext.AuditLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -48,42 +48,141 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         {
             query = query.Where(x => x.EntityId == entityId);
         }
+        if (!string.IsNullOrWhiteSpace(filter?.Module))
+        {
+            query = query.Where(x => x.Module == filter.Module);
+        }
+        if (!string.IsNullOrWhiteSpace(filter?.Actor))
+        {
+            query = query.Where(x => x.Actor == filter.Actor);
+        }
+        if (!string.IsNullOrWhiteSpace(filter?.Action))
+        {
+            query = query.Where(x => x.Action == filter.Action);
+        }
+        if (filter?.FromUtc is { } fromUtc)
+        {
+            var from = AsUtc(fromUtc);
+            query = query.Where(x => x.OccurredOnUtc >= from);
+        }
+        if (filter?.ToUtc is { } toUtc)
+        {
+            var to = AsUtc(toUtc);
+            query = query.Where(x => x.OccurredOnUtc < to);
+        }
 
         var normalizedTake = NormalizeTake(take);
         var totalCount = await query.CountAsync(cancellationToken);
-        var items = await ApplyAuditLogSort(query, sortColumn, sortDirection)
+        // ThenBy: many rows share an actor, module or action; without a tie-break, paging through them can repeat
+        // or skip rows.
+        var items = await ApplyAuditLogSort(WithActorName(query), sortColumn, sortDirection)
+            .ThenByDescending(x => x.Log.SequenceNumber)
             .Skip(NormalizeSkip(skip))
             .Take(normalizedTake)
             .Select(x => new AuditLogDto(
-                x.Id, x.OccurredOnUtc, x.Actor, x.Module, x.Action, x.EntityType, x.EntityId, x.EntityName,
-                x.OldValueJson, x.NewValueJson, x.Status, x.IpAddress, x.CorrelationId))
+                x.Log.Id, x.Log.OccurredOnUtc, x.ActorName, x.Log.Module, x.Log.Action, x.Log.EntityType,
+                x.Log.EntityId, x.Log.EntityName, x.Log.OldValueJson, x.Log.NewValueJson, x.Log.Status,
+                x.Log.IpAddress, x.Log.CorrelationId))
             .ToListAsync(cancellationToken);
 
         return ToPaged(items, totalCount, skip, normalizedTake);
     }
 
+    public async Task<AuditLogFilterOptionsDto> GetAuditLogFilterOptionsAsync(CancellationToken cancellationToken)
+    {
+        var modules = await _dbContext.AuditLogs.AsNoTracking()
+            .Select(x => x.Module)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToListAsync(cancellationToken);
+
+        var actorValues = await _dbContext.AuditLogs.AsNoTracking()
+            .Select(x => x.Actor)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        // Same naming rule as the list (User.EffectiveDisplayName), deleted users included; a value that is not a
+        // user id ("anonymous", "system", an older e-mail) is offered as stored.
+        var userIds = actorValues
+            .Select(value => Guid.TryParse(value, out var id) ? id : (Guid?)null)
+            .OfType<Guid>()
+            .ToList();
+        var names = (await _dbContext.Users.IgnoreQueryFilters().AsNoTracking()
+                .Where(u => userIds.Contains(u.Id))
+                .ToListAsync(cancellationToken))
+            .ToDictionary(u => u.Id, u => u.EffectiveDisplayName);
+
+        var actors = actorValues
+            .Select(value => new AuditLogActorOptionDto(
+                value,
+                Guid.TryParse(value, out var id) && names.TryGetValue(id, out var name) ? name : value))
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new AuditLogFilterOptionsDto(modules, actors);
+    }
+
+    /// <summary>Treats a timestamp that carries no offset as UTC (as the portal sends it), and converts a local one;
+    /// PostgreSQL rejects a non-UTC <see cref="DateTime"/> compared against a timestamptz column.</summary>
+    private static DateTime AsUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+    };
+
+    /// <summary>An audit row with its actor resolved to a person's name inside the query, so the Actor column can be
+    /// both shown and sorted by that name across pages.</summary>
+    private sealed class AuditLogWithActorName
+    {
+        public AuditLog Log { get; init; } = default!;
+        public string ActorName { get; init; } = default!;
+    }
+
+    /// <summary>
+    /// Resolves <c>AuditLog.Actor</c> (the user's id, stamped from <c>CurrentUserInfo.AuditName</c>) to the same name
+    /// <c>User.EffectiveDisplayName</c> gives: DisplayName, else "FirstName LastName", else Email. Deleted users are
+    /// included, since their past actions stay in the trail. An actor that is not a user id ("anonymous", "system",
+    /// an e-mail on rows written before ids were stored) is shown as stored.
+    /// </summary>
+    private IQueryable<AuditLogWithActorName> WithActorName(IQueryable<AuditLog> query) =>
+        query.Select(x => new AuditLogWithActorName
+        {
+            Log = x,
+            ActorName = _dbContext.Users
+                .IgnoreQueryFilters()
+                .Where(u => u.Id.ToString() == x.Actor)
+                .Select(u => !string.IsNullOrWhiteSpace(u.DisplayName)
+                    ? u.DisplayName
+                    : u.FirstName != null || u.LastName != null
+                        ? ((u.FirstName ?? string.Empty) + " " + (u.LastName ?? string.Empty)).Trim()
+                        : u.Email ?? u.ExternalUserId)
+                .FirstOrDefault() ?? x.Actor,
+        });
+
     // A null/unrecognized sortColumn always falls back to the original hardcoded ordering (newest-first
     // by the hash-chain's own sequence) regardless of sortDirection — version-history mode (see
     // AuditLogsComponent.historyMode/versionByEntryId on the frontend) depends on that exact default and
     // never sends a sortColumn itself, so this stays correct even if a stale sort param somehow arrives.
-    private static IOrderedQueryable<AuditLog> ApplyAuditLogSort(
-        IQueryable<AuditLog> query, string? sortColumn, string? sortDirection)
+    private static IOrderedQueryable<AuditLogWithActorName> ApplyAuditLogSort(
+        IQueryable<AuditLogWithActorName> query, string? sortColumn, string? sortDirection)
     {
         var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
 
-        IOrderedQueryable<AuditLog> Order<TKey>(Expression<Func<AuditLog, TKey>> keySelector) =>
+        IOrderedQueryable<AuditLogWithActorName> Order<TKey>(Expression<Func<AuditLogWithActorName, TKey>> keySelector) =>
             descending ? query.OrderByDescending(keySelector) : query.OrderBy(keySelector);
 
         return sortColumn switch
         {
-            "occurredOnUtc" => Order(x => x.OccurredOnUtc),
-            "actor"         => Order(x => x.Actor),
-            "module"        => Order(x => x.Module),
-            "action"        => Order(x => x.Action),
-            "entity"        => Order(x => x.EntityName ?? x.EntityId ?? string.Empty),
-            "status"        => Order(x => x.Status),
-            "correlationId" => Order(x => x.CorrelationId ?? string.Empty),
-            _               => query.OrderByDescending(x => x.SequenceNumber),
+            "occurredOnUtc" => Order(x => x.Log.OccurredOnUtc),
+            // Lower-cased: PostgreSQL's default "C" collation would otherwise put every capitalised name first.
+            "actor"         => Order(x => x.ActorName.ToLower()),
+            "module"        => Order(x => x.Log.Module),
+            "action"        => Order(x => x.Log.Action),
+            "entity"        => Order(x => x.Log.EntityName ?? x.Log.EntityId ?? string.Empty),
+            "status"        => Order(x => x.Log.Status),
+            "correlationId" => Order(x => x.Log.CorrelationId ?? string.Empty),
+            _               => query.OrderByDescending(x => x.Log.SequenceNumber),
         };
     }
 

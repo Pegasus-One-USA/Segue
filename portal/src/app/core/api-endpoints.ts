@@ -466,6 +466,7 @@ export const PIPELINE_RUNS_ENDPOINTS = {
 // execution's CorrelationId straight to everything else that happened during it.
 export const GOVERNANCE_ENDPOINTS = {
   auditLogs:          `${API_V1_BASE}/governance/audit-logs`,
+  auditLogFilterOptions: `${API_V1_BASE}/governance/audit-logs/filter-options`,
   authenticationLogs: `${API_V1_BASE}/governance/authentication-logs`,
   dataAccessLogs:     `${API_V1_BASE}/governance/data-access-logs`,
   securityEvents:     `${API_V1_BASE}/governance/security-events`,

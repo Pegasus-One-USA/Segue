@@ -7,9 +7,17 @@
 }
 
 .page-header h1 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 20px;
   font-weight: 600;
+}
+
+// Title with its (i) help button beside it.
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
 }
 
 .page-sub {
@@ -18,10 +26,100 @@
   font-size: 13px;
 }
 
-// Filter bar (.filter-card / .filter-row / .search-wrap / .search-ico / .search-input /
-// .filter-actions / .btn-reset) comes from the shared _list-page partial above — same standard
-// filter chrome as Workflows / Source Connections / Execution History. The Search button uses
-// .btn-search from that shared partial (sized to line up with .btn-reset).
+// Filter chrome (.filter-card / .search-wrap / .search-ico / .search-input / .select-box / .filter-actions /
+// .btn-search / .btn-reset) comes from the shared _list-page partial above, the same controls as Workflows /
+// Source Connections / Execution History; only the layout below is this page's own.
+
+// Filter bar: one grid. Correlation id gets a little more room than the four filters, which share equal columns,
+// and Search/Reset sit at the end of the same line. The selects reuse the partial's .select-box; the custom date
+// range gets its own full-width line underneath so picking "Custom range" never shifts the controls above it.
+.audit-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.3fr) repeat(4, minmax(150px, 1fr)) auto;
+  gap: 12px;
+  align-items: center;
+
+  .search-wrap {
+    min-width: 0;
+  }
+
+  .select-box {
+    min-width: 0;
+  }
+
+  .filter-actions {
+    justify-content: flex-end;
+  }
+}
+
+// Version history hides the four filters; correlation id and the buttons keep the line.
+.audit-filter-grid--history {
+  grid-template-columns: minmax(200px, 1fr) auto;
+}
+
+.custom-range {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+@media (max-width: 1280px) {
+  .audit-filter-grid {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+
+  .audit-filter-grid .search-wrap {
+    grid-column: 1 / -1;
+  }
+
+  .audit-filter-grid .filter-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .audit-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.date-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.date-input {
+  height: 40px;
+  min-width: 170px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  font-size: 13.5px;
+  color: var(--color-ink);
+  outline: none;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: var(--color-primary);
+  }
+}
+
+.filter-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.dirty-note {
+  color: var(--color-warning-strong);
+}
 
 .table-card {
   border: 1px solid var(--color-border);

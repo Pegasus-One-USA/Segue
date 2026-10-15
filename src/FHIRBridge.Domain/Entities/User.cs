@@ -63,14 +63,21 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
         }
     }
 
+    // Audit classification: credentials whose change matters are [AuditRedact] (the trail shows that they changed,
+    // never their value); sign-in and session bookkeeping is [AuditIgnore] (the authentication log already records
+    // every sign-in). An unclassified credential column fails AuditedSecretPropertyTests.
+    [AuditRedact]
     public string? PasswordHash { get; private set; }
     public bool IsLocalLoginEnabled { get; private set; }
     public bool MustChangePassword { get; private set; }
+    [AuditRedact]
     public string? PasswordResetTokenHash { get; private set; }
     public DateTime? PasswordResetTokenExpiresOnUtc { get; private set; }
 
     /// <summary>Hash of the short-lived, single-use passwordless "magic link" sign-in token.</summary>
+    [AuditIgnore]
     public string? MagicLinkTokenHash { get; private set; }
+    [AuditIgnore]
     public DateTime? MagicLinkTokenExpiresOnUtc { get; private set; }
 
     /// <summary>Account status: Active, Inactive, or Invited.</summary>
@@ -81,6 +88,7 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
 
     /// <summary>Account enable/disable. When false the user cannot authenticate.</summary>
     public bool IsEnabled { get; private set; }
+    [AuditIgnore]
     public DateTime? LastLoginOnUtc { get; private set; }
 
     // Security hardening columns.
@@ -100,16 +108,20 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
         MustChangePassword || (PasswordExpiresOnUtc is { } expiresOnUtc && expiresOnUtc < DateTime.UtcNow);
 
     /// <summary>Base32 TOTP shared secret. Staged during enrollment, active once <see cref="MfaEnabled"/> is true.</summary>
+    [AuditRedact]
     public string? MfaSecret { get; private set; }
 
     /// <summary>Newline-separated hashes of the user's remaining one-time MFA backup codes.</summary>
+    [AuditRedact]
     public string? MfaBackupCodeHashes { get; private set; }
 
     /// <summary>When the user last completed MFA enrollment (confirmed a code against the staged secret).</summary>
     public DateTime? MfaEnrolledOnUtc { get; private set; }
 
     /// <summary>Hash of the short-lived, single-use token issued after password verification when MFA is required to finish logging in.</summary>
+    [AuditIgnore]
     public string? MfaChallengeTokenHash { get; private set; }
+    [AuditIgnore]
     public DateTime? MfaChallengeExpiresOnUtc { get; private set; }
 
     /// <summary>
@@ -125,11 +137,14 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     public bool IsMfaSetupRequired => MustSetupMfa && !MfaEnabled;
 
     // Invitation flow fields.
+    [AuditRedact]
     public string? InvitationTokenHash { get; private set; }
     public DateTime? InvitationTokenExpiresOnUtc { get; private set; }
 
     // Refresh token fields.
+    [AuditIgnore]
     public string? RefreshTokenHash { get; private set; }
+    [AuditIgnore]
     public DateTime? RefreshTokenExpiresOnUtc { get; private set; }
     // Whether THIS refresh token was issued from a "Remember me" login — carried forward across
     // every rotation (see LocalAuthService.RefreshTokenAsync, which reads this back in rather than
@@ -138,6 +153,7 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     // before this column existed, when every refresh cookie was unconditionally persistent) keep
     // behaving exactly as they do today after the migration backfills it — see the migration's own
     // defaultValue for the DB-side half of that guarantee.
+    [AuditIgnore]
     public bool RefreshTokenRememberMe { get; private set; } = true;
 
     /// <summary>True when the account is currently locked out (failed-login threshold reached).</summary>

@@ -111,6 +111,105 @@ public sealed class AuditInterceptorCoverageTests
     }
 
     [Fact]
+    public async Task A_users_credentials_are_redacted_and_session_columns_left_out_of_the_audit_row()
+    {
+        // The TOTP seed alone is enough to generate a user's MFA codes; the password hash enables offline cracking.
+        // Neither may reach the append-only audit trail, which the Audit role can read.
+        const string MfaSecret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+        const string PasswordHash = "v1:350000:salt:password-hash-value";
+        const string RefreshTokenHash = "refresh-token-hash-value";
+
+        var user = new User("ext-1", "user@example.com", "Test User", Guid.NewGuid());
+        user.SetPassword(PasswordHash, mustChangePassword: false);
+        user.BeginMfaEnrollment(MfaSecret);
+        user.SetRefreshToken(RefreshTokenHash, DateTime.UtcNow.AddDays(30), rememberMe: true);
+
+        await using (var context = CreateContext())
+        {
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var row = await context.AuditLogs
+                .SingleAsync(x => x.EntityType == nameof(User) && x.Action == "Created");
+
+            row.NewValueJson.Should().NotContain(MfaSecret);
+            row.NewValueJson.Should().NotContain(PasswordHash);
+            row.NewValueJson.Should().NotContain(RefreshTokenHash);
+            row.NewValueJson.Should().Contain("\"MfaSecret\":\"***redacted***\"", "that a secret was set stays visible");
+            row.NewValueJson.Should().Contain("\"PasswordHash\":\"***redacted***\"");
+            row.NewValueJson.Should().NotContain(nameof(User.RefreshTokenHash), "session bookkeeping is left out entirely");
+            row.NewValueJson.Should().Contain("user@example.com", "which user it was still has to be visible");
+        }
+    }
+
+    [Fact]
+    public async Task Signing_in_and_rotating_the_refresh_token_writes_no_audit_row()
+    {
+        // Every login used to add a "User / Updated" row (actor "anonymous", because the request is not yet
+        // authenticated) carrying the user's whole credential set. The authentication log records the sign-in.
+        var user = new User("ext-2", "signin@example.com", "Sign In", Guid.NewGuid());
+
+        await using (var context = CreateContext())
+        {
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var tracked = await context.Users.SingleAsync(x => x.Id == user.Id);
+            tracked.RecordLogin();
+            tracked.SetRefreshToken("rotated-refresh-hash", DateTime.UtcNow.AddDays(30), rememberMe: false);
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            (await context.AuditLogs.CountAsync(x => x.EntityType == nameof(User) && x.Action == "Updated"))
+                .Should().Be(0);
+        }
+    }
+
+    [Fact]
+    public async Task Disabling_mfa_is_still_audited_but_without_the_secret()
+    {
+        // A real account change must keep its row; only the credential value is withheld.
+        const string MfaSecret = "KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU";
+        var user = new User("ext-3", "mfa@example.com", "Mfa User", Guid.NewGuid());
+        user.BeginMfaEnrollment(MfaSecret);
+        user.ConfirmMfaEnrollment(["backup-code-hash-1", "backup-code-hash-2"]);
+
+        await using (var context = CreateContext())
+        {
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var tracked = await context.Users.SingleAsync(x => x.Id == user.Id);
+            tracked.DisableMfa();
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var row = await context.AuditLogs
+                .SingleAsync(x => x.EntityType == nameof(User) && x.Action == "Updated");
+
+            row.OldValueJson.Should().NotContain(MfaSecret);
+            row.OldValueJson.Should().NotContain("backup-code-hash-1");
+            row.OldValueJson.Should().Contain("\"MfaSecret\":\"***redacted***\"");
+            row.OldValueJson.Should().Contain("\"MfaEnabled\":\"True\"");
+            row.NewValueJson.Should().Contain("\"MfaSecret\":null");
+            row.NewValueJson.Should().Contain("\"MfaEnabled\":\"False\"");
+        }
+    }
+
+    [Fact]
     public async Task A_single_key_entity_still_reports_a_bare_id()
     {
         // Guards the key-resolution change against altering existing rows' shape: anything with a plain Id must

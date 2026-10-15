@@ -7,6 +7,8 @@ import {
   AlertRule,
   ArchiveManifestEntry,
   AuditLogEntry,
+  AuditLogFilter,
+  AuditLogFilterOptions,
   AuthenticationLogEntry,
   AuthorizationLogEntry,
   CreateAlertRuleRequest,
@@ -37,14 +39,24 @@ export class GovernanceApiService {
 
   auditLogs(
     correlationId: string | undefined, page: number, pageSize: number, entityType?: string, entityId?: string,
-    sortColumn?: string, sortDirection?: 'asc' | 'desc',
+    sortColumn?: string, sortDirection?: 'asc' | 'desc', filter?: AuditLogFilter,
   ): Observable<PagedResult<AuditLogEntry>> {
     let params = buildParams(correlationId, page, pageSize);
     if (entityType) params = params.set('entityType', entityType);
     if (entityId) params = params.set('entityId', entityId);
     if (sortColumn) params = params.set('sortColumn', sortColumn);
     if (sortDirection) params = params.set('sortDirection', sortDirection);
+    if (filter?.module) params = params.set('module', filter.module);
+    if (filter?.actor) params = params.set('actor', filter.actor);
+    if (filter?.action) params = params.set('action', filter.action);
+    if (filter?.fromUtc) params = params.set('fromUtc', filter.fromUtc);
+    if (filter?.toUtc) params = params.set('toUtc', filter.toUtc);
     return this.http.get<PagedResult<AuditLogEntry>>(GOVERNANCE_ENDPOINTS.auditLogs, { params });
+  }
+
+  /** The modules and actors present in the audit trail, for the Audit Logs filter dropdowns. */
+  auditLogFilterOptions(): Observable<AuditLogFilterOptions> {
+    return this.http.get<AuditLogFilterOptions>(GOVERNANCE_ENDPOINTS.auditLogFilterOptions);
   }
 
   authenticationLogs(

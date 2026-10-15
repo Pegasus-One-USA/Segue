@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { GovernanceApiService } from '../../services/governance-api.service';
 import { CorrelationSearchResult } from '../../models/correlation-search.model';
 import { ErrorLogEntry } from '../../../operations/models/operations.model';
+import { PageHelpComponent } from '../../../components/shared/page-help/page-help.component';
 
 /** Hides per-record failure rows (Severity "Error") whenever a "PartialSuccess" Informational summary is also
  *  present in this same correlationId-scoped result — that summary already describes the batch failure, so the
@@ -126,7 +127,7 @@ function buildTimeline(result: CorrelationSearchResult): TimelineEntry[] {
 @Component({
   selector: 'app-correlation-search',
   standalone: true,
-  imports: [CommonModule, DatePipe, RouterLink, MatIconModule],
+  imports: [PageHelpComponent, CommonModule, DatePipe, RouterLink, MatIconModule],
   templateUrl: './correlation-search.component.html',
   styleUrl: './correlation-search.component.scss',
 })
