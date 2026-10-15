@@ -1,0 +1,40 @@
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_2858ad6a6dacd2::t_aec84b008fd53a 764,1217-1224
+  s_2858ad6a6dacd2::t_69745b76183605 730-734,740-763,887,960-963
+  s_2858ad6a6dacd2::t_4b2299ee2c6734 1240
+tests/FHIRBridge.UnitTests/Sources/SourceConnectionSearchParameterCompositionTests.cs
+  s_2858ad6a6dacd2::t_02a1c813a639a8 3
+  s_2858ad6a6dacd2::t_cc3743e047901f 36-60
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_2858ad6a6dacd2::t_d2ba6f136aa687 404,410-411
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_2858ad6a6dacd2::t_1ceb01f1306915 155,158-159,402
+  s_2858ad6a6dacd2::t_6363a23bd4a2dd 403-414
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorNoPatientsTests.cs
+  s_2858ad6a6dacd2::t_27a6f915f9ab4c 1-95
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/RunSourceOverrides.cs
+  s_2858ad6a6dacd2::t_bf723b2037960b 6-9
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_2858ad6a6dacd2::t_29e14fa8c5749c 227-228
+  s_2858ad6a6dacd2::t_929fa99a204348 206-210
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/SearchCriteriaPostFilter.cs
+  s_2858ad6a6dacd2::t_1fa8e727ac6ef5 71-82,84-87
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCriteriaPrecedenceTests.cs
+  s_2858ad6a6dacd2::t_d2ba6f136aa687 134-171,202-203,217-219,257-260
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "96fbb99c27f019cb76c99485885cb81f47886529",
+  "prompts": {},
+  "sessions": {
+    "s_2858ad6a6dacd2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10f975bc-e65d-460b-891b-694aafcfefd5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
