@@ -631,7 +631,8 @@ public sealed class UserManagementService : IUserManagementService
             invitationToken,
             user.MfaEnabled,
             user.MustSetupMfa,
-            invitationEmailSent);
+            invitationEmailSent,
+            user.RoleSyncNote);
     }
 
     private async Task<UserManagementDto> ToManagementDtoAsync(User user, CancellationToken cancellationToken)

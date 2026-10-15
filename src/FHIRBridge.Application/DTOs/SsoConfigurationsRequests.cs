@@ -23,7 +23,28 @@ public sealed record SsoConfigurationsDto(
     string EntraInstance,
     string EntraTenantId,
     string EntraClientId,
-    bool GoogleEnabled);
+    bool GoogleEnabled,
+    PingConfigurationDto? Ping = null);
+
+/// <summary>One PingOne group (id or display name) and the single Segue role it grants. The list order is the priority order.</summary>
+public sealed record PingGroupRoleMappingDto(string Group, string Role);
+
+/// <summary>PingOne settings as shown on the screen. The worker client secret is write-only: only whether one is set is returned.</summary>
+public sealed record PingConfigurationDto(
+    bool Enabled,
+    string EnvironmentId,
+    string AuthDomain,
+    string ApiDomain,
+    string ClientId,
+    string WorkerClientId,
+    bool WorkerSecretConfigured,
+    bool JitProvisioning,
+    bool ApplyToSaml,
+    IReadOnlyList<PingGroupRoleMappingDto> GroupRoleMappings,
+    string? WorkerSecretHint = null,
+    string RoleSyncMode = "AutoSwitch",
+    string ConflictMode = "Deny",
+    string NoMappedGroupMode = "Deny");
 
 /// <summary>Writes every SAML/magic-link/Entra field in one call — each persists as its own <c>SystemSetting</c> row.</summary>
 public sealed record UpdateSsoConfigurationsRequest(
@@ -38,4 +59,24 @@ public sealed record UpdateSsoConfigurationsRequest(
     bool EntraEnabled,
     string EntraInstance,
     string EntraTenantId,
-    string EntraClientId);
+    string EntraClientId,
+    UpdatePingConfigurationRequest? Ping = null);
+
+/// <summary>
+/// PingOne settings to save. <paramref name="WorkerClientSecret"/> is optional: blank keeps the secret already
+/// stored, a value replaces it (stored through the secret store, never in a settings row).
+/// </summary>
+public sealed record UpdatePingConfigurationRequest(
+    bool Enabled,
+    string EnvironmentId,
+    string AuthDomain,
+    string ApiDomain,
+    string ClientId,
+    string WorkerClientId,
+    string? WorkerClientSecret,
+    bool JitProvisioning,
+    bool ApplyToSaml,
+    IReadOnlyList<PingGroupRoleMappingDto> GroupRoleMappings,
+    string? RoleSyncMode = null,
+    string? ConflictMode = null,
+    string? NoMappedGroupMode = null);

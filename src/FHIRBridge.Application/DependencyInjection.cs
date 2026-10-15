@@ -93,6 +93,7 @@ public static class DependencyInjection
         services.AddScoped<IMfaService, MfaService>();
         services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<ISetupService, SetupService>();
+        services.AddScoped<IExternalRoleReconciler, ExternalRoleReconciler>();
         services.AddScoped<ISsoAuthService, SsoAuthService>();
         services.AddScoped<IRoleManagementService, RoleManagementService>();
         services.AddScoped<IHedisMeasureReportService, HedisMeasureReportService>();

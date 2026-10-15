@@ -15,4 +15,9 @@ namespace FHIRBridge.Application.Abstractions.Security;
 public interface IUserPermissionsProvider
 {
     Task<IReadOnlyList<string>> GetEffectivePermissionCodesAsync(Guid userId, CancellationToken cancellationToken);
+
+    /// <summary>Drops any cached permissions for the user, e.g. after an external IdP rewrote their roles.</summary>
+    void Invalidate(Guid userId)
+    {
+    }
 }

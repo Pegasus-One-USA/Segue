@@ -19,6 +19,7 @@ interface SsoConfigResponse {
   google?: { enabled?: boolean; clientId?: string | null };
   saml?: { enabled?: boolean };
   magicLink?: { enabled?: boolean };
+  ping?: { enabled?: boolean; authority?: string | null; clientId?: string | null };
 }
 
 @Injectable({ providedIn: 'root' })
@@ -30,6 +31,9 @@ export class SsoConfigService {
   private readonly _entraClientId    = signal<string | null>(null);
   private readonly _googleEnabled    = signal(false);
   private readonly _googleClientId   = signal<string | null>(null);
+  private readonly _pingEnabled      = signal(false);
+  private readonly _pingAuthority    = signal<string | null>(null);
+  private readonly _pingClientId     = signal<string | null>(null);
   private readonly _samlEnabled      = signal(false);
   private readonly _magicLinkEnabled = signal(false);
   private readonly _loaded           = signal(false);
@@ -39,6 +43,10 @@ export class SsoConfigService {
   readonly entraClientId    = this._entraClientId.asReadonly();
   readonly googleEnabled    = this._googleEnabled.asReadonly();
   readonly googleClientId   = this._googleClientId.asReadonly();
+  readonly pingEnabled      = this._pingEnabled.asReadonly();
+  /** PingOne OIDC issuer root, e.g. https://auth.pingone.sg/{envId}/as */
+  readonly pingAuthority    = this._pingAuthority.asReadonly();
+  readonly pingClientId     = this._pingClientId.asReadonly();
   /** SAML is a plain full-page redirect (no client-side SDK/token) — only whether to show the button matters. */
   readonly samlEnabled      = this._samlEnabled.asReadonly();
   readonly magicLinkEnabled = this._magicLinkEnabled.asReadonly();
@@ -46,7 +54,7 @@ export class SsoConfigService {
 
   /** True when at least one SSO provider is enabled — components use this to decide whether to show SSO UI. */
   anyEnabled(): boolean {
-    return this._entraEnabled() || this._googleEnabled() || this._samlEnabled();
+    return this._entraEnabled() || this._googleEnabled() || this._pingEnabled() || this._samlEnabled();
   }
 
   private inflight?: Promise<void>;
@@ -76,6 +84,11 @@ export class SsoConfigService {
         this._googleEnabled.set(googleUsable);
         this._googleClientId.set(google.clientId ?? null);
 
+        const ping = cfg?.ping ?? {};
+        this._pingEnabled.set(!!ping.enabled && !!ping.authority && !!ping.clientId);
+        this._pingAuthority.set(ping.authority ?? null);
+        this._pingClientId.set(ping.clientId ?? null);
+
         this._samlEnabled.set(!!cfg?.saml?.enabled);
         this._magicLinkEnabled.set(!!cfg?.magicLink?.enabled);
       })
@@ -83,6 +96,7 @@ export class SsoConfigService {
         // Resilient default: unreachable / not configured → no SSO.
         this._entraEnabled.set(false);
         this._googleEnabled.set(false);
+        this._pingEnabled.set(false);
         this._samlEnabled.set(false);
         this._magicLinkEnabled.set(false);
       })

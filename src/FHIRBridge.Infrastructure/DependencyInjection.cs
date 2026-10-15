@@ -434,6 +434,16 @@ public static class DependencyInjection
         services.Configure<GoogleAuthenticationOptions>(configuration.GetSection("Authentication:Google"));
         services.AddSingleton<IProviderTokenValidator, EntraTokenValidator>();
         services.AddSingleton<IProviderTokenValidator, GoogleTokenValidator>();
+
+        // PingOne: OIDC token validation plus live RBAC lookup (group membership -> FHIRBridge roles).
+        services.Configure<PingAuthenticationOptions>(configuration.GetSection("Authentication:Ping"));
+        services.AddSingleton<PingSettingsReader>();
+        services.AddSingleton<IProviderTokenValidator, PingTokenValidator>();
+        services.AddHttpClient(PingManagementClient.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
+        services.AddScoped<PingManagementClient>();
+        services.AddScoped<IExternalRoleResolver, PingRoleResolver>();
+        services.AddScoped<IPingConnectionTester, PingConnectionTester>();
+
         services.AddSingleton<IExternalTokenValidator, CompositeExternalTokenValidator>();
 
         // SAML 2.0 SSO (single configured IdP, system-wide — see FHIRBridge.Domain/README.md on why this

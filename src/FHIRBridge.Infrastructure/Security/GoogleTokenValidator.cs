@@ -40,6 +40,8 @@ public sealed class GoogleTokenValidator : IProviderTokenValidator
 
     public LoginProvider Provider => LoginProvider.Google;
 
+    public Task<bool> IsEnabledAsync(CancellationToken cancellationToken) => Task.FromResult(_options.Enabled);
+
     public async Task<ExternalIdentity> ValidateAsync(string token, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(token))

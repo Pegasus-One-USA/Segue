@@ -96,3 +96,46 @@
 }
 .badge--on  { background: var(--color-success-soft); color: var(--color-success-strong); }
 .badge--off { background: var(--color-side); color: var(--color-muted); }
+
+.card-title--sm { font-size: 14px; margin: 20px 0 4px; }
+
+.mapping-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: flex-start;
+}
+
+.mapping-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  width: 100%;
+  align-items: start;
+}
+
+.test-ok   { color: var(--color-success, var(--color-primary)); font-size: 13px; }
+.test-fail { color: var(--color-error); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .mapping-row { grid-template-columns: 1fr; }
+}
+
+.field-hint { display: block; margin-top: 4px; font-size: 12px; color: var(--color-muted); }
+
+.mapping-row input[type='text'],
+.mapping-row select {
+  width: 100%; min-height: 38px; padding: 7px 10px; box-sizing: border-box;
+  background: var(--color-surface); color: var(--color-ink);
+  border: 1px solid var(--color-border-input); border-radius: var(--radius-base);
+  font-size: 13px;
+  &:focus { outline: none; border-color: var(--color-primary); }
+}
+
+.mapping-actions { display: flex; gap: 6px; align-items: center; }
+
+.radio-group {
+  display: flex; flex-direction: column; gap: 8px; margin: 8px 0 4px;
+  input[type='radio'] { width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer; }
+}

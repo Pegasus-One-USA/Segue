@@ -279,6 +279,7 @@ export const SYSTEM_SETTINGS_ENDPOINTS = {
 export const SSO_CONFIGURATIONS_ENDPOINTS = {
   get:    `${API_V1_BASE}/system/sso-configurations`,
   update: `${API_V1_BASE}/system/sso-configurations`,
+  pingTest: `${API_V1_BASE}/system/sso-configurations/ping/test`,
 };
 
 // ─── App-level signing secrets (AppSecretsController — api/v1/system/app-secrets) ──

@@ -21,6 +21,9 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(x => x.DisplayName)
             .HasMaxLength(200);
 
+        builder.Property(x => x.RoleSyncNote)
+            .HasMaxLength(FHIRBridge.Domain.Entities.User.MaxRoleSyncNoteLength);
+
         builder.Property(x => x.PasswordHash)
             .HasMaxLength(500);
 

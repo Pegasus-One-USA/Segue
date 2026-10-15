@@ -54,9 +54,16 @@ function initApp(
     try {
       await firstValueFrom(ssoAuthApi.ssoLogin(redirectResult.provider, redirectResult.token));
       void router.navigateByUrl('/dashboard');
-    } catch {
-      // Same "no matching account" possibility as any other SSO path — surfaced as a query param
-      // since the login page isn't mounted yet at this point in the boot sequence to show a toast.
+    } catch (err) {
+      // The login page isn't mounted yet at this point in the boot sequence to show a toast, so the failure is
+      // flagged with a query param. The API's own reason (e.g. "not in any group linked to a Segue role") is
+      // handed over through sessionStorage, NOT the URL, so a crafted link can never put text in front of a user.
+      const reason = (err as { error?: { message?: unknown } })?.error?.message;
+      try {
+        if (typeof reason === 'string' && reason.length > 0 && reason.length <= 300) {
+          sessionStorage.setItem('segue.sso.error', reason);
+        }
+      } catch { /* storage unavailable: the login page falls back to its generic message */ }
       void router.navigateByUrl('/auth/login?error=sso_failed');
     }
     return true;

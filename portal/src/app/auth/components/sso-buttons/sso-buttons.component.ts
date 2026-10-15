@@ -38,6 +38,7 @@ export class SsoButtonsComponent {
 
   protected readonly entraEnabled  = this.ssoConfig.entraEnabled;
   protected readonly googleEnabled = this.ssoConfig.googleEnabled;
+  protected readonly pingEnabled   = this.ssoConfig.pingEnabled;
   protected readonly samlEnabled   = this.ssoConfig.samlEnabled;
   protected readonly anyEnabled    = () => this.ssoConfig.anyEnabled();
 
@@ -59,6 +60,13 @@ export class SsoButtonsComponent {
         // response is picked up by SsoService.handleRedirectResponse() on the next app boot,
         // after the browser returns from Microsoft (see app.config.ts).
         await this.sso.signInWithEntra();
+        return;
+      }
+
+      if (provider === 'Ping') {
+        // Same full-tab redirect as Entra: PingOne returns to the app root and the response is
+        // handled on the next boot by SsoService.handleRedirectResponse().
+        await this.sso.signInWithPing();
         return;
       }
 

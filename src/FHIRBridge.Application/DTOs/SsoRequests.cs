@@ -25,7 +25,15 @@ public sealed record SsoConfigDto(
     SsoEntraConfigDto Entra,
     SsoGoogleConfigDto Google,
     SsoSamlConfigDto Saml,
-    SsoMagicLinkConfigDto MagicLink);
+    SsoMagicLinkConfigDto MagicLink,
+    SsoPingConfigDto? Ping = null);
+
+/// <summary>PingOne OIDC settings the portal needs to start an authorization-code + PKCE sign-in.
+/// <paramref name="Authority"/> is <c>https://{authDomain}/{envId}/as</c>; null when Ping is disabled.</summary>
+public sealed record SsoPingConfigDto(
+    bool Enabled,
+    string? Authority,
+    string? ClientId);
 
 public sealed record SsoEntraConfigDto(
     bool Enabled,

@@ -1,7 +1,7 @@
 <div class="dash-content">
   <div class="page-header">
     <h1 class="page-title">SSO Configurations</h1>
-    <p class="page-sub">Configure SAML 2.0 single sign-on and Microsoft Entra ID login. Changes here take effect immediately — no restart needed.</p>
+    <p class="page-sub">Configure SAML 2.0 single sign-on, Microsoft Entra ID and Ping Identity login. Changes here take effect immediately — no restart needed.</p>
   </div>
 
   @if (loading()) {
@@ -101,6 +101,146 @@
           <div class="form-field">
             <label for="sso-entra-client">Application (Client) ID</label>
             <input id="sso-entra-client" type="text" formControlName="entraClientId" placeholder="From the App Registration's Overview page" />
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <div class="card-row">
+          <div>
+            <h2 class="card-title">Ping Identity (PingOne)</h2>
+            <p class="card-sub">"Continue with Ping" login. Roles are fetched live from PingOne at every sign-in and mapped to Segue roles below, so PingOne stays the source of truth for access.</p>
+          </div>
+          <label class="toggle-field">
+            <input type="checkbox" formControlName="pingEnabled" />
+            <span>Enabled</span>
+          </label>
+        </div>
+
+        <div class="es-grid">
+          <div class="form-field form-field--full">
+            <label for="sso-ping-env">Environment ID</label>
+            <input id="sso-ping-env" type="text" formControlName="pingEnvironmentId" placeholder="From PingOne: Environment properties" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-ping-auth">Auth Domain</label>
+            <input id="sso-ping-auth" type="text" formControlName="pingAuthDomain" placeholder="auth.pingone.com" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-ping-api">API Domain</label>
+            <input id="sso-ping-api" type="text" formControlName="pingApiDomain" placeholder="api.pingone.com" />
+          </div>
+
+          <div class="form-field form-field--full">
+            <label for="sso-ping-client">Portal App Client ID</label>
+            <input id="sso-ping-client" type="text" formControlName="pingClientId" placeholder="The Single-Page App used for sign-in" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-ping-worker">Worker App Client ID</label>
+            <input id="sso-ping-worker" type="text" formControlName="pingWorkerClientId" placeholder="The Worker app used to read groups" />
+          </div>
+
+          <div class="form-field">
+            <label for="sso-ping-secret">Worker App Client Secret</label>
+            <input id="sso-ping-secret" type="password" formControlName="pingWorkerClientSecret" autocomplete="new-password"
+                   [placeholder]="pingSecretConfigured() ? '•••••••• saved — leave blank to keep' : 'Paste the worker app secret'" />
+            @if (pingSecretHint(); as hint) {
+              <span class="field-hint">Saved secret: {{ hint }}. Compare with the PingOne console.</span>
+            }
+          </div>
+
+          <label class="toggle-field form-field--full">
+            <input type="checkbox" formControlName="pingJitProvisioning" />
+            <span>Create an account on first sign-in when a Ping group maps to a role</span>
+          </label>
+
+          <label class="toggle-field form-field--full">
+            <input type="checkbox" formControlName="pingApplyToSaml" />
+            <span>Also apply Ping roles to SAML sign-ins</span>
+          </label>
+        </div>
+
+        <h3 class="card-title card-title--sm">Group to role mapping</h3>
+        <p class="card-sub">Enter a PingOne Group ID (or exact group name) and pick the <strong>one</strong> Segue role it grants. A user holds a single role. The order matters when "Use mapping order" is selected below: the <strong>top row has the highest priority</strong>.</p>
+
+        <div class="mapping-list">
+          @for (row of pingMappings.controls; track row; let i = $index; let last = $last) {
+            <div class="mapping-row" [formGroup]="row">
+              <input type="text" formControlName="group" placeholder="Ping group ID or name" aria-label="Ping group" />
+              <select formControlName="role" aria-label="Segue role">
+                <option value="">Select Segue role…</option>
+                @for (opt of roleOptions(); track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+              <div class="mapping-actions">
+                <button type="button" class="btn-outline btn-outline--sm" (click)="moveMapping(i, -1)" [disabled]="i === 0" aria-label="Move up">&#9650;</button>
+                <button type="button" class="btn-outline btn-outline--sm" (click)="moveMapping(i, 1)" [disabled]="last" aria-label="Move down">&#9660;</button>
+                <button type="button" class="btn-outline btn-outline--sm" (click)="removeMapping(i)">Remove</button>
+              </div>
+            </div>
+          }
+          <button type="button" class="btn-outline btn-outline--sm" (click)="addMapping()">+ Add mapping</button>
+        </div>
+
+        <h3 class="card-title card-title--sm">When a user's Ping groups map to more than one role</h3>
+        <div class="radio-group" role="radiogroup" aria-label="Role conflict handling">
+          <label class="toggle-field">
+            <input type="radio" formControlName="pingConflictMode" value="Deny" />
+            <span>Do not allow sign-in (safest)</span>
+          </label>
+          <label class="toggle-field">
+            <input type="radio" formControlName="pingConflictMode" value="UseMappingOrder" />
+            <span>Use mapping order: the first matching row above decides the role</span>
+          </label>
+        </div>
+        <p class="card-sub">Groups that are not in the list are ignored. A user in one mapped group, or in several groups that all map to the same role, is never affected by this.</p>
+
+        <h3 class="card-title card-title--sm">When none of a user's Ping groups are mapped to a role</h3>
+        <div class="radio-group" role="radiogroup" aria-label="No mapped group handling">
+          <label class="toggle-field">
+            <input type="radio" formControlName="pingNoMappedGroupMode" value="Deny" />
+            <span>Do not allow sign-in</span>
+          </label>
+          <label class="toggle-field">
+            <input type="radio" formControlName="pingNoMappedGroupMode" value="AllowSegueRole" />
+            <span>Allow sign-in with the role the user already has in Segue</span>
+          </label>
+        </div>
+        <p class="card-sub">Applies to users who already have a Segue account; their role is left unchanged. A person with no Segue account and no mapped group is still refused.</p>
+
+        <h3 class="card-title card-title--sm">When the Ping role and the user's Segue role differ</h3>
+        <label class="toggle-field">
+          <input type="checkbox" formControlName="pingAutoSwitch" />
+          <span>Auto-switch the user's role to the Ping role</span>
+        </label>
+        <p class="card-sub">The user's record is updated to the Ping-mapped role, with a note "Role updated via PingOne SSO" and an entry in the authentication log.</p>
+
+        @if (!form.controls.pingAutoSwitch.value) {
+          <div class="radio-group" role="radiogroup" aria-label="Role mismatch handling">
+            <label class="toggle-field">
+              <input type="radio" formControlName="pingMismatchMode" value="AllowDifferent" />
+              <span>Allow users to sign in with a different role in Segue and Ping</span>
+            </label>
+            <label class="toggle-field">
+              <input type="radio" formControlName="pingMismatchMode" value="RestrictMismatch" />
+              <span>Restrict sign-in if the roles do not match</span>
+            </label>
+          </div>
+        }
+
+        <div class="readonly-block">
+          <p class="readonly-hint">Save first, then test. The test checks the saved settings: the worker app can get a token and read groups.</p>
+          <div class="readonly-row">
+            <button type="button" class="btn-outline btn-outline--sm" (click)="testPing()" [disabled]="pingTesting() || form.dirty">
+              {{ pingTesting() ? 'Testing…' : 'Test connection' }}
+            </button>
+            @if (pingTestResult(); as result) {
+              <span role="status" [class.test-ok]="result.success" [class.test-fail]="!result.success">{{ result.message }}</span>
+            }
           </div>
         </div>
       </section>

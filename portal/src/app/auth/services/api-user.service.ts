@@ -140,6 +140,7 @@ function mapDetailDto(dto: UserDetailDto): User {
     twoFactorEnabled:   dto.mfaEnabled,
     mfaRequired:        dto.mustSetupMfa,
     lastLoginAt:        dto.lastLoginOnUtc ?? undefined,
+    roleSyncNote:       dto.roleSyncNote ?? undefined,
     createdAt:          dto.createdOnUtc,
     updatedAt:          dto.createdOnUtc,
     _globalRoleNames:   (dto.roles ?? []).map(r => r.name),
