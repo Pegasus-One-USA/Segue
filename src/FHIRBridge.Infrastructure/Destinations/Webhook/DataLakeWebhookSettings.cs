@@ -149,7 +149,13 @@ public sealed record DataLakeWebhookSettings(
     /// </summary>
     internal static void ValidateEndpointUrl(string endpointUrl, string destinationName)
     {
-        if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out var uri))
+        // UriKind.Absolute alone isn't enough: on Linux, Uri.TryCreate treats a bare rooted path like "/events" as
+        // an implicit file:// URI (Unix's own absolute-path convention) and returns true, while the same string
+        // fails to parse on Windows — so a relative endpoint slipped past this check on Linux only. No legitimate
+        // webhook target is ever file://, so excluding that one scheme (rather than allowlisting http/https here,
+        // which would wrongly reclassify a real non-http scheme like ftp:// as "not absolute" instead of "must use
+        // https" below) makes the check OS-independent without changing behavior for any real scheme.
+        if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out var uri) || uri.Scheme == Uri.UriSchemeFile)
         {
             throw new InvalidOperationException(
                 $"Destination '{destinationName}' has an endpoint URL that is not an absolute URI: '{endpointUrl}'.");

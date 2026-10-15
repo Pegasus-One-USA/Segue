@@ -1,0 +1,127 @@
+name: Deploy_Azure_Dev
+
+# Continuous deploy to the shared Azure dev environment: every merge to main_v2 that touches app or
+# deployment code builds the 5 segue-* images, pushes them to the vendor ACR tagged dev-<short sha>,
+# and deploys them with containerization/azure-deploy/main.bicep. Customer-facing X.Y.Z versions stay
+# reserved for release.yml — a dev-* tag is never a release.
+#
+# One-time setup — GitHub environment `azure-dev` (no required reviewers, so merges deploy straight
+# through), backed by the same Entra app registration as release.yml with a federated credential for
+# this environment, AcrPush on the vendor ACR and Contributor on the dev resource group:
+#   vars:    AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, ACR_NAME (seguebuilds),
+#            AZURE_RESOURCE_GROUP (rg-tusharpuri), BICEP_NAME_PREFIX (optional, default segue),
+#            BICEP_USE_AZURE_POSTGRESQL (optional, default false — containerized Postgres is enough
+#            for dev and avoids a managed-server bill)
+#   secrets: POSTGRES_PASSWORD, JWT_SIGNING_KEY, REDIS_PASSWORD, REDIS_TLS_CRT, REDIS_TLS_KEY (the
+#            same long-lived Redis pair as the release environment)
+on:
+  push:
+    branches: [main_v2]
+    paths:
+      - 'src/**'
+      - 'portal/**'
+      - 'containerization/docker/**'
+      - 'containerization/azure-deploy/**'
+      - 'containerization/scripts/build-images.sh'
+      - 'FHIRBridge.sln'
+      - '.github/workflows/deploy-azure-dev.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write   # OIDC login to Azure
+
+# A newer merge supersedes a queued one; never cancel a deploy that's already running.
+concurrency:
+  group: deploy-azure-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: publish-and-deploy-dev
+    runs-on: ubuntu-latest
+    environment: azure-dev
+    env:
+      REGISTRY: ${{ vars.ACR_NAME }}.azurecr.io
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: tag
+        run: echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to registry
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      # Same long-lived pair as release.yml, so dev exercises exactly the cert customers get.
+      - name: Restore the redis-tls certificate
+        id: redis-cert
+        env:
+          REDIS_TLS_CRT: ${{ secrets.REDIS_TLS_CRT }}
+          REDIS_TLS_KEY: ${{ secrets.REDIS_TLS_KEY }}
+        run: |
+          CERT_DIR=containerization/docker/redis-tls
+          if [ -z "$REDIS_TLS_CRT" ] || [ -z "$REDIS_TLS_KEY" ]; then
+            echo "::error::REDIS_TLS_CRT / REDIS_TLS_KEY are not set on the azure-dev environment."
+            exit 1
+          fi
+          printf '%s\n' "$REDIS_TLS_CRT" > "$CERT_DIR/redis.crt"
+          printf '%s\n' "$REDIS_TLS_KEY" > "$CERT_DIR/redis.key"
+          chmod 600 "$CERT_DIR/redis.key"
+          THUMBPRINT="$(openssl x509 -in "$CERT_DIR/redis.crt" -noout -fingerprint -sha1 | sed -E 's/^.*=//; s/://g')"
+          echo "thumbprint=$THUMBPRINT" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push images
+        run: |
+          chmod +x containerization/scripts/build-images.sh
+          ./containerization/scripts/build-images.sh -r "$REGISTRY" -t "${{ steps.tag.outputs.value }}" -p
+
+      - name: Deploy main.bicep
+        id: deploy
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+        run: |
+          DEPLOYMENT="segue-dev-${{ github.run_number }}"
+          # Registry credentials stay empty: the vendor ACR allows anonymous pull.
+          az deployment group create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$DEPLOYMENT" \
+            --template-file containerization/azure-deploy/main.bicep \
+            --parameters \
+              namePrefix="${{ vars.BICEP_NAME_PREFIX || 'segue' }}" \
+              useAzurePostgresql="${{ vars.BICEP_USE_AZURE_POSTGRESQL || 'false' }}" \
+              imageRegistryServer="$REGISTRY" \
+              imageTag="${{ steps.tag.outputs.value }}" \
+              postgresPassword="$POSTGRES_PASSWORD" \
+              jwtSigningKey="$JWT_SIGNING_KEY" \
+              redisPassword="$REDIS_PASSWORD" \
+              redisTrustedCertificateThumbprint="${{ steps.redis-cert.outputs.thumbprint }}" \
+            --output none
+          APP_URL="$(az deployment group show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "$DEPLOYMENT" --query properties.outputs.segueAppUrl.value -o tsv)"
+          echo "app_url=$APP_URL" >> "$GITHUB_OUTPUT"
+          echo "### Deployed ${{ steps.tag.outputs.value }} to dev" >> "$GITHUB_STEP_SUMMARY"
+          echo "$APP_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      # First boot runs EF migrations before the Gateway serves anything, so allow a few minutes.
+      - name: Wait for the app to respond
+        run: |
+          URL="${{ steps.deploy.outputs.app_url }}"
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null -m 10 "$URL/"; then
+              echo "$URL is up."
+              exit 0
+            fi
+            echo "Waiting for $URL ($i/30)..."
+            sleep 10
+          done
+          echo "::error::$URL did not respond within 5 minutes — check the Container App logs."
+          exit 1

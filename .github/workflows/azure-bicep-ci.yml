@@ -1,0 +1,105 @@
+name: Azure Bicep CI
+
+# PR gate for the Bicep one-click / Marketplace path (containerization/azure-deploy) and the container
+# images it deploys. Nothing here touches Azure -- no login, no registry push, no deployment.
+#
+#   bicep    Compiles main.bicep / custom-domain.bicep and fails if the committed main.json /
+#            custom-domain.json (what the Portal deep-link and Marketplace package actually ship)
+#            have drifted from their .bicep sources. Fix a failure by running, from
+#            containerization/azure-deploy:
+#              az bicep build --file main.bicep
+#              az bicep build --file custom-domain.bicep
+#            and committing the regenerated .json files. Compiler-version metadata is ignored, so
+#            a different local Bicep version alone never fails this check.
+#   images   Builds all 5 custom images (no push) so a Dockerfile or csproj change that breaks the
+#            container build is caught before anyone tries to publish a release from it.
+on:
+  pull_request:
+    branches: [main_v2, main]
+    paths:
+      - 'containerization/azure-deploy/**'
+      - 'containerization/docker/**'
+      - 'containerization/scripts/build-images.sh'
+      - '.github/workflows/azure-bicep-ci.yml'
+  push:
+    branches: [main_v2, main]
+    paths:
+      - 'containerization/azure-deploy/**'
+      - 'containerization/docker/**'
+      - 'containerization/scripts/build-images.sh'
+      - '.github/workflows/azure-bicep-ci.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  bicep:
+    name: bicep-build-and-drift
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: containerization/azure-deploy
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: Compile Bicep templates
+        run: |
+          mkdir -p "$RUNNER_TEMP/bicep"
+          az bicep build --file main.bicep --outfile "$RUNNER_TEMP/bicep/main.json"
+          az bicep build --file custom-domain.bicep --outfile "$RUNNER_TEMP/bicep/custom-domain.json"
+
+      - name: Committed ARM JSON matches its Bicep source
+        run: |
+          python3 - "$RUNNER_TEMP/bicep" <<'EOF'
+          import json, sys
+
+          def strip(node):
+              # Drop compiler metadata (_generator version/templateHash) at every nesting level --
+              # nested module templates carry their own copy.
+              if isinstance(node, dict):
+                  meta = node.get("metadata")
+                  if isinstance(meta, dict):
+                      meta.pop("_generator", None)
+                  return {k: strip(v) for k, v in node.items()}
+              if isinstance(node, list):
+                  return [strip(v) for v in node]
+              return node
+
+          compiled_dir = sys.argv[1]
+          failed = False
+          for name in ("main.json", "custom-domain.json"):
+              with open(f"{compiled_dir}/{name}") as f:
+                  compiled = strip(json.load(f))
+              with open(name) as f:
+                  committed = strip(json.load(f))
+              if compiled != committed:
+                  print(f"::error file=containerization/azure-deploy/{name}::{name} is out of date with its .bicep source -- run 'az bicep build' and commit the result.")
+                  failed = True
+              else:
+                  print(f"{name} matches its .bicep source.")
+          sys.exit(1 if failed else 0)
+          EOF
+
+      - name: createUiDefinition files are valid JSON
+        run: |
+          for f in createUiDefinition*.json main.parameters.example.json; do
+            python3 -m json.tool "$f" > /dev/null && echo "$f OK"
+          done
+
+  images:
+    name: build-images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # redis.crt/redis.key are gitignored, and the fhirbridge-redis Dockerfile COPYs them -- a
+      # throwaway pair is enough to prove the image builds.
+      - name: Generate throwaway Redis TLS certificate
+        run: bash containerization/docker/redis-tls/generate-cert.sh
+
+      - name: Build all custom images (no push)
+        run: bash containerization/scripts/build-images.sh -t ci-${{ github.run_number }}

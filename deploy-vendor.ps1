@@ -70,20 +70,15 @@ if ($PublishOnly) {
 }
 
 Write-Host "==> Deploying via Bicep to resource group $ResourceGroup"
-# seguebuilds has neither the admin user nor anonymous pull enabled, so Container Apps needs real
-# registry credentials to pull - same read-only, scoped "one-click-pull" ACR token already embedded
-# in createUiDefinition.json for the customer-facing wizard (see README.md's "Wiring up registry
-# access" section). Without these two parameters the deploy succeeds but every Container App fails
-# to start with "UNAUTHORIZED: authentication required" pulling from seguebuilds.azurecr.io.
-# Fill in real values for the 4 password/key parameters below before running (or edit this file).
+# seguebuilds allows anonymous pull, so Container Apps need no registry credentials - the same as a
+# customer deployment from createUiDefinition.json. Never put a registry token or password in this
+# file. Fill in real values for the 3 password/key parameters below before running.
 az deployment group create `
   --resource-group $ResourceGroup `
   --template-file "$AzureDeployDir\main.bicep" `
   --parameters "$AzureDeployDir\main.parameters.example.json" `
   --parameters `
     imageRegistryServer=$AcrLoginServer `
-    imageRegistryUsername='one-click-pull' `
-    imageRegistryPassword='401K4t2K0LniPnjsqlSjjXDaUof0VPIzLyDodMHeXgWv2WYgGmn2JQQJ99CHACYeBjFEqg7NAAABAZCREYP3' `
     imageTag=$Tag `
     postgresPassword='CHANGE-ME-Str0ng!' `
     jwtSigningKey='CHANGE-ME-replace-with-a-long-random-string-32-chars-min' `

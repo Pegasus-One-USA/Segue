@@ -6,10 +6,12 @@
 
 # ---- Stage 1: .NET publish ----
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS dotnet-build
+ARG SOURCE_REVISION_ID=
 WORKDIR /src
+COPY Directory.Build.props VERSION ./
 COPY src/ ./src/
 RUN dotnet publish src/Worker/FHIRBridge.Worker/FHIRBridge.Worker.csproj \
-      -c Release --no-self-contained -o /app/publish
+      -c Release --no-self-contained -o /app/publish -p:SourceRevisionId=${SOURCE_REVISION_ID}
 
 # ---- Stage 2: runtime ----
 # Despite having no Kestrel endpoint, FHIRBridge.Worker pulls in the ASP.NET Core shared framework
