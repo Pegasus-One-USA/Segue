@@ -401,12 +401,14 @@ public sealed class BulkExportPollServiceTests
     [InlineData(null, null, new[] { "p1", "p3" })]
     [InlineData("gender=male", null, new[] { "p2" })]
     [InlineData(null, "gender=male", new[] { "p2" })]
+    [InlineData(null, "status=active", new[] { "p1", "p3" })]
     public async Task Completed_result_filters_exported_records_by_the_source_nodes_criteria_before_resuming(
         string? apiCriteria, string? callerPatientCriteria, string[] expectedPatientIds)
     {
         // A $export request carries no search criteria, so the paused node's Patient criteria (gender=female) can only
         // take effect on the downloaded records; an API run's own criteria win a parameter both set, and an external
-        // trigger's own Patient criteria (SourceOverrides.CriteriaByResourceType) replace the saved row for this run.
+        // trigger's own Patient criteria (SourceOverrides.CriteriaByResourceType) are combined with the saved row, winning
+        // a parameter both set — so a caller's status=active keeps the saved gender=female.
         const string canvasNodeId = "n-source-1";
         var workflow = new WorkflowDefinition(Guid.NewGuid(), "ecw-bulk", 1);
         var sourceNode = workflow.AddNode(

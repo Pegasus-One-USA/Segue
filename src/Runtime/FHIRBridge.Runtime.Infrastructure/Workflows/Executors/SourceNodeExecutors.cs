@@ -727,10 +727,40 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             source.LastUpdatedWatermarks is { Count: > 0 }, source.SearchCount, source.MaxPages, source.MaxRecords,
             source.SourceConnectionId);
 
+        // Set once this node's own Patient fetch completes and finds nobody (after any criteria filtering) — see the skip
+        // at the top of the loop below.
+        var patientFetchFoundNobody = false;
+        var typesSkippedForNoPatients = new List<string>();
+
         foreach (var type in executionOrder)
         {
             var resourceTypeStartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
             var isPatientType = string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase);
+
+            // Device is not a genuine FHIR-spec patient-compartment member (see PatientCompartmentResourceTypes'
+            // own doc comment) and is deliberately excluded from that shared, spec-accurate list — but Epic's
+            // own business-rule validator (code 59108, "A patient is required") rejects an unscoped Device
+            // search anyway. Scoped as an Epic-only addition here, rather than added to the shared domain-level
+            // list, since that list is also relied on elsewhere for spec-accurate compartment membership.
+            var isCompartmentType = PatientCompartmentResourceTypes.IsSupported(type)
+                || (_sourceType == RuntimeSourceType.Epic && string.Equals(type, "Device", StringComparison.OrdinalIgnoreCase));
+
+            // This node fetched Patient and found nobody (e.g. its criteria matched no one), so a patient-scoped type has
+            // no patient to belong to. Fetching it anyway meant an UNSCOPED search: Epic rejects that (every Observation
+            // category came back 400 "requires a patient or _id parameter", turning a run that simply matched no one
+            // into a PartialSuccess), and a more permissive server would return every patient's data instead. Skipped
+            // without a request — not a failure, so it isn't reported as one. Types outside the patient compartment
+            // (Practitioner, Location, ...) are unaffected, and a run that never fetched Patient keeps its behavior.
+            if (patientFetchFoundNobody && isCompartmentType)
+            {
+                _logger.LogInformation(
+                    LogEvents.ResourceTypeSkipped,
+                    "Resource type {ResourceType} was not fetched from {SourceName}: this run's Patient fetch found no " +
+                    "patients, so there is no patient to scope it to.",
+                    type, source.Name);
+                typesSkippedForNoPatients.Add(type);
+                continue;
+            }
 
             IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> page;
             try
@@ -745,14 +775,6 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                         0,
                         $"no granted SMART scope authorizes '{type}' for this session (granted: {(effectiveGrantedScopes is { Count: > 0 } ? string.Join(", ", effectiveGrantedScopes) : "none")})");
                 }
-
-                // Device is not a genuine FHIR-spec patient-compartment member (see PatientCompartmentResourceTypes'
-                // own doc comment) and is deliberately excluded from that shared, spec-accurate list — but Epic's
-                // own business-rule validator (code 59108, "A patient is required") rejects an unscoped Device
-                // search anyway. Scoped as an Epic-only addition here, rather than added to the shared domain-level
-                // list, since that list is also relied on elsewhere for spec-accurate compartment membership.
-                var isCompartmentType = PatientCompartmentResourceTypes.IsSupported(type)
-                    || (_sourceType == RuntimeSourceType.Epic && string.Equals(type, "Device", StringComparison.OrdinalIgnoreCase));
 
                 page = useBulkExport
                     ? batchedBulkResourcesByType is not null
@@ -862,6 +884,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                     .Select(id => id!)
                     .Distinct()
                     .ToList();
+                patientFetchFoundNobody = cohortPatientIds.Count == 0;
             }
         }
 
@@ -934,7 +957,10 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 ["cohortSize"] = cohortPatientIds?.Count,
                 // Non-parent resource types this node selected but couldn't fetch because the app isn't authorized
                 // for them — the orchestrator surfaces these as a PartialSuccess rather than silently dropping them.
-                ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.ToArray() : null
+                ["skippedResourceTypes"] = skippedResourceTypes.Count > 0 ? skippedResourceTypes.ToArray() : null,
+                // Patient-scoped types not fetched because this run's Patient fetch found nobody — informational
+                // (nothing failed), so deliberately NOT folded into skippedResourceTypes, which marks a PartialSuccess.
+                ["resourceTypesNotFetchedNoPatients"] = typesSkippedForNoPatients.Count > 0 ? typesSkippedForNoPatients.ToArray() : null,
             });
     }
 
@@ -1188,11 +1214,14 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
     }
 
     /// <summary>
-    /// External-trigger runs only: overlays the criteria the caller supplied for THIS run onto
-    /// <see cref="FhirSourceConfiguration.SearchCriteriaByResourceType"/>. A type named here has its saved criteria
-    /// REPLACED (not merged — <see cref="MergeSearchParameters"/> keeps the first value of a repeated key, so a merge would
-    /// let the saved value win); a type not named keeps its saved criteria. Returns <paramref name="source"/> unchanged
-    /// when there is no override, so every other run is unaffected.
+    /// External-trigger runs only: combines the criteria the caller supplied for THIS run with each named type's saved
+    /// criteria in <see cref="FhirSourceConfiguration.SearchCriteriaByResourceType"/>, the caller winning per parameter
+    /// (see <see cref="SearchCriteriaPostFilter.CombineCriteria"/>): a parameter both set takes the caller's value, and
+    /// every other saved parameter is kept. Replacing the saved criteria outright dropped parameters the caller never
+    /// mentioned — a caller adding gender=male to a saved identifier= Patient criteria lost the identifier, Epic found no
+    /// patients, and every patient-scoped sibling search then went out unscoped and was rejected. A type not named keeps
+    /// its saved criteria. Returns <paramref name="source"/> unchanged when there is no override, so every other run is
+    /// unaffected.
     /// </summary>
     private static FhirSourceConfiguration ApplyRunResourceCriteriaOverrides(
         FhirSourceConfiguration source,
@@ -1208,7 +1237,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             StringComparer.OrdinalIgnoreCase);
         foreach (var (resourceType, criteria) in overrides)
         {
-            merged[resourceType] = criteria;
+            merged[resourceType] = SearchCriteriaPostFilter.CombineCriteria(criteria, merged.GetValueOrDefault(resourceType)) ?? criteria;
         }
 
         // A Patient override is the caller's explicit Patient search: like RunSearchCriteriaActive for the run-wide

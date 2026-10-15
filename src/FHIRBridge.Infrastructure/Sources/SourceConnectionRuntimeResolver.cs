@@ -152,23 +152,11 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
 
         var retrieval = sourceConnection.Retrieval;
 
-        // "Execute V2" only: this run's Group ID / Search Criteria replace the saved ones. The node-level search string
-        // is dropped when criteria are supplied, otherwise the wizard snapshot of the OLD criteria would still win
-        // (ComposeSearchParameters gives the node-level parameters priority over the connection's).
+        // "Execute V2" / external trigger only: this run's Group ID / Search Criteria replace the saved ones.
         if (runOverrides is not null)
         {
-            if (retrieval is not null)
-            {
-                retrieval = retrieval.WithRunOverrides(runOverrides.GroupId, runOverrides.SearchCriteria);
-                if (runOverrides.SearchCriteria is not null)
-                {
-                    searchParameters = null;
-                }
-            }
-            else if (runOverrides.SearchCriteria is not null)
-            {
-                searchParameters = string.IsNullOrWhiteSpace(runOverrides.SearchCriteria) ? null : runOverrides.SearchCriteria.Trim();
-            }
+            retrieval = retrieval?.WithRunOverrides(runOverrides.GroupId, runOverrides.SearchCriteria);
+            searchParameters = RunSearchParameters(searchParameters, runOverrides);
         }
 
         var composedSearchParameters = ComposeSearchParameters(searchParameters, retrieval);
@@ -410,6 +398,19 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         var resourceType = dot < 0 ? rest : rest[..dot];
         return EClinicalWorksSupportedResourceTypes.Contains(resourceType);
     }
+
+    /// <summary>
+    /// The search parameters a run with caller-supplied overrides searches by: the run's own Search Criteria whenever
+    /// it supplied one (blank clears them for this run), in place of the node-level string — which would otherwise
+    /// carry the wizard's snapshot of the OLD criteria. Used directly rather than routed through the retrieval config's
+    /// SearchCriteria, which <see cref="ComposeSearchParameters"/> deliberately no longer reads (the source form's own
+    /// Search Criteria is retired), so routing it there silently dropped the run's criteria for any connection with a
+    /// saved retrieval config. With no run criteria the node-level string is kept unchanged.
+    /// </summary>
+    internal static string? RunSearchParameters(string? nodeSearchParameters, RunSourceOverrides runOverrides) =>
+        runOverrides.SearchCriteria is null
+            ? nodeSearchParameters
+            : string.IsNullOrWhiteSpace(runOverrides.SearchCriteria) ? null : runOverrides.SearchCriteria.Trim();
 
     /// <summary>
     /// Layers the retrieval configuration's sort and include/revinclude settings (Advanced Search Options) onto the

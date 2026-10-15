@@ -68,14 +68,23 @@ public static class SearchCriteriaPostFilter
     /// (<paramref name="apiCriteria"/>) — the API winning a parameter both set, the same precedence a search run uses.
     /// Null when there is nothing to filter by.
     /// </summary>
-    public static string? BulkExportCriteria(string resourceType, string? resourceCriteria, string? apiCriteria)
+    public static string? BulkExportCriteria(string resourceType, string? resourceCriteria, string? apiCriteria) =>
+        string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase)
+            ? CombineCriteria(apiCriteria, resourceCriteria)
+            : CombineCriteria(null, resourceCriteria);
+
+    /// <summary>
+    /// Combines two criteria strings where <paramref name="higher"/> wins: every parameter of
+    /// <paramref name="higher"/>, then each parameter of <paramref name="lower"/> whose key (the text before '=',
+    /// modifier included) <paramref name="higher"/> doesn't set. A key repeated within one string is kept as authored,
+    /// since that's how FHIR expresses a range (date=ge2024-01-01&amp;date=le2024-12-31). Null when both are empty.
+    /// </summary>
+    public static string? CombineCriteria(string? higher, string? lower)
     {
-        var api = string.Equals(resourceType, "Patient", StringComparison.OrdinalIgnoreCase)
-            ? SplitParameters(apiCriteria).ToList()
-            : [];
-        var apiKeys = api.Select(ParameterKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var combined = api
-            .Concat(SplitParameters(resourceCriteria).Where(segment => !apiKeys.Contains(ParameterKey(segment))))
+        var winning = SplitParameters(higher).ToList();
+        var winningKeys = winning.Select(ParameterKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var combined = winning
+            .Concat(SplitParameters(lower).Where(segment => !winningKeys.Contains(ParameterKey(segment))))
             .ToList();
 
         return combined.Count == 0 ? null : string.Join('&', combined);

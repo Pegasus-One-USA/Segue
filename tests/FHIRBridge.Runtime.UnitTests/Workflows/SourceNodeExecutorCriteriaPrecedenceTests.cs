@@ -132,6 +132,44 @@ public sealed class SourceNodeExecutorCriteriaPrecedenceTests
     }
 
     [Fact]
+    public async Task Caller_criteria_with_a_different_parameter_are_combined_with_the_saved_criteria()
+    {
+        // Regression: a caller's Patient gender=male used to REPLACE the saved identifier= criteria, so Epic got a
+        // gender-only Patient search, found no patients, and every patient-scoped sibling search went out unscoped.
+        var calls = await RunAsync(
+            resources: "Patient",
+            sourceSearchParameters: "",
+            criteriaRows: [("Patient", "identifier=RES-1,RES-2")],
+            callerCriteria: new Dictionary<string, string> { ["Patient"] = "gender=male" });
+
+        calls["Patient"].SearchParameters.Should().Be("gender=male&identifier=RES-1,RES-2");
+    }
+
+    [Fact]
+    public async Task Caller_criteria_win_a_parameter_the_saved_criteria_also_set()
+    {
+        var calls = await RunAsync(
+            resources: "Patient",
+            sourceSearchParameters: "",
+            criteriaRows: [("Patient", "identifier=RES-1&active=true")],
+            callerCriteria: new Dictionary<string, string> { ["Patient"] = "identifier=CALLER-1" });
+
+        calls["Patient"].SearchParameters.Should().Be("identifier=CALLER-1&active=true");
+    }
+
+    [Fact]
+    public async Task Caller_criteria_for_one_type_leave_another_types_saved_criteria_unchanged()
+    {
+        var calls = await RunAsync(
+            resources: "Observation",
+            sourceSearchParameters: "",
+            criteriaRows: [("Observation", "category=laboratory")],
+            callerCriteria: new Dictionary<string, string> { ["Patient"] = "gender=male" });
+
+        calls["Observation"].SearchParameters.Should().Be("category=laboratory");
+    }
+
+    [Fact]
     public async Task Code_filter_the_source_ignored_is_enforced_on_the_fetched_records()
     {
         // athenahealth has no Observation "status" search parameter, so it answers status=final with every status.
@@ -161,7 +199,8 @@ public sealed class SourceNodeExecutorCriteriaPrecedenceTests
         Action<WorkflowNodeOutput>? onOutput = null,
         string? extraNodeConfig = null,
         Action<string?>? onResolve = null,
-        Guid? stampedWorkflowId = null)
+        Guid? stampedWorkflowId = null,
+        IReadOnlyDictionary<string, string>? callerCriteria = null)
     {
         var sourceConnectionId = Guid.NewGuid();
         var source = new FhirSourceConfiguration(
@@ -174,6 +213,9 @@ public sealed class SourceNodeExecutorCriteriaPrecedenceTests
         resolver
             .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .Callback((Guid _, string? searchParameters, string? _, CancellationToken _, string? _, string? _) => onResolve?.Invoke(searchParameters))
+            .ReturnsAsync(source);
+        resolver
+            .Setup(x => x.ResolveWithRunOverridesAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<RunSourceOverrides>()))
             .ReturnsAsync(source);
 
         var calls = new Dictionary<string, FhirSourceConfiguration>(StringComparer.OrdinalIgnoreCase);
@@ -212,7 +254,10 @@ public sealed class SourceNodeExecutorCriteriaPrecedenceTests
         var executor = new EpicSourceNodeExecutor(
             clientFactory.Object, resolver.Object, resourceTypeCriteriaRepository: criteriaRepository.Object);
 
-        var output = await executor.ExecuteAsync(new WorkflowExecutionContext(Guid.NewGuid(), "corr"), sourceNode, [], CancellationToken.None);
+        var context = new WorkflowExecutionContext(
+            Guid.NewGuid(), "corr",
+            sourceOverrides: callerCriteria is null ? null : new RunSourceOverrides(null, null, callerCriteria));
+        var output = await executor.ExecuteAsync(context, sourceNode, [], CancellationToken.None);
         onOutput?.Invoke(output);
 
         return calls;

@@ -203,10 +203,11 @@ public sealed class BulkExportPollService : IBulkExportPollService
     /// records before the run resumes — the deferred twin of SourceNodeExecutor.EnforceBulkExportCriteria. A
     /// <c>$export</c> request carries no search criteria, so this is the only place they can take effect; only the
     /// simple code filters <see cref="SearchCriteriaPostFilter"/> enforces apply. Rows are read now, not at kick-off,
-    /// so criteria edited while the export ran are the ones applied — except where the run's caller supplied its own
-    /// criteria for a type (an external trigger's resource criteria, kept in the run's context): those replace the
-    /// saved row for this run, exactly as SourceNodeExecutor.ApplyRunResourceCriteriaOverrides does on the immediate
-    /// path. Returns <paramref name="resources"/> unchanged when there is nothing to filter by. Lookup failures
+    /// so criteria edited while the export ran are the ones applied. Where the run's caller supplied its own criteria
+    /// for a type (an external trigger's resource criteria, kept in the run's context), they're combined with that
+    /// type's saved row for this run, the caller winning a parameter both set — exactly as
+    /// SourceNodeExecutor.ApplyRunResourceCriteriaOverrides does on the immediate path. Returns
+    /// <paramref name="resources"/> unchanged when there is nothing to filter by. Lookup failures
     /// propagate rather than letting unfiltered records through.
     /// </summary>
     private async Task<IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope>> ApplyResourceCriteriaAsync(
@@ -223,7 +224,8 @@ public sealed class BulkExportPollService : IBulkExportPollService
         var (apiCriteria, runOverrides) = ReadRunCriteria(job.ContextJson);
         foreach (var (resourceType, criteria) in runOverrides)
         {
-            criteriaByResourceType[resourceType] = criteria;
+            criteriaByResourceType[resourceType] =
+                SearchCriteriaPostFilter.CombineCriteria(criteria, criteriaByResourceType.GetValueOrDefault(resourceType)) ?? criteria;
         }
 
         if (criteriaByResourceType.Count == 0 && string.IsNullOrWhiteSpace(apiCriteria))
