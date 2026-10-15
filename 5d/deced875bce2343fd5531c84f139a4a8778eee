@@ -1,0 +1,28 @@
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.html
+  s_b925c73f8ec601::t_b4492d56c7aaa2 151
+  s_b925c73f8ec601::t_592884855a0926 125,132
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.component.ts
+  s_b925c73f8ec601::t_7775da5f6dcc5c 107-109
+  s_b925c73f8ec601::t_f9be3342dcf60b 102-106
+  s_b925c73f8ec601::t_44c0d68e0f74bf 338-339
+  s_b925c73f8ec601::t_a8faf1b336a551 335-337
+portal/src/app/user-management/pages/user-detail/user-permission-overrides.accordion.spec.ts
+  s_b925c73f8ec601::t_754723a7803f97 119,121-130
+  s_b925c73f8ec601::t_a8d80f549f8831 120,131-133,137,140-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5ddeced875bce2343fd5531c84f139a4a8778eee",
+  "prompts": {},
+  "sessions": {
+    "s_b925c73f8ec601": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a71da611-af73-44f4-a8d1-ece53f32c5ce",
+        "model": "unknown"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
