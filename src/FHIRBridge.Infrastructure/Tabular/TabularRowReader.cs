@@ -87,10 +87,15 @@ public sealed class TabularRowReader : ITabularRowReader
             },
             BeginReadOnly: "SET TRANSACTION READ ONLY",
             // The READ ONLY transaction does not hold back a superuser (pg_terminate_backend, COPY ... PROGRAM via a
-            // function, ...), and the connection test promises a login that can only read: so a superuser, or a
-            // login that can write any table, is refused here as on SQL Server.
+            // function, ...), and the connection test promises a login that can only read: so a superuser, a member
+            // of a role that reads or writes the server's files or runs programs there (pg_read_file() is a plain
+            // SELECT), or a login that can write any table, is refused here as on SQL Server.
             VerifyReadOnlySql: """
                 SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND rolsuper)
+                    OR EXISTS (
+                        SELECT 1 FROM pg_roles r
+                        WHERE r.rolname IN ('pg_read_server_files', 'pg_write_server_files', 'pg_execute_server_program')
+                          AND pg_has_role(current_user, r.oid, 'MEMBER'))
                     OR EXISTS (
                         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
                         WHERE c.relkind IN ('r', 'p')
@@ -101,10 +106,13 @@ public sealed class TabularRowReader : ITabularRowReader
                 THEN 1 ELSE 0 END
                 """,
             DescribeAsync: DescribeWithLimitZeroAsync,
-            // undefined table / column / function, syntax error, unknown schema.
+            // undefined table / column / function, syntax error, unknown schema; an ambiguous column, which the check's
+            // wrapper raises for a column name the query returns twice.
             ExplainedError: ex => ex is PostgresException { SqlState: "42P01" or "42703" or "42883" or "42601" or "3F000" } pg
                 ? pg.MessageText
-                : null,
+                : ex is PostgresException { SqlState: "42702" } ambiguous
+                    ? $"{ambiguous.MessageText}. {DuplicateColumnAdvice}"
+                    : null,
             PinLexingAsync: PinPostgreSqlLexingAsync,
             RemembersReadOnlyCheck: true),
         ["mysql"] = new(
@@ -116,8 +124,11 @@ public sealed class TabularRowReader : ITabularRowReader
             },
             BeginReadOnly: null,
             DescribeAsync: DescribeWithLimitZeroAsync,
-            // 1146 no such table, 1054 unknown column, 1064 syntax, 1305 unknown function, 1049 unknown database.
-            ExplainedError: ex => ex is MySqlException { Number: 1146 or 1054 or 1064 or 1305 or 1049 } ? ex.Message : null,
+            // 1146 no such table, 1054 unknown column, 1064 syntax, 1305 unknown function, 1049 unknown database; 1060
+            // duplicate column, which the check's wrapper raises for a column name the query returns twice.
+            ExplainedError: ex => ex is MySqlException { Number: 1146 or 1054 or 1064 or 1305 or 1049 }
+                ? ex.Message
+                : ex is MySqlException { Number: 1060 } ? $"{ex.Message}. {DuplicateColumnAdvice}" : null,
             StartTransactionSql: "START TRANSACTION READ ONLY",
             // A READ ONLY transaction does not stop INTO OUTFILE (FILE) or a routine that writes (EXECUTE), so the
             // login's own grants are checked: global, schema or table privileges that change anything are refused.
@@ -222,7 +233,7 @@ public sealed class TabularRowReader : ITabularRowReader
 
             if (engine.RemembersReadOnlyCheck)
             {
-                VerifiedLogins[verifiedKey] = DateTimeOffset.UtcNow + VerifiedLoginLifetime;
+                RememberVerifiedLogin(verifiedKey, DateTimeOffset.UtcNow);
             }
         }
 
@@ -288,6 +299,23 @@ public sealed class TabularRowReader : ITabularRowReader
 
     private static bool IsRecentlyVerified(string key) =>
         VerifiedLogins.TryGetValue(key, out var until) && DateTimeOffset.UtcNow < until;
+
+    /// <summary>Remembers a pass and drops every pass that has expired, so a long-lived API or Worker process holds
+    /// only the logins checked in the last few minutes, not every connection string it has ever seen.</summary>
+    internal static void RememberVerifiedLogin(string key, DateTimeOffset now)
+    {
+        VerifiedLogins[key] = now + VerifiedLoginLifetime;
+        foreach (var (otherKey, until) in VerifiedLogins)
+        {
+            if (until <= now)
+            {
+                VerifiedLogins.TryRemove(new KeyValuePair<string, DateTimeOffset>(otherKey, until));
+            }
+        }
+    }
+
+    /// <summary>Test seam: a pass is still held for <paramref name="key"/>, expired or not.</summary>
+    internal static bool HoldsVerifiedLogin(string key) => VerifiedLogins.ContainsKey(key);
 
     private static async Task<TabularRows> ReadRowsAsync(
         DbConnection connection, DbTransaction? transaction, string sql, int maxRows, CancellationToken cancellationToken)
@@ -397,9 +425,14 @@ public sealed class TabularRowReader : ITabularRowReader
         return Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
     }
 
-    private static void RequireUniqueColumns(IReadOnlyList<string> columns)
+    private const string DuplicateColumnAdvice = "Alias each column uniquely.";
+
+    /// <summary>The name PostgreSQL gives a computed column the query did not alias.</summary>
+    private const string PostgreSqlUnnamedColumn = "?column?";
+
+    internal static void RequireUniqueColumns(IReadOnlyList<string> columns)
     {
-        if (columns.Any(string.IsNullOrEmpty))
+        if (columns.Any(c => string.IsNullOrEmpty(c) || c == PostgreSqlUnnamedColumn))
         {
             throw new BusinessRuleException("The query returns a column without a name. Give every computed column an alias.");
         }
@@ -407,7 +440,7 @@ public sealed class TabularRowReader : ITabularRowReader
         var duplicate = columns.GroupBy(c => c, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
         if (duplicate is not null)
         {
-            throw new BusinessRuleException($"The query returns the column '{duplicate.Key}' more than once. Alias each column uniquely.");
+            throw new BusinessRuleException($"The query returns the column '{duplicate.Key}' more than once. {DuplicateColumnAdvice}");
         }
     }
 

@@ -50,6 +50,10 @@ public static partial class TabularSqlGuard
             // SQL Server runs several statements in one batch with no ';' between them.
             RequireNoForbiddenKeyword(check, SqlServerStatement());
         }
+        else if (engine == "postgresql")
+        {
+            RequireNoForbiddenKeyword(check, PostgreSqlServerFunction());
+        }
 
         // Every ';' outside literals and comments is now a closing one (the check above refused any other).
         var executable = new StringBuilder(query);
@@ -303,11 +307,19 @@ public static partial class TabularSqlGuard
     [GeneratedRegex(@"\b(insert|update|delete|merge|drop|alter|create|truncate|exec|execute|grant|revoke|into|call|copy|vacuum|attach|pragma|rename|openquery|openrowset|opendatasource|dblink\w*)\b", RegexOptions.IgnoreCase)]
     private static partial Regex ForbiddenKeyword();
 
-    // SQL Server statements that change the server or the session and need no ';' before them (SELECT 1 BACKUP DATABASE
-    // ... is one batch). USE is not here: it only changes which database the rest, still checked, reads, which the
-    // login's own rights bound; and 'use' is a common column name (ContactPoint.use).
-    [GeneratedRegex(@"\b(backup|restore|dbcc|kill|shutdown|waitfor|reconfigure|checkpoint|deny|revert|setuser|writetext|updatetext)\b", RegexOptions.IgnoreCase)]
+    // SQL Server statements that change the server or the session, or start a second statement, and need no ';' before
+    // them (SELECT 1 BACKUP DATABASE ... and SELECT 1 DECLARE @x int SET @x = 1 ... are each one batch). All are reserved
+    // words, so none can be an unquoted column name in a SELECT. USE is not here: it only changes which database the
+    // rest, still checked, reads, which the login's own rights bound; and 'use' is a common column name
+    // (ContactPoint.use). FETCH is not here either: OFFSET ... FETCH NEXT is part of a SELECT.
+    [GeneratedRegex(@"\b(backup|restore|dbcc|kill|shutdown|waitfor|reconfigure|checkpoint|deny|revert|setuser|writetext|updatetext|declare|set|begin|if|while|goto|return|print|raiserror|throw|close|deallocate)\b", RegexOptions.IgnoreCase)]
     private static partial Regex SqlServerStatement();
+
+    // PostgreSQL functions a plain SELECT can call that read or write the server's files, change the session's settings
+    // (set_config could undo the lexing TabularRowReader pins) or act on other sessions. Most need a superuser or a
+    // pg_*_server_files role, which the login check refuses, but EXECUTE on them can also be granted one by one.
+    [GeneratedRegex(@"\b(pg_read_file|pg_read_binary_file|pg_ls_\w+|pg_stat_file|pg_file_\w+|pg_logdir_ls|lo_import|lo_export|lo_get|lo_put|lo_from_bytea|lo_create|lo_creat|lo_unlink|lo_open|lo_truncate|lo_truncate64|loread|lowrite|set_config|pg_reload_conf|pg_rotate_logfile|pg_terminate_backend|pg_cancel_backend|pg_promote|pg_switch_wal|pg_create_\w+|pg_drop_replication_slot|pg_replication_origin_\w+|pg_sleep\w*|pg_advisory\w*)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex PostgreSqlServerFunction();
 
     // PostgreSQL's tag rule: empty, or an identifier that does not start with a digit ($1 is a parameter).
     [GeneratedRegex(@"\$(?:[\p{L}_][\p{L}\p{Nd}_]*)?\$")]

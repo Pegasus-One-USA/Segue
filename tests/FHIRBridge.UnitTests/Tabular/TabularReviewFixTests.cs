@@ -119,11 +119,45 @@ public sealed class TabularReviewFixTests
     [InlineData("sqlserver", "select 1 exec('drop table t')", "*'EXEC' is not allowed*")]
     [InlineData("mysql", "select 1 from t where 1 = 0 union select * from t into outfile '/tmp/x'", "*'INTO' is not allowed*")]
     [InlineData("postgresql", "select call from t", "*put it in quotes*")]
+    // PR #244 round 5: SQL Server statements that start a second one with no ';', and PostgreSQL server-file functions.
+    [InlineData("sqlserver", "select 1 declare @x int set @x = 1 select @x", "*'DECLARE' is not allowed*")]
+    [InlineData("sqlserver", "select 1 set nocount on", "*'SET' is not allowed*")]
+    [InlineData("sqlserver", "select 1 begin tran", "*'BEGIN' is not allowed*")]
+    [InlineData("sqlserver", "select 1 if 1 = 1 print 'x'", "*'IF' is not allowed*")]
+    [InlineData("postgresql", "select pg_read_file('/etc/passwd')", "*'PG_READ_FILE' is not allowed*")]
+    [InlineData("postgresql", "select lo_import('/etc/passwd')", "*'LO_IMPORT' is not allowed*")]
+    [InlineData("postgresql", "select set_config('standard_conforming_strings', 'off', false)", "*'SET_CONFIG' is not allowed*")]
+    [InlineData("postgresql", "select * from pg_ls_dir('.')", "*'PG_LS_DIR' is not allowed*")]
     public void A_query_that_could_change_data_is_refused(string engine, string query, string message)
     {
         var act = () => TabularSqlGuard.ValidateQuery(query, engine);
 
         act.Should().Throw<BusinessRuleException>().WithMessage(message);
+    }
+
+    // PR #244 round 5: PostgreSQL names an unaliased computed column '?column?', which is no name at all.
+    [Theory]
+    [InlineData("?column?")]
+    [InlineData("")]
+    public void A_column_without_a_real_name_is_refused(string name)
+    {
+        var act = () => TabularRowReader.RequireUniqueColumns(["id", name]);
+
+        act.Should().Throw<BusinessRuleException>().WithMessage("*without a name*");
+    }
+
+    [Fact]
+    public void A_remembered_login_pass_is_dropped_once_it_has_expired()
+    {
+        var stale = $"test:{Guid.NewGuid():N}";
+        var fresh = $"test:{Guid.NewGuid():N}";
+        var now = DateTimeOffset.UtcNow;
+
+        TabularRowReader.RememberVerifiedLogin(stale, now - TimeSpan.FromHours(1));
+        TabularRowReader.RememberVerifiedLogin(fresh, now);
+
+        TabularRowReader.HoldsVerifiedLogin(stale).Should().BeFalse();
+        TabularRowReader.HoldsVerifiedLogin(fresh).Should().BeTrue();
     }
 
     // ---- 4. Placeholders ----
