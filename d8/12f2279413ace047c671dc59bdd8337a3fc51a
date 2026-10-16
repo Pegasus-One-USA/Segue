@@ -1,0 +1,26 @@
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_0121045dc9abeb::t_f72308af649c84 3888-3914
+  s_0121045dc9abeb::t_b132b421d25be9 930-932,937-938
+  s_0121045dc9abeb::t_91cb4304f6c968 3915-3916
+tests/FHIRBridge.Api.IntegrationTests/Tests/EhrWriteConnectionTests.cs
+  s_0121045dc9abeb::t_5d24b403683d05 242-282
+src/Api/FHIRBridge.Api/Controllers/V1/SourceConnectionsController.cs
+  s_0121045dc9abeb::t_d95c2e7fb08171 246-258
+  s_0121045dc9abeb::t_5733efe6621448 223-228
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d812f2279413ace047c671dc59bdd8337a3fc51a",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
