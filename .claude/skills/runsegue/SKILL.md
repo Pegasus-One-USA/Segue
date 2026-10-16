@@ -63,6 +63,14 @@ Useful switches:
 - `-NoClean` — incremental build instead of wiping `bin`/`obj` (much faster for a quick restart)
 - `-StopOnly` — stop everything and exit, launching nothing
 - `-DbPort` / `-DbUser` / `-DbPassword` — override connection details if the container was remapped
+- `-RedisConnectionString <cs>` — Redis for both hosts; `-NoRedis` — run both without Redis (see below)
+
+**Redis.** Both hosts get `ConnectionStrings__Redis` from, in order: `-RedisConnectionString`, a
+`ConnectionStrings__Redis` already set in your shell, or the compose `fhirbridge-redis` container on the host
+port it publishes. If none is available the run continues without Redis and says so. Without Redis a run the
+**Worker** finishes (a bulk export, a scheduled run) never reaches the portal live: Execution History, the
+Workflows list and the Dashboard show it "Running" until a refresh, because the Worker publishes status changes
+to the API over Redis (`fhirbridge:run-status-changed`).
 
 The script is the source of truth for the sequence. Do not hand-roll the steps; invoke the script.
 
@@ -76,6 +84,7 @@ The script is the source of truth for the sequence. Do not hand-roll the steps; 
    `sqlcmd SELECT 1`). If it is not running, brings it up via `docker compose` and waits. Then ensures the
    named database **exists**, creating it if absent — the API's startup migration builds the schema, not the
    database.
+   Then resolves Redis (see above) — it never starts or creates the Redis container itself.
 3. **Clean** — removes `bin/` and `obj/` across `src/` and `tests/`, plus `portal/.angular/cache`
    (skipped under `-NoClean`).
 4. **Build** — `dotnet restore` then `dotnet build FHIRBridge.sln -c Debug`. A build failure aborts the run;

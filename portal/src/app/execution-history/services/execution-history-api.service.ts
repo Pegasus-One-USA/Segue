@@ -107,9 +107,10 @@ export class ExecutionHistoryApiService {
    *  same as nodeRunPayload above: it's an expected outcome, not a failure.
    *
    *  Deliberately not `silent` — the click is an explicit user action, so the global loader is correct
-   *  feedback while the source server is being called. */
-  bulkExportStatus(id: string): Observable<BulkExportStatus | null> {
-    return this.http.get<BulkExportStatus>(EXECUTION_HISTORY_ENDPOINTS.bulkExportStatus(id)).pipe(
+   *  feedback while the source server is being called. A refresh of an already-open popup passes `silent`. */
+  bulkExportStatus(id: string, options?: { silent?: boolean }): Observable<BulkExportStatus | null> {
+    const context = options?.silent ? new HttpContext().set(SKIP_LOADER, true) : undefined;
+    return this.http.get<BulkExportStatus>(EXECUTION_HISTORY_ENDPOINTS.bulkExportStatus(id), { context }).pipe(
       catchError((error: HttpErrorResponse) => error.status === 404 ? of(null) : throwError(() => error)),
     );
   }

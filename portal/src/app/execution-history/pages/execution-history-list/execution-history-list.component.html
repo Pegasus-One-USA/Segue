@@ -341,14 +341,26 @@
         }
       </div>
 
+      @if (status.status !== 'InProgress' && status.status !== 'Completed' && status.errorMessage) {
+        <p class="bulk-status__error">{{ status.errorMessage }}</p>
+      }
+
+      <!-- A refresh of the open popup failed: what is shown is the last successful read, said so plainly. -->
+      @if (bulkStatusRefreshError()) {
+        <p class="bulk-status__muted">{{ bulkStatusRefreshError() }}</p>
+      }
+
+      <!-- These times are the source system's $export job only, not the whole workflow run: the run's Duration on
+           Execution History starts earlier (sign-in and kick-off) and ends later (downloading, mapping and writing),
+           so the two figures differ by design. The labels say which interval each one is. -->
       <dl class="bulk-status__facts">
         <div>
-          <dt>Started</dt>
+          <dt>Export started</dt>
           <dd>{{ status.kickedOffOnUtc | date: 'medium' }}</dd>
         </div>
         <div>
-          <dt>Elapsed</dt>
-          <dd>{{ bulkElapsed(status.kickedOffOnUtc) }}</dd>
+          <dt>Export elapsed</dt>
+          <dd>{{ bulkElapsedText() }}</dd>
         </div>
         @if (status.status === 'InProgress') {
           <div>
@@ -368,7 +380,18 @@
             <dd>{{ status.transactionTime | date: 'medium' }}</dd>
           </div>
         }
+        <!-- Failed/cancelled (or a manifest without transactionTime): the end Elapsed is measured to. -->
+        @if (bulkEndedAt(status); as endedAt) {
+          <div>
+            <dt>Export ended</dt>
+            <dd>{{ endedAt | date: 'medium' }}</dd>
+          </div>
+        }
       </dl>
+      <p class="bulk-status__muted bulk-status__scope">
+        Covers the source system's export only. The run's Duration also includes signing in before it and
+        downloading, mapping and writing the data after it.
+      </p>
 
       @if (status.request) {
         <div class="bulk-status__request">
@@ -396,7 +419,7 @@
               <tr>
                 <td>{{ type.resourceType }}</td>
                 <td>
-                  <span class="badge" [ngClass]="type.state === 'Ready' ? 'badge-completed' : 'badge-queued'">
+                  <span class="badge" [ngClass]="resourceStateClass(type.state)">
                     {{ type.state }}
                   </span>
                 </td>

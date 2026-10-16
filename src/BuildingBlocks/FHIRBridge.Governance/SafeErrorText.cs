@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace FHIRBridge.Governance;
 
 /// <summary>
@@ -30,4 +32,29 @@ public static class SafeErrorText
 
     /// <summary>Returns the message if it is client-safe; otherwise the supplied generic fallback.</summary>
     public static string SanitizeOr(string? raw, string fallback) => Sanitize(raw) ?? fallback;
+
+    private static readonly Regex UrlPattern = new(@"https?://[^\s""'<>]+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex MarkupPattern = new(@"<[^>]*>", RegexOptions.Compiled);
+    private static readonly Regex WhitespacePattern = new(@"\s+", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The user-facing form of an upstream failure text, for a message that must still say what went wrong (a status
+    /// code, a reason) rather than be replaced by a generic fallback as <see cref="Sanitize"/> does. Used for a bulk
+    /// export's job and run errors — which reach the Errors screen, the Bulk Data Status popup and the run-status event
+    /// every connected browser receives — and for the popup's live error. A failed download's message names the file
+    /// URL, and for a source whose file URLs are pre-signed (manifest requiresAccessToken: false) that URL alone grants
+    /// access to the bulk NDJSON; a source's error body can echo URLs and is often a whole HTML or XML page.
+    /// <para>Every URL is cut to its scheme and host (a port kept), markup is dropped, whitespace — newlines included —
+    /// collapsed, and the result capped at 300 characters. URLs are cut before the cap, so it can never leave half a
+    /// URL behind. Keep the full text in the logs.</para>
+    /// </summary>
+    public static string Redact(string message)
+    {
+        var withoutUrls = UrlPattern.Replace(message, match =>
+            Uri.TryCreate(match.Value, UriKind.Absolute, out var uri)
+                ? uri.GetLeftPart(UriPartial.Authority)
+                : "[link removed]");
+        var plain = WhitespacePattern.Replace(MarkupPattern.Replace(withoutUrls, " "), " ").Trim();
+        return plain.Length > 300 ? plain[..300] + "…" : plain;
+    }
 }

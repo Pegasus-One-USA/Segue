@@ -12,6 +12,7 @@ import { ToastService } from '../../../services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../core/components/confirm-dialog/confirm-dialog.component';
 import { ExecutionHistoryApiService } from '../../services/execution-history-api.service';
+import { formatDuration } from '../../utils/format-duration.util';
 import { DestinationWriteResultPayload, NodeRunHistoryEntry, NodeRunPayloadDetail, PagedResult, RouteExecution,
   NodeLineageBreakdown,
   LineageRuleCount,
@@ -486,9 +487,7 @@ export class ExecutionHistoryDetailComponent implements OnInit, OnDestroy {
   }
 
   formatDuration(ms: number | null): string {
-    if (ms === null) return '—';
-    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-    return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+    return formatDuration(ms);
   }
 
   /** Fallback only — used when this run's ErrorReferenceId is null (no capture ran, or the capture itself

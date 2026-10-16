@@ -3486,6 +3486,30 @@ public static class WorkflowEndpoints
             // popup's table would be empty for the whole duration of the export, which is exactly when it is opened.
             var requestedResourceTypes = ParseRequestedResourceTypes(job.RequestedResourceTypesJson);
 
+            // Failed or cancelled is final for this system: the poller stops on it and the run is closed with it, so
+            // the popup reports that rather than whatever the source now says (a cancelled export was DELETEd there;
+            // a failed one may still read "in progress" if it failed on our poll limit). No type was delivered.
+            if (job.Status is FHIRBridge.Domain.Entities.BulkExportJobStatus.Failed or FHIRBridge.Domain.Entities.BulkExportJobStatus.Cancelled)
+            {
+                return Results.Ok(new BulkExportStatusDto(
+                    run.BulkRequestId ?? BulkRequestIds.FromStatusUrl(job.StatusUrl),
+                    job.Status,
+                    Progress: null,
+                    job.KickedOffOnUtc,
+                    NextPollNotBeforeUtc: null,
+                    job.PollAttemptCount,
+                    TransactionTime: null,
+                    Request: null,
+                    RequiresAccessToken: null,
+                    requestedResourceTypes
+                        .Select(resourceType => new BulkExportResourceTypeStatusDto(resourceType, FileCount: null, State: job.Status))
+                        .ToList(),
+                    Errors: [],
+                    RetryAfterSeconds: null,
+                    job.ErrorMessage ?? (job.Status == FHIRBridge.Domain.Entities.BulkExportJobStatus.Cancelled ? "The export was cancelled." : null),
+                    job.CompletedOnUtc));
+            }
+
             var source = await sourceResolver.ResolveAsync(
                 job.SourceConnectionId, searchParameters: null, targetPatientId: null, cancellationToken);
             if (source is null)
@@ -3506,7 +3530,8 @@ public static class WorkflowEndpoints
                     Errors: [],
                     RetryAfterSeconds: null,
                     ErrorMessage: "The source connection for this export no longer exists, so its live status "
-                        + "cannot be read."));
+                        + "cannot be read.",
+                    CompletedOnUtc: job.CompletedOnUtc));
             }
 
             var snapshot = await bulkExportClient.GetStatusAsync(job.StatusUrl, source, cancellationToken);
@@ -3524,7 +3549,10 @@ public static class WorkflowEndpoints
                 BuildResourceTypeStatuses(snapshot, requestedResourceTypes),
                 BuildManifestErrors(snapshot),
                 snapshot.RetryAfter is { } retryAfter ? (int)retryAfter.TotalSeconds : null,
-                snapshot.ErrorMessage));
+                // The source's own error text (e.g. a 404 for a completed export it has since removed): the popup shows
+                // it, so no URL beyond its host and no markup (see SafeErrorText.Redact).
+                snapshot.ErrorMessage is { } liveError ? SafeErrorText.Redact(liveError) : null,
+                job.CompletedOnUtc));
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));
 

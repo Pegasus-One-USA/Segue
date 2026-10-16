@@ -19,6 +19,9 @@ public sealed class ApiFixture : IAsyncLifetime
 {
     private readonly ApiFactory _factory = new();
 
+    /// <summary>The host's services, for seeding state no endpoint creates (e.g. a workflow run paused on a bulk export).</summary>
+    public IServiceProvider Services => _factory.Services;
+
     // ── Shared clients ──────────────────────────────────────────────────────────
     public HttpClient AdminClient { get; private set; } = null!;
     public HttpClient AnonClient  { get; private set; } = null!;
