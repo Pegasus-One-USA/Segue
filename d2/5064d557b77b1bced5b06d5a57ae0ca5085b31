@@ -1,0 +1,52 @@
+tests/FHIRBridge.UnitTests/ApiClients/ClientCredentialsAccessTokenIssuerTests.cs
+  s_2858ad6a6dacd2::t_ea0751553c9539 1-111
+src/Api/FHIRBridge.Api/Workflows/ExternalRunTicketService.cs
+  s_2858ad6a6dacd2::t_c91b7f4f950870 4,28-35,43-44,47-48,50-54,58-59,69-71,84-85,87-92,94,96-110,112-124
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_2858ad6a6dacd2::t_d65cd2f7ca8e1e 1136,1163-1167,1171
+src/Api/FHIRBridge.Api/Security/ClientCredentialsAccessTokenIssuer.cs
+  s_2858ad6a6dacd2::t_80bd2323491805 42-43,46,48-50,57,62-63,67-101
+  s_2858ad6a6dacd2::t_80c8ae0cd79b5e 3,5
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/SearchCriteriaPostFilter.cs
+  s_2858ad6a6dacd2::t_d65cd2f7ca8e1e 78-80,99,103-105
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_2858ad6a6dacd2::t_271040524780e0 1696-1716,1721-1722,1917-1923,2148,2168-2174,2193-2202,2299,2313-2326,2366-2367,2372-2378,2426-2427,2431,2442,2444-2445,2448-2453,2520-2524,2546-2551,2773-2774,4812-4854
+  s_2858ad6a6dacd2::t_4645046a0d2c49 2687
+  s_2858ad6a6dacd2::t_9d8a124707e76b 2693,2705-2710,2758,2769-2772
+  s_2858ad6a6dacd2::t_f34940a7c52a48 2029,2037,2071-2078,2106
+Documents/Workflow-Trigger-Integration-PHP-V3.html
+  s_2858ad6a6dacd2::t_55068666e3235c 165
+portal/src/app/pages/workflow-list/execute-v2-dialog/execute-v2-dialog.component.ts
+  s_2858ad6a6dacd2::t_f34940a7c52a48 198-200,203-207
+tests/FHIRBridge.UnitTests/ApiClients/ExternalRunTicketServiceTests.cs
+  s_2858ad6a6dacd2::t_aadae52af64647 1-63
+src/Api/FHIRBridge.Api/Program.cs
+  s_2858ad6a6dacd2::t_4645046a0d2c49 442-448,484-490
+  s_2858ad6a6dacd2::t_d878ba078a7821 307-314,491-493
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_2858ad6a6dacd2::t_3e33d84702c4b6 235-236
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SearchCriteriaPostFilterTests.cs
+  s_2858ad6a6dacd2::t_e173a73b5ced89 97-106
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCriteriaPrecedenceTests.cs
+  s_2858ad6a6dacd2::t_e173a73b5ced89 149-159
+  s_2858ad6a6dacd2::t_8f0988153f0f1e 148
+portal/src/app/external-run/pages/external-run/external-run.component.ts
+  s_2858ad6a6dacd2::t_692e2cf94f28fc 53-55,123,307,315,317-319
+  s_2858ad6a6dacd2::t_415d3e361012da 72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d25064d557b77b1bced5b06d5a57ae0ca5085b31",
+  "prompts": {},
+  "sessions": {
+    "s_2858ad6a6dacd2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10f975bc-e65d-460b-891b-694aafcfefd5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}

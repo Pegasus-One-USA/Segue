@@ -1,0 +1,36 @@
+tests/FHIRBridge.UnitTests/Tabular/TabularReviewFixTests.cs
+  s_0121045dc9abeb::t_59374b8e4b21da 138-161
+  s_0121045dc9abeb::t_b2d21fe384ccf2 122-130
+  s_0121045dc9abeb::t_ac3870ee9cb607 162
+src/FHIRBridge.Infrastructure/Tabular/TabularSqlGuard.cs
+  s_0121045dc9abeb::t_d7f80cd33369d3 310-315,318-322
+  s_0121045dc9abeb::t_56ad7b2475f8a5 53-56
+  s_0121045dc9abeb::t_c29cec06100573 323
+src/FHIRBridge.Infrastructure/Tabular/TabularRowReader.cs
+  s_0121045dc9abeb::t_b8530364242cea 90-92,95-98
+  s_0121045dc9abeb::t_131083e11de6ab 428-431,435,443
+  s_0121045dc9abeb::t_58a88ef81c9004 303-315,319
+  s_0121045dc9abeb::t_a444f7167a24e0 109-110,113-115
+  s_0121045dc9abeb::t_0fdf7c0d5d638a 433
+  s_0121045dc9abeb::t_617781e71d7e60 236
+  s_0121045dc9abeb::t_d682582288a1d9 127-131
+  s_0121045dc9abeb::t_bdbddb7f22b63a 317-318
+  s_0121045dc9abeb::t_6cf223310d84a9 316
+  s_0121045dc9abeb::t_1cf5f66659165b 432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2ec2d6c19151f1d2a2c73c340fea1f72ec5b72a5",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_0121045dc9abeb::t_2f77235fc158dd 146-155
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_0121045dc9abeb::t_d810efeaa4ebab 843-864,910
+  s_0121045dc9abeb::t_d3c19a75f47025 441,443
+  s_0121045dc9abeb::t_22fd974294bb89 290-291
+  s_0121045dc9abeb::t_7f01fe4f937926 634,636-637
+  s_0121045dc9abeb::t_d25f3ac6bb0b7e 191-207
+  s_0121045dc9abeb::t_b4c37a1811266f 906-909
+  s_0121045dc9abeb::t_e085621732e335 865
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_0121045dc9abeb::t_6a6812db8920b4 509-643
+  s_0121045dc9abeb::t_ebb62b9eb46283 3
+  s_0121045dc9abeb::t_ab39caab4ac532 644
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "89991e79d444fb330c709fc8c06d0c7c244d7118",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}

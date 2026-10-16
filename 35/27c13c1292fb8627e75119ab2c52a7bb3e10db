@@ -1,0 +1,31 @@
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/MappedEhrWriteBackDestinationWriter.cs
+  s_0121045dc9abeb::t_cf9aefabf01f38 1049-1050
+  s_0121045dc9abeb::t_bd2235305c5462 701-705,710-711,713,720-724
+  s_0121045dc9abeb::t_33c863c3c27a97 818-838
+  s_0121045dc9abeb::t_272f964cd1b927 418-421,430,432-480,482,484-503,505,508,511-516,518-520,523-540,543-548,725
+docs/backend/20-epic-r4-write-back.md
+  s_0121045dc9abeb::t_ad9fa3866cf2dd 581-590
+docs/user-guide/ehr-write-back.md
+  s_0121045dc9abeb::t_8f56d8963645e7 187-189
+portal/src/app/components/node-library-v2/destination-wizard/ehr-write-type-grid/ehr-write-kinds.model.ts
+  s_0121045dc9abeb::t_b87453260719cd 71
+tests/FHIRBridge.UnitTests/EhrWriteBack/HealowWriteBackTests.cs
+  s_0121045dc9abeb::t_c6aac1a98a96e3 218-293
+  s_0121045dc9abeb::t_0f99c60123c044 397-399,403-410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3527c13c1292fb8627e75119ab2c52a7bb3e10db",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
