@@ -1,0 +1,14 @@
+<div class="codes" role="group" [attr.aria-label]="label()">
+  @for (o of options(); track o.value) {
+    <label class="cds-check" [for]="idPrefix() + '-' + o.value">
+      <input
+        type="checkbox"
+        [id]="idPrefix() + '-' + o.value"
+        [checked]="isChecked(o.value)"
+        [disabled]="disabled()"
+        (change)="toggle(o.value, $any($event.target).checked)"
+      />
+      {{ o.label }}
+    </label>
+  }
+</div>

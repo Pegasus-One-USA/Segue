@@ -17,17 +17,23 @@ public sealed class CdsSetupSheetService : ICdsSetupSheetService
     private readonly ICdsTrustedIssuerRepository _issuers;
     private readonly ICdsServiceHandlerRegistry _handlers;
     private readonly ICdsPublicBaseUrlResolver _baseUrlResolver;
+    private readonly ICdsPayerRepository? _payers;
+    private readonly ICdsCoverageRuleRepository? _coverageRules;
 
     public CdsSetupSheetService(
         ICdsServiceInstanceRepository instances,
         ICdsTrustedIssuerRepository issuers,
         ICdsServiceHandlerRegistry handlers,
-        ICdsPublicBaseUrlResolver baseUrlResolver)
+        ICdsPublicBaseUrlResolver baseUrlResolver,
+        ICdsPayerRepository? payers = null,
+        ICdsCoverageRuleRepository? coverageRules = null)
     {
         _instances = instances;
         _issuers = issuers;
         _handlers = handlers;
         _baseUrlResolver = baseUrlResolver;
+        _payers = payers;
+        _coverageRules = coverageRules;
     }
 
     public async Task<CdsSetupSheetDto> GetAsync(Guid instanceId, string requestOrigin, CancellationToken cancellationToken)
@@ -76,11 +82,20 @@ public sealed class CdsSetupSheetService : ICdsSetupSheetService
             warnings.Add("One-click fixes are on: the health system must review the codes below and allow the suggestions in its Epic build.");
         }
 
+        if (!instance.IsClinicallySignedOff)
+        {
+            warnings.Add("Not clinically reviewed: record a clinician's sign-off on the service's setup page before real use.");
+        }
+
         var links = instance.GetLinks();
         if (links.Any(link => link.Type == CdsCardLinkTypes.Smart))
         {
             warnings.Add("Every SMART link below must be on the health system's SMART app allow-list before Epic will launch it.");
         }
+
+        var crd = instance.HandlerKey == CdsHandlerKeys.CoverageRequirements && handler is not null
+            ? await CrdAsync(instance, handler, baseUrl, warnings, cancellationToken)
+            : null;
 
         return new CdsSetupSheetDto(
             instance.Id,
@@ -112,7 +127,81 @@ public sealed class CdsSetupSheetService : ICdsSetupSheetService
                 issuer.AllowCallback,
                 issuer.IsEnabled)).ToArray(),
             warnings,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            instance.IsClinicallySignedOff,
+            instance.SignedOffBy,
+            instance.SignedOffAtUtc,
+            instance.SignOffNote,
+            crd);
+    }
+
+    /// <summary>What the Epic team needs for a coverage requirements service (Epic's "CRD Request" outgoing API).</summary>
+    private async Task<CdsSetupSheetCrdDto> CrdAsync(
+        CdsServiceInstance instance, ICdsServiceHandler handler, CdsPublicBaseUrl baseUrl, List<string> warnings, CancellationToken cancellationToken)
+    {
+        var settings = CdsSettingsValues.Resolve(handler.Settings, instance.SettingsJson);
+        var useSystemActions = settings.GetBoolean("useSystemActions", true);
+        var dtrUrl = settings.GetText("dtrAppUrl")?.Trim();
+        var dtrType = settings.GetText("dtrLinkType", CdsCardLinkTypes.Smart);
+        IReadOnlyList<CdsPayer> payers = _payers is null ? [] : await _payers.GetAllAsync(cancellationToken);
+        IReadOnlyList<CdsCoverageRule> rules = _coverageRules is null ? [] : await _coverageRules.GetAllAsync(cancellationToken);
+        var enabledRules = rules.Where(rule => rule.IsEnabled).GroupBy(rule => rule.PayerId).ToDictionary(g => g.Key, g => g.Count());
+
+        var apis = new List<string>
+        {
+            "CDS Hooks Framework (CRD Request outgoing call)",
+            "Coverage.Search (R4), for the coverage prefetch or for fetching it when it is missing",
+        };
+        if (useSystemActions)
+        {
+            apis.Add("ServiceRequest.Update (Unsigned Order) (R4), so coverage information can be added to orders (systemActions, Epic Feb 2024+)");
+        }
+
+        if (instance.Hook is CdsHookNames.EncounterStart or CdsHookNames.EncounterDischarge)
+        {
+            apis.Add("Encounter.Search (R4), for the encounter prefetch");
+        }
+
+        var notes = new List<string>
+        {
+            $"In Epic, point the CRD Request for the {instance.Hook} hook at the service URL above, with the prefetch below (it must include the patient's active Coverage).",
+            "MedicationRequests are never updated by Segue: their coverage information is shown as a card.",
+        };
+        if (!string.IsNullOrEmpty(dtrUrl))
+        {
+            notes.Add(dtrType == CdsCardLinkTypes.Smart
+                ? $"Add the documentation (DTR) SMART app {dtrUrl} to the health system's SMART app allow-list."
+                : $"Cards link to the documentation page {dtrUrl}.");
+        }
+
+        if (payers.Any(payer => payer.IsEnabled && payer.RelayEnabled))
+        {
+            notes.Add($"Payers that receive relayed calls verify Segue's signature with its JWKS at {baseUrl.JwksUrl}.");
+        }
+
+        if (!payers.Any(payer => payer.IsEnabled))
+        {
+            warnings.Add("No payer is switched on: coverage requirements calls are answered without coverage information. Add the payers under Coverage requirements.");
+        }
+
+        return new CdsSetupSheetCrdDto(
+            instance.Hook,
+            apis,
+            useSystemActions,
+            string.IsNullOrEmpty(dtrUrl) ? null : dtrUrl,
+            string.IsNullOrEmpty(dtrUrl) ? null : dtrType,
+            baseUrl.JwksUrl,
+            payers.Select(payer => new CdsSetupSheetPayerDto(
+                payer.Id,
+                payer.Name,
+                payer.IsEnabled,
+                payer.Identifiers.ToArray(),
+                payer.PlanValues.ToArray(),
+                enabledRules.GetValueOrDefault(payer.Id),
+                payer.RelayEnabled,
+                payer.RelayServiceUrl,
+                payer.ForwardFhirAuthorization)).ToArray(),
+            notes);
     }
 
     private static void AddIssuerWarnings(IReadOnlyList<CdsTrustedIssuer> issuers, List<string> warnings)

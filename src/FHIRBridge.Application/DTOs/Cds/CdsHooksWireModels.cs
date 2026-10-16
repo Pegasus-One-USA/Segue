@@ -74,6 +74,16 @@ public sealed class CdsResponse
 {
     [JsonPropertyName("cards")]
     public IReadOnlyList<CdsCard> Cards { get; set; } = [];
+
+    /// <summary>
+    /// Actions the EHR applies without a clinician's click (CDS Hooks 2.0 systemActions). Sent ONLY by the coverage
+    /// requirements (Da Vinci CRD) handler, to annotate the request's own orders / appointments with the CRD
+    /// coverage-information extension (type "update"); the evaluator drops systemActions from any other handler.
+    /// Left out of the JSON when null.
+    /// </summary>
+    [JsonPropertyName("systemActions")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<CdsAction>? SystemActions { get; set; }
 }
 
 /// <summary>
@@ -200,12 +210,19 @@ public sealed class CdsAction
     public string? ResourceId { get; set; }
 }
 
-/// <summary>The action types Segue sends (Epic supports create and delete only; no update, no systemActions).</summary>
+/// <summary>
+/// The action types Segue sends. Suggestions use create and delete only (<see cref="All"/>; Epic supports no other);
+/// <see cref="Update"/> is used only in coverage-requirements systemActions.
+/// </summary>
 public static class CdsActionTypes
 {
     public const string Create = "create";
     public const string Delete = "delete";
 
+    /// <summary>systemActions only: replace a request resource (an order annotated with coverage information).</summary>
+    public const string Update = "update";
+
+    /// <summary>The action types a suggestion may carry.</summary>
     public static readonly IReadOnlyList<string> All = [Create, Delete];
 }
 

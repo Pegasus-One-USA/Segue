@@ -147,10 +147,15 @@
             <p class="cds-panel__sub">{{ handler()?.description }}</p>
           </div>
         </div>
-        <div class="cds-notice cds-notice--warning">
-          <mat-icon>health_and_safety</mat-icon>
-          <p>The clinical rules behind this check are sample data. Have your clinical team review them before you use the service with real patients.</p>
-        </div>
+        @if (usesSampleData()) {
+          <div class="cds-notice cds-notice--warning" data-testid="cds-sample-data-warning">
+            <mat-icon>health_and_safety</mat-icon>
+            <p>The clinical rules behind this check are sample data. Have your clinical team review them before you use the service with real patients.</p>
+          </div>
+        }
+        @if (isCoverage()) {
+          <app-cds-coverage-service-note part="settings" />
+        }
         <app-cds-settings-form
           [descriptors]="handler()?.settings ?? []"
           [group]="settingsGroup()"
@@ -232,7 +237,11 @@
           </div>
           <app-cds-fixes-badge [enabled]="fixesGroup().controls.enabled.value" />
         </div>
-        <app-cds-fixes-editor [descriptors]="fixTypes()" [group]="fixesGroup()" [showAllErrors]="submitted()" />
+        @if (isCoverage()) {
+          <app-cds-coverage-service-note part="fixes" />
+        } @else {
+          <app-cds-fixes-editor [descriptors]="fixTypes()" [group]="fixesGroup()" [showAllErrors]="submitted()" />
+        }
       </section>
 
       <!-- Dismiss reasons -->
@@ -275,5 +284,23 @@
         }
       </div>
     </form>
+
+    <!-- Clinical sign-off: outside the form, since it applies to the service as last saved. -->
+    @if (!isNew && instance(); as s) {
+      <section class="cds-panel" data-testid="cds-sign-off-panel">
+        <div class="cds-panel__head">
+          <div>
+            <h2 class="cds-panel__title">Clinical sign-off</h2>
+            <p class="cds-panel__sub">A clinician's review of the rules and settings, fixes and codes, dismiss reasons and links. Advice only: it does not stop the service being switched on.</p>
+          </div>
+        </div>
+        <app-cds-sign-off
+          [service]="s"
+          [canEdit]="canSignOff()"
+          [hasUnsavedChanges]="hasUnsavedChanges()"
+          (changed)="onSignOffChanged($event)"
+        />
+      </section>
+    }
   }
 </div>

@@ -9,7 +9,7 @@ import { resolveFallbackMessage } from './error-messages.catalog';
  * `error_description` comes from the OAuth-shaped workflow endpoints. All four are backend-authored
  * and — after the FHIRBridgeException.UserMessage / NotFoundException fixes — safe to show verbatim.
  */
-function extractBackendMessage(body: unknown): string | undefined {
+export function extractBackendMessage(body: unknown): string | undefined {
   if (!body || typeof body !== 'object') {
     return undefined;
   }

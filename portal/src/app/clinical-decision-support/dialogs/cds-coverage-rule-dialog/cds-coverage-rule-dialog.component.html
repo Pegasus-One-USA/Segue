@@ -1,0 +1,212 @@
+@let c = form.controls;
+<div class="dialog">
+  <div class="dialog-header">
+    <div class="dialog-header__icon"><mat-icon>rule</mat-icon></div>
+    <div class="dialog-header__text">
+      <h2>{{ isEdit ? 'Edit coverage rule' : 'Add coverage rule' }}</h2>
+      <p>What the payer requires when an order has this code.</p>
+    </div>
+  </div>
+
+  <form class="dialog-body" [formGroup]="form" novalidate (ngSubmit)="save()">
+
+    @if (errorMessage(); as message) {
+      <div class="cds-notice cds-notice--error" role="alert" data-testid="cds-rule-dialog-error">
+        <mat-icon>error_outline</mat-icon>
+        <p>{{ message }}</p>
+      </div>
+    }
+
+    <div class="cds-form-grid">
+      <!-- Payer -->
+      <div class="cds-field cds-field--full" [class.cds-field--error]="hasError('payerId')">
+        <label for="cds-rule-payer">Payer <span class="cds-req">*</span></label>
+        @if (isEdit) {
+          <input id="cds-rule-payer" [value]="payerName(c.payerId.value)" disabled data-testid="cds-rule-payer-fixed" />
+          <p class="cds-field__help">A saved rule stays with its payer. To move it, delete it and add it to the other payer.</p>
+        } @else {
+          <select id="cds-rule-payer" formControlName="payerId" data-testid="cds-rule-payer">
+            <option value="" disabled>Pick a payer</option>
+            @for (p of payers; track p.id) {
+              <option [value]="p.id">{{ p.name }}{{ p.isEnabled ? '' : ' (off)' }}</option>
+            }
+          </select>
+          @if (hasError('payerId')) {
+            <p class="cds-field__error">Pick the payer this rule is for.</p>
+          }
+        }
+      </div>
+
+      <!-- Code -->
+      <div class="cds-field" [class.cds-field--error]="hasError('system')">
+        <label for="cds-rule-system">Code system <span class="cds-req">*</span></label>
+        <input
+          id="cds-rule-system"
+          class="cds-mono"
+          formControlName="system"
+          list="cds-rule-systems"
+          autocomplete="off"
+          [attr.maxlength]="limits.systemMax"
+        />
+        <datalist id="cds-rule-systems">
+          @for (s of systems; track s.value) {
+            <option [value]="s.value">{{ s.label }}</option>
+          }
+        </datalist>
+        @if (hasError('system')) {
+          <p class="cds-field__error">Enter the code system, e.g. http://www.ama-assn.org/go/cpt for CPT.</p>
+        } @else {
+          <p class="cds-field__help">Where the order's code comes from. CPT is filled in; pick another from the list or type it.</p>
+        }
+      </div>
+
+      <div class="cds-field" [class.cds-field--error]="hasError('code')">
+        <label for="cds-rule-code">Code <span class="cds-req">*</span></label>
+        <input id="cds-rule-code" class="cds-mono" formControlName="code" autocomplete="off" [attr.maxlength]="limits.codeMax" placeholder="e.g. 70553" data-testid="cds-rule-code" />
+        @if (hasError('code')) {
+          <p class="cds-field__error">Enter the order code.</p>
+        }
+        <div class="radio-row" role="radiogroup" aria-label="How the code is matched">
+          <label class="cds-check" for="cds-rule-match-exact">
+            <input id="cds-rule-match-exact" type="radio" formControlName="codeMatch" value="exact" />
+            This code only
+          </label>
+          <label class="cds-check" for="cds-rule-match-prefix">
+            <input id="cds-rule-match-prefix" type="radio" formControlName="codeMatch" value="prefix" data-testid="cds-rule-match-prefix" />
+            Every code that starts with it
+          </label>
+        </div>
+      </div>
+
+      <!-- Decision -->
+      <div class="cds-field">
+        <label for="cds-rule-covered">Coverage <span class="cds-req">*</span></label>
+        <select id="cds-rule-covered" formControlName="covered" data-testid="cds-rule-covered">
+          @for (o of coveredOptions; track o.value) {
+            <option [value]="o.value">{{ o.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="cds-field">
+        <label for="cds-rule-pa">Prior authorization</label>
+        <select id="cds-rule-pa" formControlName="paNeeded" data-testid="cds-rule-pa">
+          <option value="">Not stated</option>
+          @for (o of paOptions; track o.value) {
+            <option [value]="o.value">{{ o.label }}</option>
+          }
+        </select>
+        @if (notCovered()) {
+          <p class="cds-field__help" data-testid="cds-rule-pa-off">Not used: a service that is not covered needs no prior authorization.</p>
+        }
+      </div>
+
+      <div class="cds-field">
+        <label for="cds-rule-doc">Documentation needed</label>
+        <select id="cds-rule-doc" formControlName="docNeeded" data-testid="cds-rule-doc">
+          <option value="">None</option>
+          @for (o of docOptions; track o.value) {
+            <option [value]="o.value">{{ o.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="cds-field">
+        <span class="cds-field__label">Documentation is for</span>
+        <app-cds-code-checkboxes
+          idPrefix="cds-rule-purpose"
+          label="Documentation is for"
+          [control]="c.docPurposes"
+          [options]="purposeOptions"
+        />
+        @if (!docSet()) {
+          <p class="cds-field__help" data-testid="cds-rule-purpose-off">Choose "Documentation needed" first.</p>
+        }
+      </div>
+
+      <div class="cds-field cds-field--full">
+        <span class="cds-field__label">Information needed for a firm answer</span>
+        <app-cds-code-checkboxes
+          idPrefix="cds-rule-info"
+          label="Information needed"
+          [control]="c.infoNeeded"
+          [options]="infoOptions"
+        />
+        @if (!anyConditional()) {
+          <p class="cds-field__help" data-testid="cds-rule-info-off">Only when coverage, prior authorization or documentation depends on details.</p>
+        }
+      </div>
+
+      <!-- Explanation -->
+      <div class="cds-field cds-field--full" [class.cds-field--error]="hasError('reason')">
+        <label for="cds-rule-reason">Reason shown to the clinician</label>
+        <textarea id="cds-rule-reason" formControlName="reason" rows="2" [attr.maxlength]="limits.reasonMax" placeholder="e.g. MRI of the brain requires prior authorization."></textarea>
+        <p class="cds-field__help">Plain words, up to {{ limits.reasonMax }} characters. Never patient details.</p>
+      </div>
+
+      <div class="cds-field cds-field--full" [class.cds-field--error]="hasError('policyUrl')">
+        <label for="cds-rule-policy">Payer policy link</label>
+        <input id="cds-rule-policy" class="cds-mono" formControlName="policyUrl" autocomplete="off" [attr.maxlength]="limits.urlMax" placeholder="https://payer.example.com/policies/imaging" data-testid="cds-rule-policy" />
+        @if (hasError('policyUrl')) {
+          <p class="cds-field__error">Enter a full address starting with https://.</p>
+        } @else {
+          <p class="cds-field__help">Optional. Shown on the card as a link.</p>
+        }
+      </div>
+
+      <div class="cds-field cds-field--full" [class.cds-field--error]="hasError('questionnaire')">
+        <label for="cds-rule-questionnaire">Payer questionnaire (DTR)</label>
+        <input id="cds-rule-questionnaire" class="cds-mono" formControlName="questionnaire" autocomplete="off" [attr.maxlength]="limits.urlMax" placeholder="http://payer.example.com/Questionnaire/imaging|1.0" />
+        @if (hasError('questionnaire')) {
+          <p class="cds-field__error">Enter the questionnaire's address (http:// or https://), optionally followed by |version.</p>
+        } @else if (!docSet()) {
+          <p class="cds-field__help">Choose "Documentation needed" first.</p>
+        } @else {
+          <p class="cds-field__help">Optional. The documentation app opens this questionnaire. Segue only passes it on.</p>
+        }
+      </div>
+
+      <!-- Dates -->
+      <div class="cds-field">
+        <label for="cds-rule-from">Starts on</label>
+        <input id="cds-rule-from" type="date" formControlName="effectiveFrom" />
+        <p class="cds-field__help">Leave blank for "always".</p>
+      </div>
+
+      <div class="cds-field">
+        <label for="cds-rule-to">Ends on</label>
+        <input id="cds-rule-to" type="date" formControlName="effectiveTo" />
+        <p class="cds-field__help">Leave blank for "no end". The rule still applies on this day.</p>
+      </div>
+
+      <div class="cds-field cds-field--full">
+        <label class="cds-check" for="cds-rule-enabled">
+          <input id="cds-rule-enabled" type="checkbox" formControlName="isEnabled" />
+          On
+        </label>
+        <p class="today" [class.today--on]="effectiveToday().on" data-testid="cds-rule-effective-today">
+          <mat-icon aria-hidden="true">{{ effectiveToday().on ? 'event_available' : 'event_busy' }}</mat-icon>
+          {{ effectiveToday().text }}
+        </p>
+      </div>
+    </div>
+
+    @if (groupErrors().length && (submitted() || form.dirty)) {
+      <div class="cds-notice cds-notice--error" data-testid="cds-rule-group-errors">
+        <mat-icon>error_outline</mat-icon>
+        <div>
+          @for (e of groupErrors(); track e) {
+            <p>{{ e }}</p>
+          }
+        </div>
+      </div>
+    }
+
+    <div class="cds-actions dialog-actions">
+      <button type="button" class="btn btn-secondary" (click)="cancel()">Cancel</button>
+      <button type="submit" class="btn btn-primary" data-testid="cds-rule-dialog-save" [disabled]="saving()">
+        {{ saving() ? 'Saving...' : (isEdit ? 'Save changes' : 'Add rule') }}
+      </button>
+    </div>
+  </form>
+</div>

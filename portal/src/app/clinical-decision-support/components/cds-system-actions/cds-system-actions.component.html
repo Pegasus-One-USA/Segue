@@ -1,0 +1,17 @@
+@if (updates().length) {
+  <div class="system-actions" data-testid="cds-system-actions">
+    <h3 class="title">Order updates ({{ updates().length }})</h3>
+    <p class="hint">The EHR applies these to the orders by itself. The clinician does not click anything.</p>
+    <ul class="list">
+      @for (u of updates(); track $index) {
+        <li class="item" data-testid="cds-system-action">
+          <span class="item__what">{{ u.description }}</span>
+          @if (u.target) { <code class="item__target">{{ u.target }}</code> }
+          @for (d of u.decisions; track $index) {
+            <span class="item__decision">{{ d }}</span>
+          }
+        </li>
+      }
+    </ul>
+  </div>
+}

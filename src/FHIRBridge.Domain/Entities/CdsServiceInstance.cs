@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.SharedKernel.Abstractions;
@@ -21,6 +22,8 @@ public sealed partial class CdsServiceInstance : AuditableEntity<Guid>, IHasAudi
     public const int DescriptionMaxLength = 2000;
     public const int CardSourceLabelMaxLength = 200;
     public const int UrlMaxLength = 1000;
+    public const int SignedOffByMaxLength = 200;
+    public const int SignOffNoteMaxLength = 500;
 
     private CdsServiceInstance()
     {
@@ -114,6 +117,63 @@ public sealed partial class CdsServiceInstance : AuditableEntity<Guid>, IHasAudi
     public IReadOnlyList<CdsCardLinkOption> GetLinks() =>
         CdsServiceOptionsRules.Deserialize<List<CdsCardLinkOption>>(LinksJson) ?? [];
 
+    /// <summary>
+    /// The name (and role) of the clinician who reviewed what this service tells clinicians, as typed by the admin
+    /// recording the sign-off; null when not reviewed. Advisory only: it never blocks switching the service on.
+    /// Cleared automatically when the reviewed content changes (see <see cref="Update"/>).
+    /// </summary>
+    public string? SignedOffBy { get; private set; }
+
+    /// <summary>When the clinical sign-off was recorded (UTC); null when not reviewed.</summary>
+    public DateTime? SignedOffAtUtc { get; private set; }
+
+    /// <summary>A short note on the review (e.g. "Pharmacy and therapeutics committee, Oct 2026"). No patient data.</summary>
+    public string? SignOffNote { get; private set; }
+
+    /// <summary>True while a clinical sign-off is on record for the current rules, fixes, dismiss reasons and links.</summary>
+    public bool IsClinicallySignedOff => SignedOffAtUtc is not null && SignedOffBy is not null;
+
+    /// <summary>
+    /// A short fingerprint of what a clinical sign-off covers (check type, hook, settings, fixes, dismiss reasons,
+    /// links). The setup page sends back the value it showed, so a sign-off is never recorded against content
+    /// someone else changed in the meantime.
+    /// </summary>
+    public string ContentVersion
+    {
+        get
+        {
+            var content = string.Join('\n', HandlerKey, Hook, SettingsJson, FixesJson ?? string.Empty,
+                OverrideReasonsJson ?? string.Empty, LinksJson ?? string.Empty);
+            var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
+            return Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
+        }
+    }
+
+    /// <summary>
+    /// Records that a clinician reviewed this service's current content: the check type and hook, its settings, its
+    /// one-click fixes and codes, its dismiss reasons and its card links. Replaces any earlier sign-off.
+    /// </summary>
+    public void SignOff(string signedOffBy, string? note, DateTime signedOffAtUtc)
+    {
+        SignedOffBy = Required(signedOffBy, SignedOffByMaxLength, "Reviewer name");
+        var trimmedNote = note?.Trim();
+        if (trimmedNote is { Length: > SignOffNoteMaxLength })
+        {
+            throw new BusinessRuleException($"Sign-off note must be {SignOffNoteMaxLength} characters or fewer.");
+        }
+
+        SignOffNote = string.IsNullOrEmpty(trimmedNote) ? null : trimmedNote;
+        SignedOffAtUtc = DateTime.SpecifyKind(signedOffAtUtc, DateTimeKind.Utc);
+    }
+
+    /// <summary>Removes the clinical sign-off (the service is "not clinically reviewed" again).</summary>
+    public void ClearSignOff()
+    {
+        SignedOffBy = null;
+        SignedOffAtUtc = null;
+        SignOffNote = null;
+    }
+
     public void Update(
         string serviceId,
         string title,
@@ -130,6 +190,9 @@ public sealed partial class CdsServiceInstance : AuditableEntity<Guid>, IHasAudi
         IEnumerable<CdsOverrideReasonOption>? overrideReasons = null,
         IEnumerable<CdsCardLinkOption>? links = null)
     {
+        // What a clinician reviewed, captured before it is replaced (all null on a new instance).
+        var reviewed = (HandlerKey, Hook, SettingsJson, FixesJson, OverrideReasonsJson, LinksJson);
+
         ServiceId = NormalizeServiceId(serviceId);
         Title = Required(title, TitleMaxLength, "Title");
         HandlerKey = Required(handlerKey, HandlerKeyMaxLength, "Handler");
@@ -144,6 +207,19 @@ public sealed partial class CdsServiceInstance : AuditableEntity<Guid>, IHasAudi
         FixesJson = CdsServiceOptionsRules.Serialize(CdsServiceOptionsRules.NormalizeFixes(fixes));
         OverrideReasonsJson = CdsServiceOptionsRules.Serialize(CdsServiceOptionsRules.NormalizeOverrideReasons(overrideReasons));
         LinksJson = CdsServiceOptionsRules.Serialize(CdsServiceOptionsRules.NormalizeLinks(links));
+
+        // A sign-off covers the content that was reviewed. Renaming, switching on/off, the issuer allow-list and
+        // fetch-missing-data do not change what clinicians are told, so they keep it; anything else clears it.
+        if (IsClinicallySignedOff
+            && (!string.Equals(reviewed.HandlerKey, HandlerKey, StringComparison.Ordinal)
+                || !string.Equals(reviewed.Hook, Hook, StringComparison.Ordinal)
+                || !SameJson(reviewed.SettingsJson, SettingsJson)
+                || !string.Equals(reviewed.FixesJson, FixesJson, StringComparison.Ordinal)
+                || !string.Equals(reviewed.OverrideReasonsJson, OverrideReasonsJson, StringComparison.Ordinal)
+                || !string.Equals(reviewed.LinksJson, LinksJson, StringComparison.Ordinal)))
+        {
+            ClearSignOff();
+        }
     }
 
     public void SetEnabled(bool isEnabled) => IsEnabled = isEnabled;
@@ -176,6 +252,24 @@ public sealed partial class CdsServiceInstance : AuditableEntity<Guid>, IHasAudi
 
     [GeneratedRegex("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.CultureInvariant)]
     private static partial Regex ServiceIdPattern();
+
+    /// <summary>Settings compared by value, so key order or spacing in a resent body does not count as a change.</summary>
+    private static bool SameJson(string? before, string after)
+    {
+        if (before is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return JsonNode.DeepEquals(JsonNode.Parse(before), JsonNode.Parse(after));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     private static string NormalizeSettings(string? settingsJson)
     {

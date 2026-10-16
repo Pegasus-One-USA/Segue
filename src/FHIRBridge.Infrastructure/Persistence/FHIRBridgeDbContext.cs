@@ -62,6 +62,8 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<CdsServiceInstance> CdsServiceInstances => Set<CdsServiceInstance>();
     public DbSet<CdsTrustedIssuer> CdsTrustedIssuers => Set<CdsTrustedIssuer>();
     public DbSet<CdsCallLog> CdsCallLogs => Set<CdsCallLog>();
+    public DbSet<CdsPayer> CdsPayers => Set<CdsPayer>();
+    public DbSet<CdsCoverageRule> CdsCoverageRules => Set<CdsCoverageRule>();
     public DbSet<AllowedCorsOrigin> AllowedCorsOrigins => Set<AllowedCorsOrigin>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<BrandConfiguration> BrandConfigurations => Set<BrandConfiguration>();
@@ -272,6 +274,10 @@ public sealed class FHIRBridgeDbContext : DbContext
                 .HasIndex(x => x.Issuer).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<CdsServiceInstance>()
                 .HasIndex(x => x.ServiceId).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<CdsPayer>()
+                .HasIndex(x => x.Name).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<CdsCoverageRule>()
+                .HasIndex(x => new { x.PayerId, x.System, x.Code, x.EffectiveFrom }).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<SystemSetting>()
                 .HasIndex(x => x.Key).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<ResourceTypeCriteria>()

@@ -5,6 +5,8 @@
   </div>
 
   @if (!loading()) {
+    <app-cds-readiness-panel [readiness]="readiness()" [loading]="readinessLoading()" (refresh)="loadReadiness()" />
+
     @if (discovery(); as info) {
       <app-cds-discovery-panel [info]="info" />
     }

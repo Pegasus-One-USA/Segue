@@ -39,7 +39,8 @@ public sealed class CdsCatalogService : ICdsCatalogService
                 hook => hook,
                 hook => handler.GetPrefetchTemplates(hook),
                 StringComparer.Ordinal),
-            handler.SupportedFixTypes)).ToArray();
+            handler.SupportedFixTypes,
+            handler.UsesSampleReferenceData)).ToArray();
 
     public async Task<CdsDiscoveryInfoDto> GetDiscoveryInfoAsync(string requestOrigin, CancellationToken cancellationToken)
     {
@@ -97,7 +98,17 @@ public sealed class CdsCatalogService : ICdsCatalogService
             entry.SuggestionsOffered,
             entry.SuggestionsAccepted,
             CdsReasonCodeCounts.Parse(entry.OverrideReasonCodes).Select(reason => reason.Code).ToArray(),
-            CdsReasonCodeCounts.Parse(entry.OverrideReasonCodes))).ToArray();
+            CdsReasonCodeCounts.Parse(entry.OverrideReasonCodes),
+            entry.SystemActionCount,
+            entry.PayerId,
+            entry.PayerName,
+            string.IsNullOrEmpty(entry.CoverageDecisions)
+                ? []
+                : entry.CoverageDecisions.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            entry.RelayUsed,
+            entry.RelayMs,
+            entry.RelayOutcome,
+            entry.CoverageAssertionCount)).ToArray();
 
         return new CdsActivityPageDto(items, paged.TotalCount, paged.Page, paged.PageSize);
     }

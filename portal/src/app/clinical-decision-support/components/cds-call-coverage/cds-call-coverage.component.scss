@@ -1,0 +1,47 @@
+:host { display: block; }
+
+.coverage {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  max-width: 340px;
+}
+
+.payer {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+
+.decisions {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--color-ink);
+}
+
+.facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fact {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-side);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  white-space: nowrap;
+
+  &--warning {
+    border-color: var(--color-warning);
+    background: var(--color-warning-soft);
+    color: var(--color-warning-strong);
+  }
+}

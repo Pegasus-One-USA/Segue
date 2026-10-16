@@ -68,6 +68,15 @@ describe('CdsServiceListComponent', () => {
     expect(rows()[1].querySelector('[data-testid="cds-fixes-badge"]')).toBeNull();
   });
 
+  it('badges each service as reviewed by a clinician or not clinically reviewed', () => {
+    const { rows } = create([
+      makeService({ isClinicallySignedOff: true, signedOffBy: 'Dr A. Patel', signedOffAtUtc: '2026-10-15T14:00:00Z' }),
+      GAPS,
+    ]);
+    expect(rows()[0].querySelector('[data-testid="cds-sign-off-badge"]')?.textContent).toContain('Reviewed by Dr A. Patel on Oct 15, 2026');
+    expect(rows()[1].querySelector('[data-testid="cds-sign-off-badge"]')?.textContent).toContain('Not clinically reviewed');
+  });
+
   it('sends the Epic options back unchanged when the switch changes', () => {
     const fixes = { enabled: true, fixTypes: [{ key: 'remove-draft', enabled: true, mappings: [] }], recommendedFixType: 'remove-draft' };
     const reasons = [{ code: 'pt-refused', display: 'Patient refused' }];

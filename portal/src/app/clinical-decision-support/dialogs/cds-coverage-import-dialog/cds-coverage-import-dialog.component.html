@@ -1,0 +1,127 @@
+@let c = options.controls;
+<div class="dialog">
+  <div class="dialog-header">
+    <div class="dialog-header__icon"><mat-icon>upload_file</mat-icon></div>
+    <div class="dialog-header__text">
+      <h2>Import coverage rules</h2>
+      <p>{{ step() === 'choose' ? 'Step 1 of 2: choose the file' : 'Step 2 of 2: check, then import' }}</p>
+    </div>
+  </div>
+
+  <div class="dialog-body">
+    @if (errorMessage(); as message) {
+      <div class="cds-notice cds-notice--error" role="alert" data-testid="cds-import-error">
+        <mat-icon>error_outline</mat-icon>
+        <p>{{ message }}</p>
+      </div>
+    }
+
+    @if (step() === 'choose') {
+      <p class="intro">
+        One rule per row. Start from a template, or export your rules, change them and import them again. Nothing is
+        saved until you check the file and choose Import.
+      </p>
+      <div class="templates">
+        <span>Download a template:</span>
+        <button type="button" class="btn btn-secondary btn-sm" data-testid="cds-import-template-csv" (click)="downloadTemplate('csv')">
+          <mat-icon>download</mat-icon> CSV
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" data-testid="cds-import-template-json" (click)="downloadTemplate('json')">
+          <mat-icon>download</mat-icon> JSON
+        </button>
+      </div>
+
+      <div class="cds-form-grid" [formGroup]="options">
+        <div class="cds-field cds-field--full" [class.cds-field--error]="!!fileError()">
+          <label for="cds-import-file">File <span class="cds-req">*</span></label>
+          <input id="cds-import-file" type="file" accept=".csv,.json,text/csv,application/json" data-testid="cds-import-file" (change)="onFileChange($event)" />
+          @if (fileError(); as e) {
+            <p class="cds-field__error">{{ e }}</p>
+          } @else if (file()) {
+            <p class="cds-field__help" data-testid="cds-import-file-name">Chosen: {{ file()?.name }}</p>
+          } @else {
+            <p class="cds-field__help">A .csv or .json file, up to 5 MB and 5000 rules.</p>
+          }
+        </div>
+
+        <div class="cds-field">
+          <label for="cds-import-format">File type</label>
+          <select id="cds-import-format" formControlName="format" data-testid="cds-import-format">
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+          <p class="cds-field__help">Set from the file name.</p>
+        </div>
+
+        <div class="cds-field">
+          <label for="cds-import-payer">Payer</label>
+          <select id="cds-import-payer" formControlName="payerId" data-testid="cds-import-payer">
+            <option value="">The payer named on each row</option>
+            @for (p of payers; track p.id) {
+              <option [value]="p.id">All rows are for {{ p.name }}</option>
+            }
+          </select>
+          <p class="cds-field__help">Pick a payer to leave the file's payer column blank.</p>
+        </div>
+
+        <div class="cds-field cds-field--full">
+          <span class="cds-field__label">How to import</span>
+          <div class="strategies" role="radiogroup" aria-label="How to import">
+            <label class="cds-check" for="cds-import-merge">
+              <input id="cds-import-merge" type="radio" formControlName="strategy" value="merge" />
+              <span><strong>Add and update.</strong> Rules in the file are added or updated. Other rules stay.</span>
+            </label>
+            @if (canReplace) {
+              <label class="cds-check" for="cds-import-replace">
+                <input id="cds-import-replace" type="radio" formControlName="strategy" value="replace" data-testid="cds-import-replace" />
+                <span><strong>Replace.</strong> The file becomes the payer's whole rule set.</span>
+              </label>
+            }
+          </div>
+          @if (!canReplace) {
+            <p class="cds-field__help" data-testid="cds-import-replace-unavailable">
+              Replace deletes rules, so it needs permission to delete coverage rules.
+            </p>
+          }
+          @if (strategy() === 'replace') {
+            <div class="cds-notice cds-notice--warning" data-testid="cds-import-replace-warning">
+              <mat-icon>warning_amber</mat-icon>
+              <p>
+                Replace <strong>deletes</strong> every rule of
+                {{ c.payerId.value ? payerName(c.payerId.value) : 'each payer named in the file' }} that the file does not
+                list. The preview shows which ones before anything is deleted.
+              </p>
+            </div>
+          }
+        </div>
+      </div>
+    } @else if (preview()) {
+      <app-cds-import-preview [result]="preview()!" />
+      @if (previewHasErrors()) {
+        <div class="cds-notice cds-notice--error" data-testid="cds-import-blocked">
+          <mat-icon>block</mat-icon>
+          <p>Fix the problems in the file, then choose it again. Import saves every row or none, so nothing is saved while a row has an error.</p>
+        </div>
+      } @else if (nothingToDo()) {
+        <div class="cds-notice" data-testid="cds-import-nothing">
+          <mat-icon>info</mat-icon>
+          <p>The rules in the file are already in Segue. There is nothing to import.</p>
+        </div>
+      }
+    }
+
+    <div class="cds-actions dialog-actions">
+      <button type="button" class="btn btn-secondary" (click)="cancel()">Cancel</button>
+      @if (step() === 'choose') {
+        <button type="button" class="btn btn-primary" data-testid="cds-import-preview-btn" [disabled]="!canPreview()" (click)="runPreview()">
+          {{ busy() ? 'Checking...' : 'Check the file' }}
+        </button>
+      } @else {
+        <button type="button" class="btn btn-secondary" data-testid="cds-import-back" [disabled]="busy()" (click)="backToChoose()">Back</button>
+        <button type="button" class="btn btn-primary" data-testid="cds-import-apply" [disabled]="!canApply()" (click)="apply()">
+          {{ busy() ? 'Importing...' : 'Import' }}
+        </button>
+      }
+    </div>
+  </div>
+</div>

@@ -15,6 +15,10 @@ namespace FHIRBridge.Application.DTOs.Cds;
 /// <param name="Links">Card links; smart links must be on the health system's SMART app allow-list.</param>
 /// <param name="Issuers">The trusted issuers allowed to call this service, with the values each must sign with.</param>
 /// <param name="Warnings">Short notes for the admin, e.g. "Cds:PublicBaseUrl is not set", "No trusted issuer is allowed".</param>
+/// <param name="IsClinicallySignedOff">True while a clinical sign-off is on record for this service's current content.</param>
+/// <param name="SignedOffBy">The reviewing clinician as recorded; null when not reviewed.</param>
+/// <param name="SignedOffAtUtc">When the sign-off was recorded; null when not reviewed.</param>
+/// <param name="SignOffNote">Short note on the review; null when none.</param>
 public sealed record CdsSetupSheetDto(
     Guid ServiceInstanceId,
     string ServiceId,
@@ -34,7 +38,42 @@ public sealed record CdsSetupSheetDto(
     IReadOnlyList<CdsCardLinkOption> Links,
     IReadOnlyList<CdsSetupSheetIssuerDto> Issuers,
     IReadOnlyList<string> Warnings,
-    DateTime GeneratedOnUtc);
+    DateTime GeneratedOnUtc,
+    bool IsClinicallySignedOff = false,
+    string? SignedOffBy = null,
+    DateTime? SignedOffAtUtc = null,
+    string? SignOffNote = null,
+    CdsSetupSheetCrdDto? Crd = null);
+
+/// <summary>The coverage requirements (Da Vinci CRD) part of a setup sheet; null for other services.</summary>
+/// <param name="Hook">The hook to configure in Epic's "CRD Request" outgoing call for this service.</param>
+/// <param name="EpicApis">The Epic APIs the CDS client registration needs for this service.</param>
+/// <param name="UseSystemActions">True when orders are annotated through systemActions (needs ServiceRequest.Update (Unsigned Order)).</param>
+/// <param name="DtrAppUrl">The documentation (DTR) app the cards link to; null when none (then nothing for the SMART allow-list).</param>
+/// <param name="DtrLinkType">"smart" or "absolute".</param>
+/// <param name="SegueJwksUrl">Segue's public JWKS (the jku of relayed calls); payers that receive relayed calls register it.</param>
+/// <param name="Notes">Plain-language steps for the Epic team.</param>
+public sealed record CdsSetupSheetCrdDto(
+    string Hook,
+    IReadOnlyList<string> EpicApis,
+    bool UseSystemActions,
+    string? DtrAppUrl,
+    string? DtrLinkType,
+    string SegueJwksUrl,
+    IReadOnlyList<CdsSetupSheetPayerDto> Payers,
+    IReadOnlyList<string> Notes);
+
+/// <summary>A payer this service answers for, as the setup sheet shows it.</summary>
+public sealed record CdsSetupSheetPayerDto(
+    Guid Id,
+    string Name,
+    bool IsEnabled,
+    IReadOnlyList<string> Identifiers,
+    IReadOnlyList<string> PlanValues,
+    int EnabledRuleCount,
+    bool RelayEnabled,
+    string? RelayServiceUrl,
+    bool ForwardFhirAuthorization);
 
 /// <param name="Key">The prefetch key Epic must send.</param>
 /// <param name="Query">The FHIR query template, e.g. "AllergyIntolerance?patient={{context.patientId}}".</param>

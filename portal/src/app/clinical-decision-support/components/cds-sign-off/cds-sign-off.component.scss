@@ -1,0 +1,37 @@
+@use '../../cds' as *;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__text {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-ink-2);
+    line-height: 1.5;
+  }
+
+  &__note {
+    display: block;
+    color: var(--color-muted);
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+
+  .btn mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+  }
+}

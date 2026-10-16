@@ -50,6 +50,19 @@ public interface ICdsServiceHandler
     IReadOnlyList<CdsFixTypeDescriptor> SupportedFixTypes { get; }
 
     /// <summary>
+    /// True when the rules use the illustrative SAMPLE reference data shipped with Segue (every built-in handler
+    /// does). The go-live readiness check then asks for a clinical sign-off before real use. Default false.
+    /// </summary>
+    bool UsesSampleReferenceData => false;
+
+    /// <summary>
+    /// True only for a handler allowed to return CDS Hooks systemActions (the coverage requirements / Da Vinci CRD
+    /// handler, which annotates the request's own orders). The evaluator drops systemActions from every other
+    /// handler. Default false.
+    /// </summary>
+    bool ReturnsSystemActions => false;
+
+    /// <summary>
     /// A complete, synthetic CDS request for <paramref name="hook"/> (context and prefetch filled with made-up
     /// data that triggers at least one card with default settings), shown on the admin Test screen.
     /// </summary>
@@ -75,6 +88,9 @@ public static class CdsHandlerKeys
     public const string RenalDose = "renal-dose";
     public const string CareGap = "care-gap";
     public const string PriorAuth = "prior-auth";
+
+    /// <summary>Da Vinci Coverage Requirements Discovery (CRD): payer coverage, prior auth and documentation rules.</summary>
+    public const string CoverageRequirements = "coverage-requirements";
 }
 
 /// <summary>CDS Hooks hook names used by the built-in handlers.</summary>
@@ -83,6 +99,12 @@ public static class CdsHookNames
     public const string PatientView = "patient-view";
     public const string OrderSelect = "order-select";
     public const string OrderSign = "order-sign";
+
+    // Da Vinci CRD hooks (only the coverage-requirements handler answers these).
+    public const string AppointmentBook = "appointment-book";
+    public const string EncounterStart = "encounter-start";
+    public const string EncounterDischarge = "encounter-discharge";
+    public const string OrderDispatch = "order-dispatch";
 }
 
 /// <summary>
@@ -185,7 +207,18 @@ public static class CdsFixTypeKeys
 /// Set when the handler could not evaluate fully (e.g. a prefetch entry was null) and answered with fewer or no
 /// cards. A short, non-PHI sentence; it is written to the CDS call log.
 /// </param>
-public sealed record CdsHandlerResult(IReadOnlyList<CdsCard> Cards, string? DegradedReason = null)
+/// <param name="SystemActions">
+/// systemActions (coverage requirements only, see <see cref="ICdsServiceHandler.ReturnsSystemActions"/>); null for none.
+/// </param>
+/// <param name="SourceLabel">
+/// The card <c>source.label</c> to use instead of the instance's (e.g. "&lt;payer&gt; via Segue" for cards relayed
+/// from a payer's CRD service); null keeps the instance's label.
+/// </param>
+public sealed record CdsHandlerResult(
+    IReadOnlyList<CdsCard> Cards,
+    string? DegradedReason = null,
+    IReadOnlyList<CdsAction>? SystemActions = null,
+    string? SourceLabel = null)
 {
     public static CdsHandlerResult Empty { get; } = new([]);
 }

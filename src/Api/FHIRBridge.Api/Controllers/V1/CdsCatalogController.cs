@@ -33,6 +33,17 @@ public sealed class CdsCatalogController : ControllerBase
     public async Task<IActionResult> DiscoveryInfo(CancellationToken cancellationToken) =>
         Ok(await _service.GetDiscoveryInfoAsync($"{Request.Scheme}://{Request.Host}{Request.PathBase}", cancellationToken));
 
+    /// <summary>
+    /// Go-live readiness: public https address, replay protection, trusted issuers, services, clinical sign-off,
+    /// licence and rate limit, each ok / warning / blocker with how to fix it. Configuration only, no secrets.
+    /// Resolved per call so the other catalog endpoints never depend on it.
+    /// </summary>
+    [HttpGet("readiness")]
+    [StandardPermission(PermissionGroupCode.CdsHooks, PermissionActionCode.View, description: "View CDS Hooks services, trusted issuers and activity.")]
+    [ProducesResponseType(typeof(CdsReadinessDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Readiness([FromServices] ICdsReadinessService readinessService, CancellationToken cancellationToken) =>
+        Ok(await readinessService.GetAsync(cancellationToken));
+
     /// <summary>CDS calls, newest first. Metadata only — no patient data is ever recorded.</summary>
     /// <param name="serviceId">Exact service id (URL slug).</param>
     [HttpGet("activity")]

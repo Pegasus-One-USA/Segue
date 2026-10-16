@@ -1,0 +1,97 @@
+<section class="cds-panel" data-testid="cds-payer-list">
+  <div class="cds-panel__head">
+    <div>
+      <h2 class="cds-panel__title">Payers</h2>
+      <p class="cds-panel__sub">The health plans Segue answers for. Segue finds the payer on the patient's coverage, then uses its rules.</p>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" data-testid="cds-payer-add" *appHideWithoutPermission="'cdshooks.create'" (click)="openAdd()">
+      Add payer
+    </button>
+  </div>
+
+  @if (payers().length === 0) {
+    <p class="empty" data-testid="cds-payer-empty">No payers yet. Add the first payer, then add its rules or import them from a file.</p>
+  } @else {
+    <div class="table-scroll">
+      <table class="payer-table">
+        <thead>
+          <tr>
+            <th scope="col">Payer</th>
+            <th scope="col">Recognised by</th>
+            <th scope="col">Plans</th>
+            <th scope="col">Rules</th>
+            <th scope="col">Answered by</th>
+            <th scope="col">Status</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of payers(); track p.id) {
+            <tr data-testid="cds-payer-row">
+              <td><span class="name">{{ p.name }}</span></td>
+              <td>
+                <div class="chips">
+                  @for (id of p.identifiers; track id) {
+                    <code class="chip">{{ id }}</code>
+                  }
+                </div>
+              </td>
+              <td>
+                @if (p.planValues.length) {
+                  <div class="chips">
+                    @for (plan of p.planValues; track plan) {
+                      <code class="chip">{{ plan }}</code>
+                    }
+                  </div>
+                } @else {
+                  <span class="muted">Every plan</span>
+                }
+              </td>
+              <td>
+                <span [matTooltip]="p.enabledRuleCount + ' of ' + p.ruleCount + ' on'">{{ p.enabledRuleCount }} on</span>
+                @if (p.ruleCount !== p.enabledRuleCount) {
+                  <span class="sub">{{ p.ruleCount }} in all</span>
+                }
+              </td>
+              <td>
+                <span>{{ answeredBy(p) }}</span>
+                @if (p.relayEnabled && p.relayServiceUrl) {
+                  <code class="sub url" [matTooltip]="p.relayServiceUrl">{{ p.relayServiceUrl }}</code>
+                }
+                @if (p.relayEnabled && p.forwardFhirAuthorization) {
+                  <span class="cds-badge cds-badge--warning" matTooltip="The payer receives the EHR's access token">Gets EHR token</span>
+                }
+              </td>
+              <td>
+                <span class="cds-badge" [class.cds-badge--success]="p.isEnabled">{{ p.isEnabled ? 'On' : 'Off' }}</span>
+              </td>
+              <td class="col-actions">
+                @if (hasRowMenu(p)) {
+                  <button mat-icon-button class="btn-more" matTooltip="More actions" [attr.aria-label]="'Actions for ' + p.name" [matMenuTriggerFor]="rowMenu">
+                    <mat-icon>more_vert</mat-icon>
+                  </button>
+                  <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                    <button mat-menu-item *appHideWithoutPermission="'cdshooks.edit'" (click)="openEdit(p)">
+                      <mat-icon>edit</mat-icon>
+                      Edit
+                    </button>
+                    @if (p.relayEnabled) {
+                      <button mat-menu-item data-testid="cds-payer-test-relay" *appHideWithoutPermission="'cdshooks.test'" (click)="openRelayTest(p)">
+                        <mat-icon>send</mat-icon>
+                        Test relay
+                      </button>
+                    }
+                    <button mat-menu-item class="menu-item-danger" *appHideWithoutPermission="'cdshooks.delete'" (click)="confirmDelete(p)">
+                      <mat-icon>delete_outline</mat-icon>
+                      Delete
+                    </button>
+                  </mat-menu>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

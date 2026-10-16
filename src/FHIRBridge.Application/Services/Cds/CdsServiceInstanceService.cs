@@ -92,6 +92,37 @@ public sealed class CdsServiceInstanceService : ICdsServiceInstanceService
         await _repository.DeleteAsync(instance, cancellationToken);
     }
 
+    public async Task<CdsServiceInstanceDto> SignOffAsync(Guid id, CdsSignOffRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var instance = await GetRequiredAsync(id, cancellationToken);
+        if (string.IsNullOrWhiteSpace(request.ContentVersion))
+        {
+            throw new BusinessRuleException("contentVersion is required: send the contentVersion of the service the clinician reviewed.");
+        }
+
+        if (!string.Equals(request.ContentVersion.Trim(), instance.ContentVersion, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CdsContentChangedException();
+        }
+
+        instance.SignOff(request.SignedOffBy, request.Note, DateTime.UtcNow);
+        await _repository.UpdateAsync(instance, cancellationToken);
+        return (await ToDtosAsync([instance], cancellationToken))[0];
+    }
+
+    public async Task<CdsServiceInstanceDto> ClearSignOffAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var instance = await GetRequiredAsync(id, cancellationToken);
+        if (instance.IsClinicallySignedOff)
+        {
+            instance.ClearSignOff();
+            await _repository.UpdateAsync(instance, cancellationToken);
+        }
+
+        return (await ToDtosAsync([instance], cancellationToken))[0];
+    }
+
     public async Task<CdsRequest> GetSampleRequestAsync(Guid id, CancellationToken cancellationToken)
     {
         var instance = await GetRequiredAsync(id, cancellationToken);
@@ -240,10 +271,28 @@ public sealed class CdsServiceInstanceService : ICdsServiceInstanceService
                 instance.GetOverrideReasons(),
                 instance.GetOwnOverrideReasons() is null,
                 instance.GetLinks(),
-                handler?.SupportedFixTypes ?? []);
+                handler?.SupportedFixTypes ?? [],
+                instance.IsClinicallySignedOff,
+                instance.SignedOffBy,
+                instance.SignedOffAtUtc,
+                instance.SignOffNote,
+                handler?.UsesSampleReferenceData == true,
+                instance.ContentVersion);
         }).ToArray();
     }
 
     private static string? Resolve(IReadOnlyDictionary<string, string> names, string? actor) =>
         actor is null ? null : names.GetValueOrDefault(actor, actor);
+}
+
+/// <summary>
+/// A sign-off named a <see cref="CdsServiceInstanceDto.ContentVersion"/> that is no longer the service's: someone
+/// changed what the service tells clinicians after the reviewer looked at it. The API answers 409 Conflict.
+/// </summary>
+public sealed class CdsContentChangedException : FHIRBridgeException
+{
+    public CdsContentChangedException()
+        : base("The service changed since it was opened. Reload it, have the clinician review the new version, then record the sign-off again.")
+    {
+    }
 }

@@ -48,6 +48,15 @@ export const CDS_ROUTES: Routes = [
           import('./pages/cds-test/cds-test.component').then(m => m.CdsTestComponent),
       },
       {
+        // Payers and coverage rules for the coverage requirements (Da Vinci CRD) service. Edits inside the page are
+        // gated by cdshooks.create / edit / delete / test.
+        path: 'coverage',
+        canActivate: [permissionGuard],
+        data: { permissions: ['cdshooks.view'] },
+        loadComponent: () =>
+          import('./pages/cds-coverage/cds-coverage.component').then(m => m.CdsCoverageComponent),
+      },
+      {
         path: 'activity',
         canActivate: [permissionGuard],
         data: { permissions: ['cdshooks.view'] },

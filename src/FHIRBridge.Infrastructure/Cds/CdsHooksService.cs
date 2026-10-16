@@ -113,6 +113,9 @@ public sealed class CdsHooksService : ICdsHooksService
             call.CallbackResourceCount = evaluation.CallbackResourceCount;
             call.CallbackMs = evaluation.CallbackMs;
             call.SuggestionsOffered = evaluation.Response?.Cards.Sum(card => card.Suggestions?.Count ?? 0) ?? 0;
+            call.SystemActionCount = evaluation.SystemActionCount;
+            call.Coverage = evaluation.Coverage;
+            call.CoverageAssertionCount = evaluation.CoverageAssertionCount;
             await FinishAsync(call, evaluation.Outcome, evaluation.Status, evaluation.CardCount, evaluation.Detail);
             return evaluation.Status == CdsCallStatus.Ok
                 ? new CdsInvokeResult(CdsCallStatus.Ok, evaluation.Response ?? new CdsResponse())
@@ -315,7 +318,15 @@ public sealed class CdsHooksService : ICdsHooksService
                         call.CallbackMs,
                         call.SuggestionsOffered,
                         call.SuggestionsAccepted,
-                        call.OverrideReasonCodes)),
+                        call.OverrideReasonCodes,
+                        call.SystemActionCount,
+                        call.Coverage?.PayerId,
+                        call.Coverage?.PayerName,
+                        call.Coverage?.Decisions,
+                        call.Coverage?.RelayUsed,
+                        call.Coverage?.RelayMs,
+                        call.Coverage?.RelayOutcome,
+                        call.CoverageAssertionCount)),
                 CancellationToken.None);
         }
         catch (Exception exception)
@@ -399,6 +410,14 @@ public sealed class CdsHooksService : ICdsHooksService
 
         /// <summary>Feedback: distinct override reason codes, comma-separated (codes only).</summary>
         public string? OverrideReasonCodes { get; set; }
+
+        /// <summary>Invoke: systemActions returned (coverage requirements only).</summary>
+        public int SystemActionCount { get; set; }
+
+        /// <summary>Invoke, coverage requirements: payer, decision codes and relay facts (no patient data).</summary>
+        public CdsCoverageCallInfo? Coverage { get; set; }
+
+        public int? CoverageAssertionCount { get; set; }
 
         /// <summary>
         /// The service id to log: the matched instance's own id, otherwise the requested id trimmed and lower-cased

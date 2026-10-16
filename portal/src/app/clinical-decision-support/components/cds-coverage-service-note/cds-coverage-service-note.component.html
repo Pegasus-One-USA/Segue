@@ -1,0 +1,18 @@
+@if (part() === 'settings') {
+  <div class="cds-notice" data-testid="cds-coverage-note-settings">
+    <mat-icon>health_and_safety</mat-icon>
+    <p>
+      This check answers from your payers' rules. Add the payers and their rules on the
+      <a routerLink="/clinical-decision-support/coverage">Coverage (CRD)</a> tab. Without a payer, orders get no answer.
+    </p>
+  </div>
+} @else {
+  <div class="cds-notice" data-testid="cds-coverage-note-fixes">
+    <mat-icon>info</mat-icon>
+    <p>
+      Coverage requirements don't use one-click fixes. With "Add coverage information to orders" on, Segue writes the
+      payer's answer onto the order itself, with no click from the clinician. In Epic this needs the
+      <code>ServiceRequest.Update (Unsigned Order)</code> API. Medication orders get a card instead.
+    </p>
+  </div>
+}

@@ -1,0 +1,78 @@
+@use '../../cds' as *;
+
+:host { display: block; }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-surface);
+  box-sizing: border-box;
+
+  &:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
+  &--error { border-color: var(--color-error); }
+  &--disabled { background: var(--color-side); }
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 2px 4px 2px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-side);
+  font-size: 12.5px;
+  color: var(--color-ink);
+
+  &__text { overflow-wrap: anywhere; }
+
+  &__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-muted);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-border);
+      color: var(--color-ink);
+    }
+
+    mat-icon {
+      width: 14px;
+      height: 14px;
+      font-size: 14px;
+    }
+  }
+}
+
+.chips__input {
+  flex: 1;
+  min-width: 140px;
+  height: 26px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--color-ink);
+
+  &:focus { outline: none; }
+}

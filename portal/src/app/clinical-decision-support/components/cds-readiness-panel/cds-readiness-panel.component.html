@@ -1,0 +1,48 @@
+<section class="cds-panel" data-testid="cds-readiness-panel">
+  <div class="cds-panel__head">
+    <div>
+      <h2 class="cds-panel__title">Go-live readiness</h2>
+      <p class="cds-panel__sub">What must be in place before a health system's EHR calls Segue for real. Clinical sign-off is advice, not a lock.</p>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm" data-testid="cds-readiness-refresh" [disabled]="loading()" (click)="refresh.emit()">
+      <mat-icon>refresh</mat-icon>
+      Check again
+    </button>
+  </div>
+
+  @if (readiness(); as r) {
+    <div class="summary summary--{{ r.status }}" data-testid="cds-readiness-summary" role="status">
+      <mat-icon>{{ icon(r.status) }}</mat-icon>
+      <span class="summary__text">{{ headline() }}</span>
+      <span class="summary__time">Checked {{ r.generatedOnUtc | date:'MMM d, h:mm a' }}</span>
+    </div>
+
+    <ul class="checks">
+      @for (check of r.checks; track check.key) {
+        <li class="check check--{{ check.status }}" data-testid="cds-readiness-check" [attr.data-key]="check.key">
+          <mat-icon class="check__icon" aria-hidden="true">{{ icon(check.status) }}</mat-icon>
+          <div class="check__body">
+            <div class="check__head">
+              <span class="check__label">{{ check.label }}</span>
+              <span
+                class="cds-badge"
+                [class.cds-badge--success]="check.status === 'ok'"
+                [class.cds-badge--warning]="check.status === 'warning'"
+                [class.cds-badge--error]="check.status === 'blocker'"
+              >{{ statusLabel(check.status) }}</span>
+            </div>
+            <p class="check__detail">{{ check.detail }}</p>
+            @if (check.howToFix) {
+              <p class="check__fix" data-testid="cds-readiness-fix"><strong>How to fix:</strong> {{ check.howToFix }}</p>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  } @else if (!loading()) {
+    <div class="cds-notice cds-notice--error" role="alert">
+      <mat-icon>error_outline</mat-icon>
+      <p>The readiness checks could not be loaded. Try again.</p>
+    </div>
+  }
+</section>

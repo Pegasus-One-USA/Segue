@@ -41,6 +41,9 @@ import { CdsFixesEditorComponent } from '../../components/cds-fixes-editor/cds-f
 import { CdsOverrideReasonsEditorComponent } from '../../components/cds-override-reasons-editor/cds-override-reasons-editor.component';
 import { CdsLinksEditorComponent } from '../../components/cds-links-editor/cds-links-editor.component';
 import { CdsFixesBadgeComponent } from '../../components/cds-fixes-badge/cds-fixes-badge.component';
+import { CdsSignOffComponent } from '../../components/cds-sign-off/cds-sign-off.component';
+import { CdsCoverageServiceNoteComponent } from '../../components/cds-coverage-service-note/cds-coverage-service-note.component';
+import { CDS_COVERAGE_HANDLER_KEY } from '../../models/cds-coverage.models';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { ToastService } from '../../../services/toast.service';
 import { PermissionService } from '../../../auth/services/permission.service';
@@ -69,6 +72,8 @@ type SetupControlName = 'handlerKey' | 'hook' | 'title' | 'serviceId' | 'descrip
     CdsOverrideReasonsEditorComponent,
     CdsLinksEditorComponent,
     CdsFixesBadgeComponent,
+    CdsSignOffComponent,
+    CdsCoverageServiceNoteComponent,
   ],
   templateUrl: './cds-service-setup.component.html',
   styleUrl: './cds-service-setup.component.scss',
@@ -127,6 +132,11 @@ export class CdsServiceSetupComponent implements OnInit, HasUnsavedChanges {
 
   readonly handler = computed(() => this.handlers().find(h => h.key === this.handlerKeyValue()) ?? null);
   readonly prefetch = computed(() => this.handler()?.prefetchByHook[this.hookValue()] ?? {});
+  /** The chosen check runs on the SAMPLE rules shipped with Segue (older APIs don't say: assume it does). */
+  readonly usesSampleData = computed(() =>
+    this.handler()?.usesSampleReferenceData ?? this.instance()?.usesSampleReferenceData ?? true);
+  /** Coverage requirements (CRD): payers and rules live on the Coverage tab, and fixes do not apply. */
+  readonly isCoverage = computed(() => this.handlerKeyValue() === CDS_COVERAGE_HANDLER_KEY);
   /** The fix types the chosen check offers (the fixes group is built from these, in this order). */
   readonly fixTypes = computed(() => this.handler()?.fixTypes ?? []);
   /** The standard dismiss reasons, as the API reports them for a saved service that uses them. */
@@ -147,6 +157,9 @@ export class CdsServiceSetupComponent implements OnInit, HasUnsavedChanges {
 
   readonly canSave = computed(() =>
     this.permissions.hasPermission(this.isNew ? 'cdshooks.create' : 'cdshooks.edit'));
+
+  /** Recording or removing a clinical sign-off is an edit of a saved service. */
+  readonly canSignOff = computed(() => this.permissions.hasPermission('cdshooks.edit'));
 
   /** Set when an existing service names a check that is no longer available. */
   readonly handlerMissing = computed(() => !this.loading() && !!this.handlerKeyValue() && !this.handler());
@@ -283,8 +296,12 @@ export class CdsServiceSetupComponent implements OnInit, HasUnsavedChanges {
           this.toast.success(`"${saved.title}" added.`);
           this.router.navigate(['/clinical-decision-support/services', saved.id], { replaceUrl: true });
         } else {
+          const lostSignOff = this.instance()?.isClinicallySignedOff === true && !saved.isClinicallySignedOff;
           this.applyInstance(saved);
           this.toast.success('Changes saved.');
+          if (lostSignOff) {
+            this.toast.warning('The clinical sign-off was removed because what clinicians see changed. Have it reviewed again.');
+          }
         }
       },
       error: (err: HttpErrorResponse) => {
@@ -292,6 +309,11 @@ export class CdsServiceSetupComponent implements OnInit, HasUnsavedChanges {
         this.errorMessage.set(err.message || 'Could not save the service.');
       },
     });
+  }
+
+  /** A sign-off was recorded or removed: only the sign-off changed, so the form (and any edits in it) stays as is. */
+  onSignOffChanged(updated: CdsServiceInstance): void {
+    this.instance.set(updated);
   }
 
   cancel(): void {

@@ -1,0 +1,120 @@
+@use '../../cds' as *;
+
+:host { display: block; }
+
+.btn mat-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: var(--radius-base);
+  border: 1px solid var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success-strong);
+  font-size: 13.5px;
+  font-weight: 600;
+
+  mat-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+
+  &--warning {
+    border-color: var(--color-warning);
+    background: var(--color-warning-soft);
+    color: var(--color-warning-strong);
+  }
+
+  &--blocker {
+    border-color: var(--color-error);
+    background: var(--color-error-soft);
+    color: var(--color-error-strong);
+  }
+
+  &__text { flex: 1; min-width: 0; }
+
+  &__time {
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.85;
+  }
+}
+
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--color-success);
+
+  & + & { border-top: 1px solid var(--color-border); }
+
+  &__icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    color: var(--color-success-strong);
+  }
+
+  &--warning {
+    border-left-color: var(--color-warning);
+
+    .check__icon { color: var(--color-warning-strong); }
+  }
+
+  &--blocker {
+    border-left-color: var(--color-error);
+
+    .check__icon { color: var(--color-error-strong); }
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  &__label {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  &__detail,
+  &__fix {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-ink-2);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  &__fix { color: var(--color-muted); }
+}

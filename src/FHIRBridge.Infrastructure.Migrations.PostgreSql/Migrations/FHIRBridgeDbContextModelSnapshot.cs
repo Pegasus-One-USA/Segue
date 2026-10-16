@@ -328,6 +328,196 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.ToTable("BulkExportJobs", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.CdsCoverageRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("CodePrefixMatch")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Covered")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasDefaultValue("system");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("timezone('utc', now())");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DocNeeded")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.PrimitiveCollection<List<string>>("DocPurposes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.PrimitiveCollection<List<string>>("InfoNeeded")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ModifiedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaNeeded")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("PayerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PolicyUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("QuestionnaireCanonical")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("System")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code");
+
+                    b.HasIndex("PayerId", "System", "Code", "EffectiveFrom")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("CdsCoverageRules", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.CdsPayer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasDefaultValue("system");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("timezone('utc', now())");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("FallbackToLocalRules")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ForwardFhirAuthorization")
+                        .HasColumnType("boolean");
+
+                    b.PrimitiveCollection<List<string>>("Identifiers")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ModifiedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.PrimitiveCollection<List<string>>("PlanValues")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("RelayClientId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("RelayEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RelayServiceUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("RelayTimeoutMs")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("CdsPayers", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.CdsServiceInstance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -417,6 +607,17 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<string>("SettingsJson")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("SignOffNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("SignedOffAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SignedOffBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1275,6 +1476,13 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                     b.Property<int>("CardCount")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("CoverageAssertionCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CoverageDecisions")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("CriteriaId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -1330,6 +1538,23 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<Guid?>("PayerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PayerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long?>("RelayMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RelayOutcome")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool?>("RelayUsed")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ServiceId")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1342,6 +1567,9 @@ namespace FHIRBridge.Infrastructure.Migrations.PostgreSql.Migrations
                         .HasColumnType("integer");
 
                     b.Property<int>("SuggestionsOffered")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SystemActionCount")
                         .HasColumnType("integer");
 
                     b.Property<string>("TriggerAction")

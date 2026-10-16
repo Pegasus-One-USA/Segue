@@ -11,6 +11,7 @@ import { PageChangeEvent, PaginationBarComponent } from '../../../components/sha
 import { ToastService } from '../../../services/toast.service';
 import { CdsCallExtrasComponent } from '../../components/cds-call-extras/cds-call-extras.component';
 import { CdsFeedbackSummaryComponent } from '../../components/cds-feedback-summary/cds-feedback-summary.component';
+import { CdsCallCoverageComponent } from '../../components/cds-call-coverage/cds-call-coverage.component';
 
 /** Every call EHRs made to the CDS services, newest first. The log holds no patient data, so none is shown. */
 @Component({
@@ -24,6 +25,7 @@ import { CdsFeedbackSummaryComponent } from '../../components/cds-feedback-summa
     PaginationBarComponent,
     CdsCallExtrasComponent,
     CdsFeedbackSummaryComponent,
+    CdsCallCoverageComponent,
   ],
   templateUrl: './cds-activity.component.html',
   styleUrl: './cds-activity.component.scss',

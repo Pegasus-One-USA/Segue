@@ -1,0 +1,115 @@
+@use '../../cds' as *;
+
+:host { display: block; }
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.count {
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-side);
+  font-size: 12.5px;
+  color: var(--color-ink-2);
+
+  &__n {
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  &--success { border-color: var(--color-success); background: var(--color-success-soft); }
+  &--info    { border-color: var(--color-info);    background: var(--color-info-soft); }
+  &--warning { border-color: var(--color-warning); background: var(--color-warning-soft); }
+  &--error   { border-color: var(--color-error);   background: var(--color-error-soft); }
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-ink-2);
+
+  select {
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    background: var(--color-surface);
+    font: inherit;
+    color: var(--color-ink);
+  }
+}
+
+.table-scroll {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+}
+
+.rows {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+
+  th {
+    position: sticky;
+    top: 0;
+    padding: 8px 10px;
+    background: var(--color-side);
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+    font-weight: 700;
+    color: var(--color-ink-2);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: top;
+    color: var(--color-ink);
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+}
+
+.row--error td { background: var(--color-error-soft); }
+
+.sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  display: block;
+  color: var(--color-error-strong);
+}
+
+.none {
+  margin: 0;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--color-muted);
+}

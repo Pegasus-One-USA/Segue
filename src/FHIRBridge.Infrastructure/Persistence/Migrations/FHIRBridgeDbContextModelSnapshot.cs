@@ -331,6 +331,198 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.ToTable("BulkExportJobs", (string)null);
                 });
 
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.CdsCoverageRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("CodePrefixMatch")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Covered")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)")
+                        .HasDefaultValue("system");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DocNeeded")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.PrimitiveCollection<string>("DocPurposes")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.PrimitiveCollection<string>("InfoNeeded")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ModifiedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaNeeded")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("PayerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PolicyUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("QuestionnaireCanonical")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("System")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code");
+
+                    b.HasIndex("PayerId", "System", "Code", "EffectiveFrom")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("CdsCoverageRules", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.CdsPayer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)")
+                        .HasDefaultValue("system");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("FallbackToLocalRules")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ForwardFhirAuthorization")
+                        .HasColumnType("bit");
+
+                    b.PrimitiveCollection<string>("Identifiers")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ModifiedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.PrimitiveCollection<string>("PlanValues")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RelayClientId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("RelayEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("RelayServiceUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("RelayTimeoutMs")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("CdsPayers", (string)null);
+                });
+
             modelBuilder.Entity("FHIRBridge.Domain.Entities.CdsServiceInstance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -421,6 +613,17 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<string>("SettingsJson")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SignOffNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("SignedOffAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SignedOffBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1285,6 +1488,13 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<int>("CardCount")
                         .HasColumnType("int");
 
+                    b.Property<int?>("CoverageAssertionCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CoverageDecisions")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("CriteriaId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1340,6 +1550,23 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<Guid?>("PayerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PayerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<long?>("RelayMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RelayOutcome")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool?>("RelayUsed")
+                        .HasColumnType("bit");
+
                     b.Property<string>("ServiceId")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1352,6 +1579,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("SuggestionsOffered")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SystemActionCount")
                         .HasColumnType("int");
 
                     b.Property<string>("TriggerAction")

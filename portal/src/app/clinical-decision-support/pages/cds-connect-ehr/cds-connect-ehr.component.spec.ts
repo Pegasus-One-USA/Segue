@@ -8,7 +8,8 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../services/toast.service';
 import { CdsApiService } from '../../services/cds-api.service';
 import {
-  CDS_ALL_PERMISSIONS, makeCdsApiSpy, makeDialogSpy, makeDiscovery, makeIssuer, makeSetupSheet, makeToastSpy, signInWith,
+  CDS_ALL_PERMISSIONS, makeCdsApiSpy, makeDialogSpy, makeDiscovery, makeIssuer, makeReadiness, makeReadinessCheck, makeSetupSheet,
+  makeToastSpy, signInWith,
 } from '../../testing/cds-test-data';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 
@@ -48,6 +49,36 @@ describe('CdsConnectEhrComponent', () => {
     expect(el.querySelector('[data-testid="cds-discovery-url"]')?.textContent).toBe('https://segue.example.org/cds-services');
     expect(el.querySelectorAll('[data-testid="cds-issuer-row"]').length).toBe(1);
     expect(el.querySelector('app-cds-sandbox-hint')?.textContent).toContain('https://segue.example.org/cds-services');
+  });
+
+  it('shows the go-live readiness checks', () => {
+    const { el } = create(CDS_ALL_PERMISSIONS, a => a.getReadiness.and.returnValue(of(makeReadiness({
+      status: 'blocker',
+      checks: [makeReadinessCheck({ key: 'trusted-issuer', label: 'Trusted EHR issuer', status: 'blocker', howToFix: 'Add the Epic issuer.' })],
+    }))));
+
+    expect(el.querySelector('[data-testid="cds-readiness-panel"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="cds-readiness-check"]')?.textContent).toContain('Add the Epic issuer.');
+  });
+
+  it('reloads the readiness report on "Check again" and after an issuer change', () => {
+    const { el, fixture } = create();
+    expect(api.getReadiness).toHaveBeenCalledTimes(1);
+
+    (el.querySelector('[data-testid="cds-readiness-refresh"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(api.getReadiness).toHaveBeenCalledTimes(2);
+
+    fixture.componentInstance.load();
+    expect(api.getReadiness).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps the connection details when the readiness report fails', () => {
+    const { el } = create(CDS_ALL_PERMISSIONS, a => a.getReadiness.and.returnValue(throwError(() => new Error('down'))));
+
+    expect(el.querySelector('[data-testid="cds-readiness-panel"] .cds-notice--error')).not.toBeNull();
+    expect(el.querySelector('[data-testid="cds-discovery-url"]')).not.toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('opens the issuer dialog pre-filled with the sandbox', () => {

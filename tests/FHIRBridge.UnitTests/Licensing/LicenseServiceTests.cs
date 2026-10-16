@@ -82,6 +82,9 @@ public sealed class LicenseServiceTests
 
         public Task DeleteAsync(string key, CancellationToken cancellationToken) =>
             throw new NotSupportedException("Not exercised by these tests.");
+
+        public Task<SystemSetting> AddIfAbsentAsync(string key, string value, string? description, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("Not exercised by these tests.");
     }
 
     /// <summary>Minimal concrete <see cref="DbException"/> — the type is abstract, and no fake of it exists

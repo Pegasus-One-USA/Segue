@@ -132,6 +132,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 .ConfigurePrimaryHttpMessageHandler(() => new CdsTestHttpEndpoints.Handler());
             services.AddHttpClient<FHIRBridge.Application.Abstractions.Cds.ICdsFhirCallbackClient, FHIRBridge.Infrastructure.Cds.CdsFhirCallbackClient>()
                 .ConfigurePrimaryHttpMessageHandler(() => new CdsTestHttpEndpoints.Handler());
+            services.AddHttpClient(FHIRBridge.Infrastructure.Cds.Coverage.CdsPayerRelayClient.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => new CdsTestHttpEndpoints.Handler());
         });
     }
 }

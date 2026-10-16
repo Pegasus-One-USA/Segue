@@ -7,6 +7,8 @@ import { CdsApiService } from '../../services/cds-api.service';
 import { CdsDiscoveryInfoService, CdsSetupSheet } from '../../models/cds.models';
 import { cdsFixResourceLabel, cdsHookLabel } from '../../models/cds-labels';
 import { CdsCopyButtonComponent } from '../cds-copy-button/cds-copy-button.component';
+import { CdsSignOffBadgeComponent } from '../cds-sign-off-badge/cds-sign-off-badge.component';
+import { CdsSetupSheetCrdComponent } from '../cds-setup-sheet-crd/cds-setup-sheet-crd.component';
 import { ToastService } from '../../../services/toast.service';
 
 /**
@@ -17,7 +19,7 @@ import { ToastService } from '../../../services/toast.service';
 @Component({
   selector: 'app-cds-epic-setup-sheet',
   standalone: true,
-  imports: [DatePipe, MatIconModule, CdsCopyButtonComponent],
+  imports: [DatePipe, MatIconModule, CdsCopyButtonComponent, CdsSignOffBadgeComponent, CdsSetupSheetCrdComponent],
   templateUrl: './cds-epic-setup-sheet.component.html',
   styleUrl: './cds-epic-setup-sheet.component.scss',
 })

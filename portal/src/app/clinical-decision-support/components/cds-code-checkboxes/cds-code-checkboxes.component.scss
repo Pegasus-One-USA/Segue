@@ -1,0 +1,9 @@
+@use '../../cds' as *;
+
+:host { display: block; }
+
+.codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}

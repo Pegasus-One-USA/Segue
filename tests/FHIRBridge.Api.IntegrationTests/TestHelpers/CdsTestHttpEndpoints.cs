@@ -26,7 +26,8 @@ public static class CdsTestHttpEndpoints
     public static HttpResponseMessage Json(string json, HttpStatusCode status = HttpStatusCode.OK) =>
         new(status) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/fhir+json") };
 
-    public sealed record SeenRequest(string Url, string? Authorization);
+    /// <param name="Body">The request body (POSTs, e.g. a relayed CRD call); null when there is none.</param>
+    public sealed record SeenRequest(string Url, string? Authorization, string? Body = null);
 
     /// <summary>The primary handler installed on the CDS clients in the test host.</summary>
     public sealed class Handler : HttpMessageHandler
@@ -34,7 +35,8 @@ public static class CdsTestHttpEndpoints
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var url = request.RequestUri!.AbsoluteUri;
-            SeenRequests.Enqueue(new SeenRequest(url, request.Headers.Authorization?.ToString()));
+            var body = request.Content?.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult();
+            SeenRequests.Enqueue(new SeenRequest(url, request.Headers.Authorization?.ToString(), body));
             var route = Routes
                 .Where(pair => url.StartsWith(pair.Key, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(pair => pair.Key.Length)

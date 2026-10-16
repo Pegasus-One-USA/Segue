@@ -23,6 +23,12 @@ public sealed class CdsReplayGuard
         _redis = redis;
     }
 
+    /// <summary>
+    /// True when the record of used tokens is in Redis (shared by every node); false when it is this process's
+    /// memory, which protects a single node only. Reported by the go-live readiness check.
+    /// </summary>
+    public bool IsShared => _redis is not null;
+
     /// <summary>Marks <paramref name="key"/> as used until <paramref name="expiresOnUtc"/>.</summary>
     /// <returns>True when this call marked it; false when it was already used (a replay).</returns>
     public async Task<bool> TryMarkUsedAsync(string key, DateTimeOffset expiresOnUtc, CancellationToken cancellationToken)

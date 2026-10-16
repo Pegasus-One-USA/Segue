@@ -5,6 +5,7 @@ using FHIRBridge.Application.Abstractions.Cds;
 using FHIRBridge.Application.DTOs.Cds;
 using FHIRBridge.Domain.Entities;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Cds.Handlers;
 using FHIRBridge.Observability;
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,8 @@ namespace FHIRBridge.Infrastructure.Cds;
 /// <param name="Messages">Notes for the Test screen (same non-PHI content as <paramref name="Detail"/>).</param>
 /// <param name="CallbackResourceCount">Resources fetched from the client's fhirServer; null when no callback ran.</param>
 /// <param name="CallbackMs">Wall time of the callback; null when no callback ran.</param>
+/// <param name="Coverage">Coverage requirements facts for the call log (payer, decision codes, relay); null for other handlers.</param>
+/// <param name="CoverageAssertionCount">Coverage-information extensions in the systemActions sent; null for other handlers.</param>
 public sealed record CdsEvaluation(
     CdsCallOutcome Outcome,
     CdsCallStatus Status,
@@ -26,9 +29,13 @@ public sealed record CdsEvaluation(
     long DurationMs,
     JsonObject ResolvedSettings,
     int? CallbackResourceCount = null,
-    long? CallbackMs = null)
+    long? CallbackMs = null,
+    CdsCoverageCallInfo? Coverage = null,
+    int? CoverageAssertionCount = null)
 {
     public int CardCount => Response?.Cards.Count ?? 0;
+
+    public int SystemActionCount => Response?.SystemActions?.Count ?? 0;
 }
 
 /// <summary>
@@ -44,22 +51,32 @@ public sealed class CdsEvaluator
     /// <summary>Upper bound on suggestions per card.</summary>
     public const int MaxSuggestionsPerCard = 10;
 
+    /// <summary>Upper bound on systemActions per call (coverage requirements only).</summary>
+    public const int MaxSystemActions = 25;
+
+    /// <summary>Longest appContext a card link may carry.</summary>
+    public const int MaxAppContextLength = 4096;
+
     private readonly ISystemSettingsCache _settingsCache;
     private readonly IOptionsMonitor<CdsOptions> _options;
     private readonly ILogger<CdsEvaluator> _logger;
     private readonly ICdsFhirCallbackClient? _callbackClient;
+    private readonly IReadOnlyDictionary<string, ICdsHandlerPreparer> _preparers;
 
     /// <param name="callbackClient">Fetches missing prefetch from the client's fhirServer; null disables the callback.</param>
+    /// <param name="preparers">Per handler type I/O run before the rules (found by handler key, never a switch).</param>
     public CdsEvaluator(
         ISystemSettingsCache settingsCache,
         IOptionsMonitor<CdsOptions> options,
         ILogger<CdsEvaluator> logger,
-        ICdsFhirCallbackClient? callbackClient = null)
+        ICdsFhirCallbackClient? callbackClient = null,
+        IEnumerable<ICdsHandlerPreparer>? preparers = null)
     {
         _settingsCache = settingsCache;
         _options = options;
         _logger = logger;
         _callbackClient = callbackClient;
+        _preparers = (preparers ?? []).ToDictionary(preparer => preparer.HandlerKey, StringComparer.Ordinal);
     }
 
     /// <summary>Evaluates with no authenticated caller (the admin Test run): missing prefetch is never fetched.</summary>
@@ -85,10 +102,12 @@ public sealed class CdsEvaluator
         var resolvedSettings = settings.ToJsonObject();
         int? callbackResourceCount = null;
         long? callbackMs = null;
+        CdsCoverageCallInfo? coverage = null;
+        int? coverageAssertions = null;
 
         CdsEvaluation Finish(CdsCallOutcome outcome, CdsCallStatus status, CdsResponse? response, string? detail) =>
             new(outcome, status, response, detail, detail is null ? [] : [detail], stopwatch.ElapsedMilliseconds, resolvedSettings,
-                callbackResourceCount, callbackMs);
+                callbackResourceCount, callbackMs, coverage, coverageAssertions);
 
         if (request is null)
         {
@@ -134,6 +153,7 @@ public sealed class CdsEvaluator
             30_000);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(timeoutMs);
+        var budgetClock = Stopwatch.StartNew();
 
         string? callbackNote = null;
         if (absent.Length > 0)
@@ -184,10 +204,41 @@ public sealed class CdsEvaluator
         activity?.SetTag("cds.service_id", instance.ServiceId);
         activity?.SetTag("cds.handler", handler.Key);
 
+        var snapshot = CdsInstanceSnapshot.From(instance);
+        string? preparationNote = null;
+        object? prepared = null;
+        if (_preparers.TryGetValue(handler.Key, out var preparer))
+        {
+            try
+            {
+                var remaining = TimeSpan.FromMilliseconds(Math.Max(0, timeoutMs - budgetClock.ElapsedMilliseconds));
+                var preparation = await preparer.PrepareAsync(
+                    new CdsPreparationContext(snapshot, request, settings, remaining, trustedIssuer is not null), budget.Token);
+                prepared = preparation.Data;
+                coverage = preparation.Coverage;
+                preparationNote = preparation.Note;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, "timeout");
+                return Finish(CdsCallOutcome.Degraded, CdsCallStatus.Ok, new CdsResponse(),
+                    $"Preparing the rules' data did not finish within {timeoutMs} ms. Answered with no cards.");
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // The exception type only: a message could quote request content or a payer URL.
+                _logger.LogWarning(
+                    "CDS preparation for handler {HandlerKey} of service {ServiceId} failed: {ErrorType}.",
+                    handler.Key, instance.ServiceId, exception.GetType().Name);
+                return Finish(CdsCallOutcome.Degraded, CdsCallStatus.Ok, new CdsResponse(),
+                    $"The rules' data could not be prepared ({exception.GetType().Name}). Answered with no cards.");
+            }
+        }
+
         CdsHandlerResult result;
         try
         {
-            var context = new CdsHandlerContext(CdsInstanceSnapshot.From(instance), request, settings);
+            var context = new CdsHandlerContext(snapshot, request, settings, prepared);
             // Off the request thread so the budget holds even for a handler that does its work synchronously.
             result = await Task.Run(() => handler.EvaluateAsync(context, budget.Token), budget.Token).WaitAsync(budget.Token);
         }
@@ -207,8 +258,21 @@ public sealed class CdsEvaluator
             return Finish(CdsCallOutcome.Error, CdsCallStatus.Error, null, $"The rules failed ({exception.GetType().Name}).");
         }
 
-        var cards = Sanitize(result.Cards, instance, request, out var droppedSuggestions);
+        var cards = Sanitize(result.Cards, instance, request, result.SourceLabel, out var droppedSuggestions);
+        var systemActions = SanitizeSystemActions(result.SystemActions, handler, request, out var droppedActions);
+        if (handler.ReturnsSystemActions)
+        {
+            coverageAssertions = CdsCoverageInformation.Count(systemActions);
+        }
+
         activity?.SetTag("cds.card_count", cards.Count);
+        if (droppedActions > 0)
+        {
+            // Counts only: an action holds request data.
+            _logger.LogWarning(
+                "CDS handler {HandlerKey} for service {ServiceId} produced {Dropped} systemAction(s) that broke the systemAction rules; they were not sent.",
+                handler.Key, instance.ServiceId, droppedActions);
+        }
         if (droppedSuggestions > 0)
         {
             // Counts only: a suggestion holds request data.
@@ -217,27 +281,31 @@ public sealed class CdsEvaluator
                 handler.Key, instance.ServiceId, droppedSuggestions);
         }
 
-        var response = new CdsResponse { Cards = cards };
+        var response = new CdsResponse { Cards = cards, SystemActions = systemActions.Count > 0 ? systemActions : null };
         if (result.DegradedReason is { } degraded)
         {
             return Finish(CdsCallOutcome.Degraded, CdsCallStatus.Ok, response, Truncate(degraded, 300));
         }
 
-        return cards.Count > 0
-            ? Finish(CdsCallOutcome.Success, CdsCallStatus.Ok, response, null)
-            : Finish(CdsCallOutcome.NoCards, CdsCallStatus.Ok, response, null);
+        var note = preparationNote is null ? null : Truncate(preparationNote, 300);
+        return cards.Count > 0 || systemActions.Count > 0
+            ? Finish(CdsCallOutcome.Success, CdsCallStatus.Ok, response, note)
+            : Finish(CdsCallOutcome.NoCards, CdsCallStatus.Ok, response, note);
     }
 
     /// <summary>
     /// Enforces the card contract whatever the handler did: non-empty summary under 140 characters, a valid
     /// indicator, a uuid, the instance's source label/url, and suggestions only when the instance's fixes are on and
     /// each one meets <see cref="CdsSuggestionRules"/> (one action; a delete names a draft order of this request; a
-    /// created order is a draft). <c>selectionBehavior</c> is "any" exactly when suggestions remain.
+    /// created order is a draft). <c>selectionBehavior</c> is "any" exactly when suggestions remain. Links are kept
+    /// only when absolute https with a label, type absolute or smart, and appContext at most
+    /// <see cref="MaxAppContextLength"/> characters; an icon only when absolute https.
     /// </summary>
     private static IReadOnlyList<CdsCard> Sanitize(
         IReadOnlyList<CdsCard>? cards,
         CdsServiceInstance instance,
         CdsRequest request,
+        string? sourceLabel,
         out int droppedSuggestions)
     {
         droppedSuggestions = 0;
@@ -263,11 +331,13 @@ public sealed class CdsEvaluator
             card.Uuid = string.IsNullOrWhiteSpace(card.Uuid) ? Guid.NewGuid().ToString() : card.Uuid;
             card.Source = new CdsSource
             {
-                Label = instance.CardSourceLabel,
+                Label = string.IsNullOrWhiteSpace(sourceLabel) ? instance.CardSourceLabel : Truncate(sourceLabel.Trim(), 200),
                 Url = instance.CardSourceUrl,
-                Icon = card.Source?.Icon,
+                Icon = IsHttpsUrl(card.Source?.Icon) ? card.Source!.Icon : null,
                 Topic = card.Source?.Topic,
             };
+            var links = (card.Links ?? []).Where(IsSafeLink).ToArray();
+            card.Links = links.Length > 0 ? links : null;
 
             var kept = new List<CdsSuggestion>();
             foreach (var suggestion in card.Suggestions ?? [])
@@ -311,6 +381,67 @@ public sealed class CdsEvaluator
         }
 
         return clean;
+    }
+
+    /// <summary>
+    /// The systemActions that may leave Segue: only from a handler that declares
+    /// <see cref="ICdsServiceHandler.ReturnsSystemActions"/> (coverage requirements); each must be an "update" of a
+    /// resource of this request (its draft / dispatched orders, appointments or encounter, by "Type/id") carrying the
+    /// CRD coverage-information extension, and apart from its coverage-information extensions it must be exactly
+    /// the request's own copy of that resource (a systemAction may add coverage information, never change the
+    /// order); at most <see cref="MaxSystemActions"/>. Everything else is dropped.
+    /// </summary>
+    private static IReadOnlyList<CdsAction> SanitizeSystemActions(
+        IReadOnlyList<CdsAction>? actions,
+        ICdsServiceHandler handler,
+        CdsRequest request,
+        out int dropped)
+    {
+        dropped = 0;
+        if (actions is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        if (!handler.ReturnsSystemActions)
+        {
+            dropped = actions.Count;
+            return [];
+        }
+
+        var targets = CdsCrdItems.Extract(request)
+            .Where(item => item.Reference is not null)
+            .GroupBy(item => item.Reference!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Resource, StringComparer.Ordinal);
+        var kept = new List<CdsAction>();
+        foreach (var action in actions)
+        {
+            var resource = action?.Resource;
+            var reference = resource is null ? null : $"{CdsFhirReader.ResourceType(resource)}/{CdsFhirReader.Text(resource["id"])}";
+            var valid = action is not null
+                        && action.Type == CdsActionTypes.Update
+                        && reference is not null
+                        && targets.TryGetValue(reference, out var original)
+                        && resource!["extension"] is JsonArray extensions
+                        && extensions.OfType<JsonObject>().Any(CdsCoverageInformation.IsCoverageInformation)
+                        && SameApartFromCoverageInformation(resource, original)
+                        && kept.Count < MaxSystemActions;
+            if (!valid)
+            {
+                dropped++;
+                continue;
+            }
+
+            action!.ResourceId = null;
+            if (string.IsNullOrWhiteSpace(action.Description))
+            {
+                action.Description = "Coverage information";
+            }
+
+            kept.Add(action);
+        }
+
+        return kept;
     }
 
     /// <summary>"Type/id" of every order in the request's context.draftOrders (what a delete action may name).</summary>
@@ -407,6 +538,44 @@ public sealed class CdsEvaluator
             return (null, "callback ran out of time", stopwatch.ElapsedMilliseconds);
         }
     }
+
+    /// <summary>True when the two resources are equal once every coverage-information extension is removed from both.</summary>
+    private static bool SameApartFromCoverageInformation(JsonObject updated, JsonObject original)
+    {
+        static JsonObject Strip(JsonObject resource)
+        {
+            var copy = (JsonObject)resource.DeepClone();
+            if (copy["extension"] is JsonArray extensions)
+            {
+                var others = extensions
+                    .Where(extension => extension is not JsonObject ext || !CdsCoverageInformation.IsCoverageInformation(ext))
+                    .Select(extension => extension?.DeepClone())
+                    .ToArray();
+                if (others.Length == 0)
+                {
+                    copy.Remove("extension");
+                }
+                else
+                {
+                    copy["extension"] = new JsonArray(others);
+                }
+            }
+
+            return copy;
+        }
+
+        return JsonNode.DeepEquals(Strip(updated), Strip(original));
+    }
+
+    private static bool IsHttpsUrl(string? value) =>
+        value is { Length: > 0 and <= 2048 } && Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
+
+    private static bool IsSafeLink(CdsLink? link) =>
+        link is not null
+        && !string.IsNullOrWhiteSpace(link.Label)
+        && IsHttpsUrl(link.Url)
+        && (link.Type == CdsCardLinkTypes.Absolute || link.Type == CdsCardLinkTypes.Smart)
+        && (link.AppContext is null || link.AppContext.Length <= MaxAppContextLength);
 
     private static string Truncate(string value, int maxLength) =>
         value.Length > maxLength ? value[..maxLength] + "…" : value;

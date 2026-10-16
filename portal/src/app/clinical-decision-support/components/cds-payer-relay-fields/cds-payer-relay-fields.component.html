@@ -1,0 +1,92 @@
+@let c = controls();
+<fieldset class="relay" data-testid="cds-payer-relay">
+  <legend class="relay__title">Relay to the payer</legend>
+  <p class="cds-field__help">
+    Use this when the payer runs its own coverage requirements service. Segue sends the call on to it, signed with
+    Segue's own key, and passes the payer's answer back to the EHR. Leave it off to answer from the rules you keep
+    in Segue.
+  </p>
+
+  <label class="cds-check" for="cds-payer-relay-enabled">
+    <input id="cds-payer-relay-enabled" type="checkbox" data-testid="cds-payer-relay-enabled" [formControl]="c.relayEnabled" />
+    Send this payer's calls to the payer's own service
+  </label>
+
+  @if (c.relayEnabled.value) {
+    <div class="cds-form-grid">
+      <div class="cds-field cds-field--full" [class.cds-field--error]="hasError('relayServiceUrl')">
+        <label for="cds-payer-relay-url">Payer's service address <span class="cds-req">*</span></label>
+        <input
+          id="cds-payer-relay-url"
+          class="cds-mono"
+          autocomplete="off"
+          data-testid="cds-payer-relay-url"
+          [attr.maxlength]="limits.urlMax"
+          placeholder="https://crd.payer.example.com/cds-services/order-sign-crd"
+          [formControl]="c.relayServiceUrl"
+        />
+        @if (hasError('relayServiceUrl', 'required')) {
+          <p class="cds-field__error">Enter the payer's service address.</p>
+        } @else if (hasError('relayServiceUrl', 'httpsUrl') || hasError('relayServiceUrl', 'query')) {
+          <p class="cds-field__error">Enter a full address starting with https://, with no ? part.</p>
+        } @else {
+          <p class="cds-field__help">The full address of the payer's CDS service, as the payer gave it to you.</p>
+        }
+      </div>
+
+      <div class="cds-field" [class.cds-field--error]="hasError('relayTimeoutMs')">
+        <label for="cds-payer-relay-timeout">Wait for the payer (ms)</label>
+        <input
+          id="cds-payer-relay-timeout"
+          type="number"
+          [attr.min]="limits.relayTimeoutMin"
+          [attr.max]="limits.relayTimeoutMax"
+          [formControl]="c.relayTimeoutMs"
+        />
+        @if (hasError('relayTimeoutMs')) {
+          <p class="cds-field__error">Between {{ limits.relayTimeoutMin }} and {{ limits.relayTimeoutMax }} ms.</p>
+        } @else {
+          <p class="cds-field__help">Default 1000. The whole call to Segue still has to finish in time for the EHR.</p>
+        }
+      </div>
+
+      <div class="cds-field" [class.cds-field--error]="hasError('relayClientId')">
+        <label for="cds-payer-relay-client">Client id the payer gave Segue</label>
+        <input id="cds-payer-relay-client" class="cds-mono" autocomplete="off" [attr.maxlength]="limits.clientIdMax" [formControl]="c.relayClientId" />
+        <p class="cds-field__help">Sent as the token's <code>sub</code>. Leave blank if the payer gave you none.</p>
+      </div>
+
+      <div class="cds-field cds-field--full">
+        <label class="cds-check" for="cds-payer-relay-fallback">
+          <input id="cds-payer-relay-fallback" type="checkbox" [formControl]="c.fallbackToLocalRules" />
+          If the payer doesn't answer in time, use the rules kept in Segue
+        </label>
+        @if (!c.fallbackToLocalRules.value) {
+          <p class="cds-field__help">Off: when the payer fails, the clinician sees nothing for this payer.</p>
+        }
+      </div>
+
+      <div class="cds-field cds-field--full">
+        <label class="cds-check" for="cds-payer-relay-token">
+          <input
+            id="cds-payer-relay-token"
+            type="checkbox"
+            data-testid="cds-payer-relay-token"
+            [checked]="c.forwardFhirAuthorization.value"
+            [disabled]="c.forwardFhirAuthorization.disabled"
+            (change)="onForwardTokenChange($event)"
+          />
+          Send the EHR's access token to this payer
+        </label>
+        @if (c.forwardFhirAuthorization.value) {
+          <div class="cds-notice cds-notice--warning" data-testid="cds-payer-relay-token-warning">
+            <mat-icon>warning_amber</mat-icon>
+            <p>The payer receives the EHR's access token and can read patient data from your EHR while it lasts.</p>
+          </div>
+        } @else {
+          <p class="cds-field__help">Off (recommended): the payer gets only the data in the call, never a token.</p>
+        }
+      </div>
+    </div>
+  }
+</fieldset>

@@ -62,6 +62,31 @@ public sealed class EfSystemSettingRepository : ISystemSettingRepository
         }
     }
 
+    public async Task<SystemSetting> AddIfAbsentAsync(
+        string key, string value, string? description, CancellationToken cancellationToken)
+    {
+        if (await GetByKeyAsync(key, cancellationToken) is { } existing)
+        {
+            return existing;
+        }
+
+        var created = new SystemSetting(key, value, description);
+        await _db.SystemSettings.AddAsync(created, cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            return created;
+        }
+        catch (DbUpdateException exception) when (IsSystemSettingsKeyViolation(exception))
+        {
+            // Another instance inserted the key first (IX_SystemSettings_Key is unique): its row wins.
+            _db.Entry(created).State = EntityState.Detached;
+            return await GetByKeyAsync(key, cancellationToken)
+                ?? throw new InvalidOperationException(
+                    $"SystemSetting '{key}' insert failed on a unique-key violation but no row was found afterward.", exception);
+        }
+    }
+
     private static bool IsSystemSettingsKeyViolation(DbUpdateException exception) =>
         exception.InnerException switch
         {

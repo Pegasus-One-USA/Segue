@@ -33,6 +33,10 @@ public sealed class InMemorySystemSettingRepository : ISystemSettingRepository
         return Task.FromResult(setting);
     }
 
+    public Task<SystemSetting> AddIfAbsentAsync(
+        string key, string value, string? description, CancellationToken cancellationToken) =>
+        Task.FromResult(_store.GetOrAdd(key, _ => new SystemSetting(key, value, description)));
+
     public Task DeleteAsync(string key, CancellationToken cancellationToken)
     {
         _store.TryRemove(key, out _);

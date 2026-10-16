@@ -69,7 +69,10 @@
             <td mat-cell *matCellDef="let s">
               <a class="cell-link" [routerLink]="['/clinical-decision-support/services', s.id]">{{ s.title }}</a>
               <span class="cell-id">{{ s.serviceId }}</span>
-              <app-cds-fixes-badge [enabled]="s.fixesEnabled" />
+              <span class="cell-badges">
+                <app-cds-sign-off-badge [signedOffBy]="s.signedOffBy" [signedOffAtUtc]="s.signedOffAtUtc" />
+                <app-cds-fixes-badge [enabled]="s.fixesEnabled" />
+              </span>
             </td>
           </ng-container>
 

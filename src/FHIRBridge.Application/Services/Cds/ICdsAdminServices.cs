@@ -18,6 +18,26 @@ public interface ICdsServiceInstanceService
 
     /// <summary>The handler's synthetic sample request for the instance's hook (Test screen starting point).</summary>
     Task<CdsRequest> GetSampleRequestAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records the clinical sign-off for the service's current content (replacing any earlier one). Advisory only.
+    /// Cleared automatically by a save that changes the check, hook, settings, fixes, dismiss reasons or links.
+    /// </summary>
+    /// <exception cref="FHIRBridge.SharedKernel.Exceptions.NotFoundException">No instance with that id.</exception>
+    Task<CdsServiceInstanceDto> SignOffAsync(Guid id, CdsSignOffRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Removes the clinical sign-off. No-op when there is none.</summary>
+    /// <exception cref="FHIRBridge.SharedKernel.Exceptions.NotFoundException">No instance with that id.</exception>
+    Task<CdsServiceInstanceDto> ClearSignOffAsync(Guid id, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// The go-live readiness report (api/v1/cds/readiness): checks of the deployment and configuration an EHR needs
+/// before real use. Configuration only; never secrets.
+/// </summary>
+public interface ICdsReadinessService
+{
+    Task<CdsReadinessDto> GetAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>Admin CRUD over trusted issuers (api/v1/cds/trusted-issuers).</summary>

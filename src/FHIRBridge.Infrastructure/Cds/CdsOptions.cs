@@ -50,4 +50,16 @@ public sealed class CdsOptions
 
     /// <summary>Largest callback response read per query; a bigger one is treated as not fetched.</summary>
     public int CallbackMaxResponseBytes { get; set; } = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// Lets payer relay URLs (coverage requirements) resolve to private, loopback or link-local addresses. Off by
+    /// default so an admin-entered relay URL cannot reach internal-only endpoints.
+    /// </summary>
+    public bool AllowPrivateRelayAddresses { get; set; }
+
+    /// <summary>Largest payer relay response read; a bigger one counts as a failed relay.</summary>
+    public int RelayMaxResponseBytes { get; set; } = 1024 * 1024;
+
+    /// <summary>Lifetime of the JWT Segue signs for a relayed call (CDS Hooks asks for 5 minutes or less).</summary>
+    public int RelayTokenLifetimeSeconds { get; set; } = 60;
 }

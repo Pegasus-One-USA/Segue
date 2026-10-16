@@ -82,8 +82,23 @@ describe('CdsActivityComponent', () => {
     expect(summary.textContent?.replace(/\s+/g, ' ')).toContain('will-monitor × 2');
   });
 
+  it('shows the payer, coverage decisions and relay of a coverage requirements call', () => {
+    const { el } = create([log({
+      handlerKey: 'coverage-requirements', serviceTitle: 'Coverage requirements', payerName: 'Acme Health Plan',
+      coverageDecisions: ['covered/auth-needed/-'], relayUsed: true, relayMs: 310, relayOutcome: 'ok',
+      systemActionCount: 1, coverageAssertionCount: 1,
+    })]);
+    const row = el.querySelector('[data-testid="cds-activity-row"]')!;
+    expect(row.textContent).toContain('Payer: Acme Health Plan');
+    expect(row.textContent).toContain('Covered, prior authorization needed');
+    expect(row.textContent).toContain('Asked the payer in 310 ms');
+    expect(row.textContent).toContain('1 order updated');
+    expect(row.textContent).toContain('1 coverage answer');
+  });
+
   it('shows no extras or summary for plain calls', () => {
     const { el } = create();
+    expect(el.querySelector('[data-testid="cds-call-coverage"]')).toBeNull();
     expect(el.querySelector('[data-testid="cds-call-extras"]')).toBeNull();
     expect(el.querySelector('[data-testid="cds-feedback-summary"]')).toBeNull();
   });

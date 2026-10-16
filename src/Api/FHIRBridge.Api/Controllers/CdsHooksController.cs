@@ -52,6 +52,26 @@ public sealed class CdsHooksController : ControllerBase
     public async Task<IActionResult> Discovery(CancellationToken cancellationToken) =>
         Ok(await _service.GetDiscoveryAsync(cancellationToken));
 
+    /// <summary>
+    /// Segue's own public JWK Set: the jku of the JWTs Segue signs when it relays a coverage requirements (CRD) call
+    /// to a payer's CRD service. Public key only; the key is created on first use. Anonymous, like discovery.
+    /// </summary>
+    [HttpGet(".well-known/jwks.json")]
+    [ProducesResponseType(typeof(FHIRBridge.Application.DTOs.JsonWebKeySetDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Jwks([FromServices] ICdsRelayJwksProvider jwks, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var keys = await jwks.GetJwksAsync(cancellationToken);
+            Response.Headers.CacheControl = "public, max-age=3600";
+            return Ok(keys);
+        }
+        catch (InvalidOperationException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Segue's CDS signing key is not available." });
+        }
+    }
+
     /// <summary>Invokes one service. 200 with cards (possibly none), or 400/401/403/404/412/500.</summary>
     [HttpPost("{serviceId}")]
     [RequestSizeLimit(MaxInvokeBodyBytes)]

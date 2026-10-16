@@ -37,7 +37,12 @@
   &:hover { color: var(--color-primary); text-decoration: underline; }
 }
 
-app-cds-fixes-badge { margin-top: 4px; }
+.cell-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
 
 .cell-id {
   display: block;

@@ -27,7 +27,7 @@ Technical background: [22 — CDS Hooks](../backend/22-cds-hooks.md).
 
 | Word | Meaning |
 |---|---|
-| **Check** | The kind of rule a service runs, for example "Drug–allergy check". Segue has five. |
+| **Check** | The kind of rule a service runs, for example "Drug–allergy check". Segue has six. |
 | **Service** | One check set up with your own name and settings. You can add the same check more than once with different settings. |
 | **Runs when** | The moment in the EHR that calls the service: **Patient chart opened**, **Order selected** or **Order signed**. |
 | **Card** | One piece of advice the EHR shows the clinician. |
@@ -44,8 +44,12 @@ Technical background: [22 — CDS Hooks](../backend/22-cds-hooks.md).
 | **Dismiss reason** | A reason the clinician can pick when they dismiss a card, such as "Will monitor the patient". |
 | **Card link** | A button on a card that opens a web page or an app inside the EHR (a SMART app). |
 | **Epic setup sheet** | Everything Epic's team must type into Epic for one service, on one page you can copy or download. |
+| **Payer** | A health plan, such as "Acme Health Plan". Coverage requirements are answered per payer. |
+| **Coverage rule** | For one order code, what a payer requires: covered or not, prior authorization, documentation. |
+| **CRD** | Da Vinci Coverage Requirements Discovery, the standard for telling the clinician what the payer requires while they order. |
+| **Relay** | Instead of answering from rules kept in Segue, Segue passes the call on to the payer's own CRD service and returns its answer. |
 
-## The five checks
+## The six checks
 
 | Check | Runs when | What it does |
 |---|---|---|
@@ -54,6 +58,7 @@ Technical background: [22 — CDS Hooks](../backend/22-cds-hooks.md).
 | **Renal dose check** | Order selected, Order signed | Flags drafted medicines that need a dose review, or should be avoided, at the patient's latest kidney function (eGFR). You set the eGFR threshold. |
 | **Care-gap reminders** | Patient chart opened | Reminds about overdue care: HbA1c for patients with diabetes, flu vaccine, colorectal cancer screening. You set the intervals and ages. |
 | **Prior-authorization reminder** | Order signed | Reminds the clinician when an order is on your list of codes that need prior authorization. You keep the list. |
+| **Coverage requirements (CRD)** | Order signed (also Order selected, Order dispatched, Appointment booked, Encounter started or discharged) | Tells the clinician what the patient's payer requires for the order (covered, prior authorization, documentation) and writes the answer onto the order itself. Answers from the payer rules you keep on the **Coverage (CRD)** tab, or from the payer's own service. See [Coverage requirements (CRD)](#coverage-requirements-crd). |
 
 ## Where to find it
 
@@ -61,9 +66,9 @@ Click **Clinical Decision Support** in the left-hand menu. You need the **CDS Ho
 (`cdshooks.view`). To grant it, open **User Management → Role Permissions**; the row is **CDS Hooks** under
 **Clinical Decision Support**, with View, Create, Edit, Delete and Test.
 
-## The five screens
+## The screens
 
-The section has four tabs at the top, plus the service setup page.
+The section has five tabs at the top, plus the service setup page.
 
 ### 1. Services
 
@@ -72,6 +77,9 @@ was last changed.
 
 - The **On** switch saves straight away. When a service is off, EHRs can't call it and it is not listed for them.
 - A yellow **Changes EHR drafts** label means the service's cards offer one-click fixes.
+- A green **Reviewed by ... on ...** label means a clinician signed off the service as it is now. A yellow
+  **Not clinically reviewed** label means nobody has yet, or the service changed since. It is advice only: you can
+  still switch the service on. See [Record a clinical sign-off](#record-a-clinical-sign-off).
 - The **⋮** menu on each row has **Edit** (or **View** if you may not change it), **Test** and **Delete**.
 - **Add service** opens a window where you pick the check.
 
@@ -96,9 +104,14 @@ Opens when you add a service or click **Edit**. It has these parts:
   [Change the dismiss reasons](#change-the-dismiss-reasons).
 - **Card links**: buttons on every card that open a web page or a SMART app. Up to 10. See
   [Add card links](#add-card-links).
+- **Clinical sign-off** (saved services only, below the **Save changes** button): who reviewed the service and
+  when, or a form to record it. See [Record a clinical sign-off](#record-a-clinical-sign-off).
 
 ### 3. Connect your EHR
 
+- **Go-live readiness** at the top: a list of checks, each green (**Ready**), yellow (**Review**) or red
+  (**Blocker**), with **How to fix** under anything that is not ready. Click **Check again** after a change. See
+  [Go-live checklist (Epic)](#go-live-checklist-epic).
 - **Discovery URL** with a copy button. Give it to your EHR team. If a yellow warning says the address was worked
   out from the page you are on, ask your administrator to set `Cds:PublicBaseUrl` to the address EHRs really use.
   Until it is set, Segue refuses EHR calls (they show as **Not signed in**), so it cannot be fooled about which
@@ -129,7 +142,19 @@ stored and is not written to Activity. Use made-up patients only. You need **Vie
 - The Test screen never reads missing data from an EHR. If the sample is missing something, the card list is
   empty and the note says so.
 
-### 5. Activity
+### 5. Coverage (CRD)
+
+The payers Segue answers coverage requirements for, and their rules. See
+[Coverage requirements (CRD)](#coverage-requirements-crd).
+
+- **Payers**: each payer's name, the values that recognise it on the patient's coverage, its plans, how many rules
+  are on, and whether calls are **answered by** the rules in Segue or by the payer's own service. The **⋮** menu has
+  **Edit**, **Test relay** (for a payer whose calls are relayed) and **Delete** (which also deletes its rules).
+- **Coverage rules**: filter by payer, code, text and status; the **Dates** column shows **In use today** for a
+  rule that is on and inside its dates. **Add rule**, **Import** (a CSV or JSON file, checked before anything is
+  saved) and **Export** (the rules in the same file format).
+
+### 6. Activity
 
 Every call an EHR made, newest first: when, calls or feedback, which service and hook, who called, the outcome,
 the HTTP status, how many cards, how long it took, and a short reason. It never shows patient data. Filter by
@@ -144,6 +169,9 @@ Small labels under a row add detail when there is any:
 | **Fetched 3 from EHR in 240 ms** | Data the EHR left out, read from its FHIR server for this call. Nothing was stored. |
 | **2 fixes offered** / **1 fix accepted** | One-click fixes on the cards, and fixes the clinician clicked (from feedback). |
 | **Dismissed: will-monitor** | The dismiss reason code the clinician picked. Epic may send its own number code instead. |
+| **Payer: Acme Health Plan** | Coverage requirements: the payer found on the patient's coverage (or **No payer matched**), then each order's answer in plain words, such as "Covered, prior authorization needed". |
+| **Asked the payer in 310 ms** / **Payer: timed out; local rules used** | Coverage requirements: the call was relayed to the payer's own service, and how that went. |
+| **1 order updated** / **1 coverage answer** | Coverage requirements: orders Segue wrote the payer's answer onto, and coverage answers given. |
 
 A line above the table counts fixes offered, fixes accepted, and each dismiss reason on the current page.
 
@@ -176,7 +204,7 @@ Outcomes you may see:
 12. In the request, change `"value": 25` to `"value": 80`.
 13. Click **Run**. No card appears; "The service ran and had no advice" is the normal answer.
 
-You can do the same with the other four checks. Each sample request is made up so that it produces at least one
+You can do the same with the other checks. Each sample request is made up so that it produces at least one
 card.
 
 ## Try it with the public CDS Hooks sandbox
@@ -327,6 +355,68 @@ The sheet contains settings only, no patient data. You can also open it from a s
    Epic uses. Edit the issuer.
 4. **Not signed in** with "sub is not this issuer's expected client id": the client id is wrong. Edit the issuer.
 
+## Go-live checklist (Epic)
+
+Work through this list before Epic calls Segue with real patients. The **Go-live readiness** panel at the top of
+**Connect your EHR** checks the Segue side for you: fix every red **Blocker**, and read every yellow **Review**.
+
+1. **Epic app and its APIs.** Whoever registers Segue as a CDS client in Epic selects the **CDS Hooks Framework**
+   API. If you will use one-click fixes, also select:
+   - **MedicationRequest**: Read, Create, and Delete (Unsigned Order);
+   - **ServiceRequest**: Read, Create, and Delete (Unsigned Order);
+   - **Condition.Create** for **Problems** and for **Encounter Diagnosis**.
+
+   For **Fetch missing data**, also select read access to the data your services use (allergies, medications,
+   lab results, problems, immunizations, procedures, patient).
+2. **A secure web address.** Segue must run on **https**, and your administrator sets `Cds:PublicBaseUrl` to that
+   address. Plain http is refused outside test setups.
+3. **Redis.** Your administrator sets up Redis for Segue, so a captured EHR call can't be replayed, even with more
+   than one Segue server.
+4. **Add Epic as a trusted issuer**: the issuer (their FHIR address), the JWKS URL and the client id. See
+   [Step 1](#step-1-add-epic-as-a-trusted-issuer), then run **Test callback** ([Step 2](#step-2-check-segue-can-reach-epics-fhir-server)).
+5. **Hand the Epic setup sheet to the Epic team** for each service ([Step 3](#step-3-hand-the-epic-setup-sheet-to-epic)).
+   They set up in Epic: the alert records (OPA / BPA) that call each service, the service address and audience,
+   the prefetch, which Epic override reason each of your dismiss reason codes means, the preference list items
+   behind each fix code, and their SMART app allow-list for any SMART links.
+6. **Test in Epic's test environment**, one service at a time: the card appears when expected; each fix adds or
+   removes the right draft; feedback arrives (**Activity** shows **Feedback received** with the reason codes);
+   missing data is fetched (Activity shows how many items were read). Fix anything Activity shows as
+   **Not signed in**, **Missing data** or **Error**.
+7. **Clinical sign-off.** A clinician reviews each service with the Epic team, then you record it. See
+   [Record a clinical sign-off](#record-a-clinical-sign-off).
+8. **Go live one service at a time.** Switch one service on in production and watch **Activity** for a few days
+   before the next.
+
+## Record a clinical sign-off
+
+A sign-off records that a clinician reviewed what a service tells clinicians: its rules and settings, its
+one-click fixes and their codes, its dismiss reasons and its card links. It is advice only: it never stops a
+service from being switched on.
+
+1. Click **Clinical Decision Support** in the left-hand menu.
+2. Click the **Services** tab.
+3. Click the name of the service.
+4. If you changed anything on the page, click **Save changes** first. A sign-off covers the service as last saved.
+5. Scroll to **Clinical sign-off** at the bottom.
+6. In **Reviewed by**, type the clinician's name and role, for example `Dr A. Patel, CMIO`.
+7. In **Note**, optionally type a short note, for example `P&T committee, Oct 2026`. No patient details.
+8. Click **Record sign-off**.
+9. Read the question and click **Record sign-off**.
+
+The section and the Services list now show **Reviewed by ... on ...**.
+
+- **When it goes away by itself:** saving a change to the check, **Runs when**, the settings, the fixes, the
+  dismiss reasons or the card links removes the sign-off, because what clinicians see has changed. A message says
+  so. Renaming the service, switching it on or off, or changing who can call it keeps it.
+- **Coverage requirements services:** adding, changing or deleting a payer or a coverage rule, or importing rules
+  that change something, also removes the sign-off of every coverage requirements service, because the payer rules
+  the clinician reviewed have changed.
+- **If someone else changed the service meanwhile:** the sign-off is not recorded and the section says so. Reload
+  the page, have the clinician review the new version, then record the sign-off again.
+- **To remove it yourself:** in **Clinical sign-off**, click **Remove sign-off**, then click **Remove sign-off** in
+  the question.
+- You need permission to edit CDS services to record or remove a sign-off.
+
 ## Turn on one-click fixes safely
 
 A fix changes the clinician's drafts in the EHR when clicked. Turn fixes on only after your clinical team has
@@ -417,12 +507,188 @@ reasons, so agree on codes with them and don't change a code once Epic uses it.
 A SMART app must be on the health system's SMART app allow-list, or the EHR won't open it. The Epic setup sheet
 lists it for them.
 
+## Coverage requirements (CRD)
+
+While a clinician orders, the EHR can ask Segue what the patient's payer requires for that order. Segue answers
+with a card such as "Prior authorization required by Example Health Plan: MRI brain", and writes the same answer
+onto the order itself, so it travels with the order. This follows the Da Vinci **CRD** standard.
+
+How it works:
+
+1. Segue finds the payer on the patient's coverage that the EHR sends with the call.
+2. It looks up that payer's **coverage rule** for the order's code.
+3. It answers from that rule, or, if you set the payer up for it, it asks the payer's own CRD service and passes
+   its answer back (a **relay**).
+
+You need three things: a **payer**, its **rules** (or a relay), and a **Coverage requirements (CRD)** service.
+The steps below use the made-up payer and order of Segue's sample request, so you can try it on the Test screen.
+
+### Add a payer
+
+1. Click **Clinical Decision Support** in the left-hand menu.
+2. Click the **Coverage (CRD)** tab.
+3. Click **Add payer**.
+4. In **Name**, type `Example Health Plan`.
+5. Click the **How the EHR names this payer** box.
+6. Type `EXAMPLE-PAYER` and press **Enter**. It becomes a chip. Add more values the same way: the payer id, a
+   `system|value` pair, or the payer's name exactly as the EHR shows it. A name can contain commas (for example
+   `Aetna Life Insurance Company, Inc.`): only **Enter** adds the value.
+7. Leave **Only these plans** empty to cover every plan of the payer.
+8. Click **Add payer** at the bottom of the window.
+
+### Add a rule
+
+1. Under **Coverage rules**, click **Add rule**.
+2. Click the **Payer** box.
+3. Click **Example Health Plan**.
+4. **Code system** is already CPT. In **Code**, type `70553`.
+5. Leave **This code only** selected. (Pick **Every code that starts with it** to cover a range, for example `705`.)
+6. Click the **Coverage** box and click **Covered**.
+7. Click the **Prior authorization** box and click **Prior authorization needed**.
+8. Click the **Documentation needed** box and click **Clinical documentation**.
+9. Under **Documentation is for**, tick **With the prior authorization request**.
+10. In **Reason shown to the clinician**, type `MRI of the brain needs prior authorization.`
+11. Click **Add rule**.
+
+The new rule shows **In use today**. Fields that don't fit your choices switch off by themselves, as the CRD
+standard requires:
+
+- A **Not covered** rule cannot state prior authorization.
+- **Documentation is for** and **Payer questionnaire** need **Documentation needed**.
+- **Information needed** is only for an answer that **depends on details**.
+- **Ends on** must not be before **Starts on**. Leave both blank for "always". A rule applies on its end date too.
+- The **Payer policy link** must start with `https://`.
+- A saved rule stays with its payer. To move it, delete it and add it to the other payer.
+
+### Import rules from a file (with a preview)
+
+Nothing is saved until you have seen the preview and clicked **Import**.
+
+1. On the **Coverage (CRD)** tab, click **Import**.
+2. Next to **Download a template**, click **CSV** (or **JSON**). Open the file, keep the first row, and put one rule
+   on each row after it. The template has two made-up examples to copy.
+3. Click **Choose File** and pick your file. The **File type** is set from the file name.
+4. Leave **Payer** on **The payer named on each row**, or pick one payer to leave the file's payer column blank.
+5. Leave **How to import** on **Add and update**.
+6. Click **Check the file**.
+7. Read the preview: how many rules would be added, updated, left unchanged and deleted, and every row with its
+   action. Rows with an **Error** say what is wrong. Pick **Only rows with errors** in **Show** to list just those.
+8. If there are errors, fix the file, click **Back**, choose the file again and click **Check the file**.
+   **Import** stays off while any row has an error, because the import saves every row or none.
+9. Click **Import**.
+
+**Replace** instead of **Add and update** makes the file the payer's whole rule set: every rule of that payer that
+the file does not list is **deleted**. The preview lists them as **Delete**, and Segue asks you to confirm before
+importing. Click **Export** first if you may need the old rules. Because it deletes rules, **Replace** is shown only
+to people who may delete coverage rules.
+
+**Export**, next to **Import**, downloads the rules (of the payer picked in the **Payer** filter, or all of them)
+in the same CSV or JSON format, ready to change and import again.
+
+### Relay a payer's calls to the payer's own service
+
+Use this when the payer runs its own CRD service and has given you its address.
+
+1. On the **Coverage (CRD)** tab, click **⋮** on the payer's row.
+2. Click **Edit**.
+3. Under **Relay to the payer**, tick **Send this payer's calls to the payer's own service**.
+4. In **Payer's service address**, type or paste the address the payer gave you. It must start with `https://`.
+5. Leave **Wait for the payer (ms)** at `1000` unless the payer asks for more time.
+6. In **Client id the payer gave Segue**, type the id the payer gave you, if any.
+7. Leave **If the payer doesn't answer in time, use the rules kept in Segue** ticked, so the clinician still gets an
+   answer when the payer is slow or down.
+8. Leave **Send the EHR's access token to this payer** off. It is off by default: the payer then gets only the data
+   in the call. Turn it on only if your agreement with the payer covers it. Segue asks you to confirm first, because
+   the payer could then read patient data from your EHR while the token lasts.
+9. Click **Save changes**.
+10. Send the payer Segue's key set address, so it can check that the calls really come from Segue. It is on the Epic
+    setup sheet of your Coverage requirements service, as **Segue's key set (JWKS)** (see below).
+
+To check the payer can be reached:
+
+1. Click **⋮** on the payer's row.
+2. Click **Test relay**. Segue sends the payer a made-up order for a made-up patient. No real patient data and no
+   EHR token are sent.
+3. Read the result: **Outcome** (**Answered**, or why not, such as **Timed out** or **HTTP 401**), **Answer**
+   (the HTTP status and how long it took), **Cards** and **Order updates** (how many the payer returned).
+4. Click **Test again** after a change on the payer's side, or **Close**.
+
+### Add a Coverage requirements service
+
+1. Click the **Services** tab.
+2. Click **Add service**.
+3. Click **Coverage requirements (CRD)**.
+4. In **Name**, type `Coverage requirements`.
+5. Leave **Runs when** on **Order signed**.
+6. Look at **Settings**. The defaults suit Epic:
+   - **Add coverage information to orders (systemActions)**: on. Segue writes the payer's answer onto the order.
+     Medication orders get a card instead.
+   - **Show an instructions card**: on.
+   - **When no rule matches**: **Nothing**, or an information card saying the requirements are unknown.
+   - **Documentation (DTR) app URL**: optional. When set, orders that need documentation get a card with a link to
+     that app.
+7. Under **One-click fixes**, a note says they don't apply: this check changes the order itself instead.
+8. Click **Add service** at the bottom of the page.
+
+### Try it on the Test screen
+
+The sample request is a made-up patient covered by **Example Health Plan** (`EXAMPLE-PAYER`), with a drafted MRI
+of the brain (CPT `70553`), so it matches the payer and rule above.
+
+1. Click the **Test** tab.
+2. Click the **Service** box.
+3. Click **Coverage requirements**.
+4. Click **Load sample request**.
+5. Click **Run**.
+6. A yellow **Warning** card appears: prior authorization required by Example Health Plan. Below the cards,
+   **Order updates (1)** shows the order Segue would update, with the answer "Covered, prior authorization needed,
+   clinical documentation".
+7. On the **Coverage (CRD)** tab, switch the rule off (**⋮**, **Edit**, untick **On**, **Save changes**) and run the
+   test again: no card, because no rule is in use.
+
+The Test screen never relays to a payer's service and is not written to Activity. Use **Test relay** for that.
+
+### Read Activity
+
+Once an EHR calls the service, click the **Activity** tab. Each call to a Coverage requirements service shows:
+
+- **Payer: ...**, the payer found on the patient's coverage, or **No payer matched**.
+- Each order's answer in plain words, such as **Covered, prior authorization needed, clinical documentation**.
+- **Asked the payer in ... ms** when the call was relayed, or what went wrong, such as
+  **Payer: timed out; local rules used**.
+- **... orders updated** and **... coverage answers**.
+
+Activity never shows the order, the coverage or the patient.
+
+### Epic and go-live
+
+- The **Epic setup sheet** of a Coverage requirements service has a part **7. Coverage requirements (CRD)**: the
+  hook for Epic's **CRD Request** call, the Epic APIs to select (including
+  **ServiceRequest.Update (Unsigned Order)**, which lets Segue write the answer onto unsigned orders), the
+  documentation app to put on the SMART app allow-list, **Segue's key set (JWKS)** for relayed payers, your payers,
+  and notes for the Epic team.
+- **Go-live readiness** on **Connect your EHR** adds checks for coverage requirements: every payer has rules or a
+  relay, relay addresses use https, rules that end soon, and a clinical review of the service.
+
+### What coverage requirements (CRD) v1 does not do
+
+- **No DTR.** Segue does not fill in documentation. It only links to your documentation (DTR) app and names the
+  payer's questionnaire.
+- **No PAS.** Segue does not send prior authorization requests to the payer.
+- **No "already approved" answers.** A rule can't say prior authorization is already approved; that needs the
+  payer's approval for each patient.
+- **No order swaps.** Cards don't offer a covered alternative (no "propose alternate" or one-click fixes).
+- **One coverage per call.** Segue uses the first of the patient's coverages that matches a payer.
+- **Medication orders are not updated.** They get a card instead (Epic updates only ServiceRequest orders).
+- **No patient data is kept**, and the EHR's token is never passed to a payer unless you switch that on.
+
 ## Good to know
 
 - **No patient data is kept.** Not in Activity, not in logs, not from the Test screen. Data Segue reads from the
   EHR is used for that one call and forgotten; the EHR's access token is never stored.
 - **Sample rules.** Have your clinical team review each check's rules and settings before real use; for prior
-  authorization, check the code list against your payers' rules. The same goes for every fix code.
+  authorization, check the code list against your payers' rules. The same goes for every fix code. Record the
+  review as a [clinical sign-off](#record-a-clinical-sign-off).
 - **Fixes change drafts only.** With fixes off (the default), cards only advise. With fixes on, a click can remove
   a draft order or add a draft order, problem or diagnosis; the clinician still signs. Segue never removes a signed
   order.

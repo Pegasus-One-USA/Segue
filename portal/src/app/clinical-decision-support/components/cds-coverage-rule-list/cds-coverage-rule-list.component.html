@@ -1,0 +1,139 @@
+<section class="cds-panel" data-testid="cds-rule-list">
+  <div class="cds-panel__head">
+    <div>
+      <h2 class="cds-panel__title">Coverage rules</h2>
+      <p class="cds-panel__sub">For each order code, what the payer requires. A code can match exactly, or every code that starts with it.</p>
+    </div>
+    <div class="head-actions">
+      <button type="button" class="btn btn-secondary btn-sm" data-testid="cds-rule-export" [matMenuTriggerFor]="exportMenu">
+        <mat-icon>download</mat-icon>
+        Export
+      </button>
+      <mat-menu #exportMenu="matMenu" class="app-kebab-menu">
+        <button mat-menu-item data-testid="cds-rule-export-csv" (click)="exportRules('csv')">CSV file</button>
+        <button mat-menu-item data-testid="cds-rule-export-json" (click)="exportRules('json')">JSON file</button>
+      </mat-menu>
+      <button type="button" class="btn btn-secondary btn-sm" data-testid="cds-rule-import" *appHideWithoutPermission="'cdshooks.edit'" (click)="openImport()">
+        <mat-icon>upload_file</mat-icon>
+        Import
+      </button>
+      <button type="button" class="btn btn-primary btn-sm" data-testid="cds-rule-add" *appHideWithoutPermission="'cdshooks.create'" (click)="openAdd()">
+        Add rule
+      </button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="cds-field">
+      <label for="cds-rule-filter-payer">Payer</label>
+      <select id="cds-rule-filter-payer" data-testid="cds-rule-filter-payer" (change)="setPayer($any($event.target).value)">
+        <option value="" [selected]="!payerFilter()">All payers</option>
+        @for (p of payers(); track p.id) {
+          <option [value]="p.id" [selected]="p.id === payerFilter()">{{ p.name }}</option>
+        }
+      </select>
+    </div>
+    <div class="cds-field">
+      <label for="cds-rule-filter-code">Code starts with</label>
+      <input id="cds-rule-filter-code" class="cds-mono" autocomplete="off" data-testid="cds-rule-filter-code" [value]="codeFilter()" (input)="setCode($any($event.target).value)" />
+    </div>
+    <div class="cds-field">
+      <label for="cds-rule-filter-search">Search</label>
+      <input id="cds-rule-filter-search" autocomplete="off" placeholder="System, code or reason" data-testid="cds-rule-filter-search" [value]="searchFilter()" (input)="setSearch($any($event.target).value)" />
+    </div>
+    <div class="cds-field">
+      <label for="cds-rule-filter-enabled">Status</label>
+      <select id="cds-rule-filter-enabled" data-testid="cds-rule-filter-enabled" (change)="setEnabled($any($event.target).value)">
+        <option value="" [selected]="enabledFilter() === ''">On and off</option>
+        <option value="true" [selected]="enabledFilter() === 'true'">On</option>
+        <option value="false" [selected]="enabledFilter() === 'false'">Off</option>
+      </select>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm reset" [disabled]="!hasActiveFilter()" (click)="reset()">Reset</button>
+  </div>
+
+  @if (!loading() || rules().length) {
+    @if (rules().length === 0) {
+      <p class="empty" data-testid="cds-rule-empty">
+        @if (hasActiveFilter()) {
+          No rules match your filters.
+        } @else if (payers().length === 0) {
+          No rules yet. Add a payer first, then add rules or import a file.
+        } @else {
+          No rules yet. Add a rule, or import a file (download a template from Import).
+        }
+      </p>
+    } @else {
+      <div class="table-scroll">
+        <table class="rule-table">
+          <thead>
+            <tr>
+              <th scope="col">Payer</th>
+              <th scope="col">Code</th>
+              <th scope="col">Requires</th>
+              <th scope="col">Dates</th>
+              <th scope="col">Status</th>
+              <th scope="col"><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of rules(); track r.id) {
+              <tr data-testid="cds-rule-row">
+                <td>{{ r.payerName ?? 'Unknown payer' }}</td>
+                <td>
+                  <code class="code">{{ r.code }}{{ r.codeMatch === 'prefix' ? '*' : '' }}</code>
+                  <span class="sub mono" [title]="r.system">{{ r.system }}</span>
+                  @if (r.codeMatch === 'prefix') { <span class="sub">Every code starting with {{ r.code }}</span> }
+                </td>
+                <td>
+                  <span>{{ summary(r) }}</span>
+                  @if (docLine(r); as doc) { <span class="sub">{{ doc }}</span> }
+                  @if (infoLine(r); as info) { <span class="sub">{{ info }}</span> }
+                  @if (r.reason) { <span class="sub reason">{{ r.reason }}</span> }
+                </td>
+                <td>
+                  <span class="nowrap">{{ datesLabel(r) }}</span>
+                  @if (r.isEffectiveToday) {
+                    <span class="cds-badge cds-badge--success today" data-testid="cds-rule-today">In use today</span>
+                  } @else {
+                    <span class="cds-badge today" data-testid="cds-rule-not-today" matTooltip="Off, or today is outside its dates">Not in use today</span>
+                  }
+                </td>
+                <td>
+                  <span class="cds-badge" [class.cds-badge--success]="r.isEnabled">{{ r.isEnabled ? 'On' : 'Off' }}</span>
+                </td>
+                <td class="col-actions">
+                  @if (hasRowMenu()) {
+                    <button mat-icon-button class="btn-more" matTooltip="More actions" [attr.aria-label]="'Actions for rule ' + r.code" [matMenuTriggerFor]="rowMenu">
+                      <mat-icon>more_vert</mat-icon>
+                    </button>
+                    <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                      <button mat-menu-item *appHideWithoutPermission="'cdshooks.edit'" (click)="openEdit(r)">
+                        <mat-icon>edit</mat-icon>
+                        Edit
+                      </button>
+                      <button mat-menu-item class="menu-item-danger" *appHideWithoutPermission="'cdshooks.delete'" (click)="confirmDelete(r)">
+                        <mat-icon>delete_outline</mat-icon>
+                        Delete
+                      </button>
+                    </mat-menu>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pagination-bar
+        [pageIndex]="pageIndex()"
+        [pageSize]="pageSize()"
+        [totalCount]="totalCount()"
+        [pageSizeOptions]="[25, 50, 100, 200]"
+        (pageChange)="onPageChange($event)"
+      />
+    }
+  } @else {
+    <p class="empty">Loading...</p>
+  }
+</section>

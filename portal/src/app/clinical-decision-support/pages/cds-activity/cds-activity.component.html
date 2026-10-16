@@ -135,6 +135,7 @@
             <td mat-cell *matCellDef="let c">
               <span class="cell-detail">{{ c.detail ?? '' }}</span>
               <app-cds-call-extras [call]="c" />
+              <app-cds-call-coverage [call]="c" />
             </td>
           </ng-container>
 

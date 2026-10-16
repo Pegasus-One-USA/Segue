@@ -42,13 +42,24 @@ describe('CdsServiceSetupComponent', () => {
     fixTypes: [makeDeleteFixType(), makeCreateFixType()],
   });
 
+  /** The coverage requirements (CRD) check: payer rules, not sample data, and no fixes. */
+  const CRD = makeHandler({
+    key: 'coverage-requirements', displayName: 'Coverage requirements (CRD)', supportedHooks: ['order-sign'],
+    usesSampleReferenceData: false,
+    settings: [
+      makeSetting({ key: 'useSystemActions', label: 'Add coverage information to orders (systemActions)', type: 'boolean', defaultValue: true }),
+      makeSetting({ key: 'dtrAppUrl', label: 'Documentation (DTR) app URL', type: 'text', defaultValue: '' }),
+    ],
+    prefetchByHook: { 'order-sign': { coverage: 'Coverage?patient={{context.patientId}}&status=active' } },
+  });
+
   /** Stands in for the confirm question; answers `dialogAnswer`. */
   let dialog: ReturnType<typeof makeDialogSpy>;
   let dialogAnswer: unknown = true;
 
   async function open(url: string, permissions = CDS_ALL_PERMISSIONS, instance: CdsServiceInstance | 'not-found' = makeService()) {
     api = makeCdsApiSpy();
-    api.getHandlers.and.returnValue(of([RENAL, CARE_GAP, ALLERGY]));
+    api.getHandlers.and.returnValue(of([RENAL, CARE_GAP, ALLERGY, CRD]));
     dialog = makeDialogSpy(dialogAnswer);
     api.getTrustedIssuers.and.returnValue(of([makeIssuer()]));
     api.getService.and.returnValue(instance === 'not-found'
@@ -107,6 +118,23 @@ describe('CdsServiceSetupComponent', () => {
       expect(el.textContent).toContain('https://segue.example.org/cds-services/care-gaps');
       expect(el.textContent).toContain('sample data');
       expect(page.hasUnsavedChanges()).toBeFalse();
+    });
+
+    it('for coverage requirements: renders its settings, points to the Coverage tab and explains fixes do not apply', async () => {
+      const { el, q } = await open('/clinical-decision-support/services/new?handler=coverage-requirements');
+
+      expect(q<HTMLInputElement>('#cds-setting-useSystemActions').checked).toBeTrue();
+      expect(q<HTMLInputElement>('#cds-setting-dtrAppUrl')).not.toBeNull();
+      expect(el.querySelector('[data-testid="cds-sample-data-warning"]')).toBeNull();
+      expect(el.querySelector('[data-testid="cds-coverage-note-settings"]')?.textContent).toContain('Coverage (CRD)');
+      expect(el.querySelector('[data-testid="cds-coverage-note-fixes"]')?.textContent).toContain("don't use one-click fixes");
+      expect(el.textContent).toContain('Coverage?patient={{context.patientId}}&status=active');
+    });
+
+    it('shows the sample-data warning and no coverage notes for a built-in sample check', async () => {
+      const { el } = await open('/clinical-decision-support/services/new?handler=renal-dose');
+      expect(el.querySelector('[data-testid="cds-sample-data-warning"]')).not.toBeNull();
+      expect(el.querySelector('[data-testid="cds-coverage-note-settings"]')).toBeNull();
     });
 
     it('keeps the service id in step with the name until the id is edited', async () => {
@@ -203,6 +231,51 @@ describe('CdsServiceSetupComponent', () => {
       expect(api.updateService).toHaveBeenCalledWith('svc-1', jasmine.objectContaining({ title: 'Renal (ward 3)', handlerKey: 'renal-dose' }));
       expect(toast.success).toHaveBeenCalledWith('Changes saved.');
       expect(page.hasUnsavedChanges()).toBeFalse();
+    });
+
+    it('shows the clinical sign-off section for a saved service only', async () => {
+      const existing = await open('/clinical-decision-support/services/svc-1');
+      expect(existing.el.querySelector('[data-testid="cds-sign-off-panel"]')).not.toBeNull();
+      expect(existing.el.querySelector('[data-testid="cds-sign-off-badge"]')?.textContent).toContain('Not clinically reviewed');
+
+      TestBed.resetTestingModule();
+      const fresh = await open('/clinical-decision-support/services/new?handler=renal-dose');
+      expect(fresh.el.querySelector('[data-testid="cds-sign-off-panel"]')).toBeNull();
+    });
+
+    it('records a sign-off without touching the form, and asks to save edits first', async () => {
+      const { page, el, type, harness } = await open('/clinical-decision-support/services/svc-1');
+      api.signOffService.and.returnValue(of(makeService({
+        isClinicallySignedOff: true, signedOffBy: 'Dr A. Patel', signedOffAtUtc: '2026-10-15T14:00:00Z',
+      })));
+
+      type('#cds-title', 'Edited name');
+      expect(el.querySelector('[data-testid="cds-sign-off-unsaved"]')).not.toBeNull();
+      expect((el.querySelector('[data-testid="cds-sign-off-record"]') as HTMLButtonElement).disabled).toBeTrue();
+
+      type('#cds-title', 'Renal dose check');
+      page.form.markAsPristine();
+      harness.detectChanges();
+      type('#cds-sign-off-name', 'Dr A. Patel');
+      (el.querySelector('[data-testid="cds-sign-off-record"]') as HTMLButtonElement).click();
+      harness.detectChanges();
+
+      expect(api.signOffService).toHaveBeenCalledWith('svc-1', { signedOffBy: 'Dr A. Patel', note: null, contentVersion: 'v1' });
+      expect(page.instance()?.isClinicallySignedOff).toBeTrue();
+      expect(el.querySelector('[data-testid="cds-sign-off-panel"] [data-testid="cds-sign-off-badge"]')?.textContent)
+        .toContain('Reviewed by Dr A. Patel');
+      expect(page.hasUnsavedChanges()).toBeFalse();
+    });
+
+    it('warns when a save removes the clinical sign-off', async () => {
+      const signed = makeService({ isClinicallySignedOff: true, signedOffBy: 'Dr A', signedOffAtUtc: '2026-10-15T14:00:00Z' });
+      const { type, save } = await open('/clinical-decision-support/services/svc-1', CDS_ALL_PERMISSIONS, signed);
+      api.updateService.and.returnValue(of(makeService({ settings: { egfrThreshold: 45 } })));
+
+      type('#cds-setting-egfrThreshold', '45');
+      save();
+
+      expect(toast.warning).toHaveBeenCalledWith(jasmine.stringContaining('clinical sign-off was removed'));
     });
 
     it('is read-only for a role without edit', async () => {

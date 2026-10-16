@@ -30,6 +30,19 @@ describe('CdsTestResultComponent', () => {
     expect(el.querySelector('.messages')?.textContent).toContain('No renal drugs in the order.');
   });
 
+  it('shows the order updates of a coverage requirements answer', () => {
+    const { el } = render(makeTestResult({
+      outcome: 'NoCards',
+      response: {
+        cards: [],
+        systemActions: [{ type: 'update', description: 'Coverage information from Example Health Plan', resource: { resourceType: 'ServiceRequest', id: 'o1' } }],
+      },
+    }));
+    expect(el.textContent).toContain('1 order update');
+    expect(el.querySelector('[data-testid="cds-system-actions"]')?.textContent).toContain('ServiceRequest/o1');
+    expect(el.textContent).not.toContain('had no advice');
+  });
+
   it('handles a run with no response body', () => {
     const { el } = render(makeTestResult({ outcome: 'PreconditionFailed', httpStatus: 412, response: null }));
 

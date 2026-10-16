@@ -1,0 +1,13 @@
+@if (signedOffBy() && signedOffAtUtc()) {
+  <span
+    class="cds-badge cds-badge--success"
+    data-testid="cds-sign-off-badge"
+    title="A clinician signed off this service's rules, fixes, dismiss reasons and links as they are now."
+  >Reviewed by {{ signedOffBy() }} on {{ signedOffAtUtc() | date:'MMM d, y' }}</span>
+} @else {
+  <span
+    class="cds-badge cds-badge--warning"
+    data-testid="cds-sign-off-badge"
+    title="No clinician has signed off this service yet. Record the review on the service's page before real use."
+  >Not clinically reviewed</span>
+}

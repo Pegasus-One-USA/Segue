@@ -63,6 +63,11 @@
           <dd class="cds-url-row"><code class="cds-url">{{ s.defaultAudience }}</code><app-cds-copy-button [value]="s.defaultAudience" what="audience" /></dd>
           <dt>Status</dt>
           <dd>{{ s.isEnabled ? 'On' : 'Off: calls are refused until it is turned on' }}</dd>
+          <dt>Clinical review</dt>
+          <dd data-testid="cds-setup-sheet-sign-off">
+            <app-cds-sign-off-badge [signedOffBy]="s.signedOffBy" [signedOffAtUtc]="s.signedOffAtUtc" />
+            @if (s.signOffNote) { <span class="sign-off-note">{{ s.signOffNote }}</span> }
+          </dd>
         </dl>
       </div>
 
@@ -220,6 +225,10 @@
           </div>
         }
       </div>
+
+      @if (s.crd; as crd) {
+        <app-cds-setup-sheet-crd [crd]="crd" [step]="7" />
+      }
 
       <p class="generated">Made {{ s.generatedOnUtc | date:'MMM d, y, h:mm a' }}. Contains settings only, no patient data.</p>
     }

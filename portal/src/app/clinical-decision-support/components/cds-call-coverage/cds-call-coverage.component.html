@@ -1,0 +1,21 @@
+@if (isCoverage()) {
+  <div class="coverage" data-testid="cds-call-coverage">
+    <span class="payer" title="The payer found on the patient's coverage">
+      {{ call().payerName ? 'Payer: ' + call().payerName : 'No payer matched' }}
+    </span>
+    @if (decisions().length) {
+      <ul class="decisions">
+        @for (d of decisions(); track $index) {
+          <li class="decision">{{ d }}</li>
+        }
+      </ul>
+    }
+    @if (facts().length) {
+      <ul class="facts">
+        @for (f of facts(); track $index) {
+          <li class="fact" [class.fact--warning]="f.tone === 'warning'" [title]="f.tip">{{ f.label }}</li>
+        }
+      </ul>
+    }
+  </div>
+}

@@ -1,0 +1,88 @@
+@if (service(); as s) {
+  <div class="status">
+    <app-cds-sign-off-badge [signedOffBy]="s.signedOffBy" [signedOffAtUtc]="s.signedOffAtUtc" />
+    @if (s.isClinicallySignedOff) {
+      <p class="status__text" data-testid="cds-sign-off-details">
+        {{ s.signedOffBy }} signed off this service on {{ s.signedOffAtUtc | date:'MMM d, y, h:mm a' }}.
+        @if (s.signOffNote) { <span class="status__note">{{ s.signOffNote }}</span> }
+      </p>
+    } @else {
+      <p class="status__text">
+        @if (s.usesSampleReferenceData) {
+          This check runs on the sample rules shipped with Segue.
+        }
+        Before real use, have a clinician review what this service tells clinicians, then record it here.
+        It does not stop you switching the service on.
+      </p>
+    }
+  </div>
+
+  @if (canEdit()) {
+    @if (s.isClinicallySignedOff) {
+      <div class="actions">
+        <button type="button" class="btn btn-secondary btn-sm" data-testid="cds-sign-off-remove" [disabled]="busy()" (click)="remove()">
+          <mat-icon>remove_done</mat-icon>
+          Remove sign-off
+        </button>
+      </div>
+    } @else {
+      <div class="cds-form-grid" [formGroup]="form">
+        <div class="cds-field" [class.cds-field--error]="nameError()">
+          <label for="cds-sign-off-name">Reviewed by <span class="cds-req">*</span></label>
+          <input
+            id="cds-sign-off-name"
+            data-testid="cds-sign-off-name"
+            formControlName="signedOffBy"
+            autocomplete="off"
+            maxlength="200"
+            placeholder="Name and role, e.g. Dr A. Patel, CMIO"
+            (keydown.enter)="$event.preventDefault(); record()"
+          />
+          @if (nameError()) {
+            <p class="cds-field__error">Enter the reviewing clinician's name.</p>
+          }
+        </div>
+        <div class="cds-field">
+          <label for="cds-sign-off-note">Note</label>
+          <input
+            id="cds-sign-off-note"
+            data-testid="cds-sign-off-note"
+            formControlName="note"
+            autocomplete="off"
+            maxlength="500"
+            placeholder="Optional, e.g. P&T committee, Oct 2026"
+            (keydown.enter)="$event.preventDefault(); record()"
+          />
+          <p class="cds-field__help">No patient details.</p>
+        </div>
+      </div>
+
+      @if (hasUnsavedChanges()) {
+        <div class="cds-notice cds-notice--warning" data-testid="cds-sign-off-unsaved">
+          <mat-icon>save</mat-icon>
+          <p>Save your changes first. A sign-off covers the service as last saved.</p>
+        </div>
+      }
+
+      <div class="actions">
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          data-testid="cds-sign-off-record"
+          [disabled]="busy() || hasUnsavedChanges()"
+          (click)="record()"
+        >
+          <mat-icon>verified</mat-icon>
+          Record sign-off
+        </button>
+      </div>
+    }
+  }
+
+  @if (errorMessage(); as message) {
+    <div class="cds-notice cds-notice--error" role="alert">
+      <mat-icon>error_outline</mat-icon>
+      <p>{{ message }}</p>
+    </div>
+  }
+}

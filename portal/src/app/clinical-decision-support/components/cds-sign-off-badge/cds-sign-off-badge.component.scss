@@ -1,0 +1,12 @@
+@use '../../cds' as *;
+
+:host {
+  display: inline-flex;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.cds-badge {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

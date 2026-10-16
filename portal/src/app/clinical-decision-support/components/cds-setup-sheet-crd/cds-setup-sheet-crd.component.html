@@ -1,0 +1,101 @@
+@let c = crd();
+<div class="block" data-testid="cds-setup-sheet-crd">
+  <h3 class="block__title">{{ step() }}. Coverage requirements (CRD)</h3>
+
+  <dl class="facts">
+    <dt>Epic "CRD Request" hook</dt>
+    <dd>{{ hookLabel(c.hook) }} <code>{{ c.hook }}</code></dd>
+    <dt>Coverage on the order</dt>
+    <dd>
+      @if (c.useSystemActions) {
+        Segue adds the coverage information to the order itself. Epic needs <code>{{ orderUpdateApi }}</code> for that.
+      } @else {
+        Off: the clinician sees cards only.
+      }
+    </dd>
+    <dt>Documentation app (DTR)</dt>
+    <dd>
+      @if (c.dtrAppUrl) {
+        <code>{{ c.dtrAppUrl }}</code>
+        <span class="muted">{{ c.dtrLinkType === 'absolute' ? 'Web link' : 'SMART app: add it to your SMART app allow-list' }}</span>
+      } @else {
+        <span class="muted">None</span>
+      }
+    </dd>
+    <dt>Segue's key set (JWKS)</dt>
+    <dd class="cds-url-row" data-testid="cds-setup-sheet-crd-jwks">
+      <code class="cds-url">{{ c.segueJwksUrl }}</code>
+      <app-cds-copy-button [value]="c.segueJwksUrl" what="Segue key set URL" />
+    </dd>
+  </dl>
+  @if (anyRelay()) {
+    <p class="hint">Payers whose calls are relayed check Segue's signature with this key set. Send them the URL.</p>
+  }
+
+  <h4 class="sub-title">Epic APIs for the CDS client registration</h4>
+  <ul class="apis" data-testid="cds-setup-sheet-crd-apis">
+    @for (api of c.epicApis; track api) {
+      <li>
+        <code>{{ api }}</code>
+        @if (isOrderUpdate(api)) { <span class="muted">(lets Segue add coverage information to unsigned orders)</span> }
+      </li>
+    }
+  </ul>
+
+  <h4 class="sub-title">Payers</h4>
+  @if (c.payers.length === 0) {
+    <p class="hint" data-testid="cds-setup-sheet-crd-no-payers">
+      No payers yet, so every order gets no answer. Add them on the
+      <a routerLink="/clinical-decision-support/coverage">Coverage (CRD)</a> tab.
+    </p>
+  } @else {
+    <div class="table-scroll">
+      <table class="sheet-table">
+        <thead>
+          <tr>
+            <th scope="col">Payer</th>
+            <th scope="col">Recognised by</th>
+            <th scope="col">Plans</th>
+            <th scope="col">Rules on</th>
+            <th scope="col">Answered by</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of c.payers; track p.id) {
+            <tr data-testid="cds-setup-sheet-crd-payer">
+              <td>{{ p.name }} @if (!p.isEnabled) { <span class="muted">(off)</span> }</td>
+              <td>
+                @for (id of p.identifiers; track id; let last = $last) { <code>{{ id }}</code>@if (!last) {, } }
+              </td>
+              <td>
+                @if (p.planValues.length) {
+                  @for (plan of p.planValues; track plan; let last = $last) { <code>{{ plan }}</code>@if (!last) {, } }
+                } @else {
+                  <span class="muted">Every plan</span>
+                }
+              </td>
+              <td>{{ p.enabledRuleCount }}</td>
+              <td>
+                @if (p.relayEnabled) {
+                  Payer's service <code>{{ p.relayServiceUrl }}</code>
+                  @if (p.forwardFhirAuthorization) { <span class="muted">(receives the EHR's access token)</span> }
+                } @else {
+                  Rules in Segue
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (c.notes.length) {
+    <h4 class="sub-title">Notes for the Epic team</h4>
+    <ul class="notes" data-testid="cds-setup-sheet-crd-notes">
+      @for (n of c.notes; track $index) {
+        <li>{{ n }}</li>
+      }
+    </ul>
+  }
+</div>

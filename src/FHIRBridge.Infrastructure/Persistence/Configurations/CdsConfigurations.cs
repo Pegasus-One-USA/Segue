@@ -51,6 +51,11 @@ public sealed class CdsServiceInstanceConfiguration : IEntityTypeConfiguration<C
         builder.Property(x => x.OverrideReasonsJson);
         builder.Property(x => x.LinksJson);
         builder.Ignore(x => x.FixesEnabled);
+        builder.Property(x => x.SignedOffBy).HasMaxLength(CdsServiceInstance.SignedOffByMaxLength);
+        builder.Property(x => x.SignedOffAtUtc);
+        builder.Property(x => x.SignOffNote).HasMaxLength(CdsServiceInstance.SignOffNoteMaxLength);
+        builder.Ignore(x => x.IsClinicallySignedOff);
+        builder.Ignore(x => x.ContentVersion);
 
         // A primitive collection: a JSON array column on SQL Server, a uuid[] column on PostgreSQL.
         builder.PrimitiveCollection(x => x.AllowedIssuerIds).IsRequired();
@@ -82,9 +87,70 @@ public sealed class CdsCallLogConfiguration : IEntityTypeConfiguration<CdsCallLo
         builder.Property(x => x.SuggestionsOffered).IsRequired();
         builder.Property(x => x.SuggestionsAccepted).IsRequired();
         builder.Property(x => x.OverrideReasonCodes).HasMaxLength(CdsCallLog.OverrideReasonCodesMaxLength);
+        builder.Property(x => x.SystemActionCount).IsRequired();
+        builder.Property(x => x.PayerId);
+        builder.Property(x => x.PayerName).HasMaxLength(CdsCallLog.PayerNameMaxLength);
+        builder.Property(x => x.CoverageDecisions).HasMaxLength(CdsCallLog.CoverageDecisionsMaxLength);
+        builder.Property(x => x.RelayUsed);
+        builder.Property(x => x.RelayMs);
+        builder.Property(x => x.RelayOutcome).HasMaxLength(CdsCallLog.RelayOutcomeMaxLength);
+        builder.Property(x => x.CoverageAssertionCount);
 
         builder.HasIndex(x => x.OccurredOnUtc);
         builder.HasIndex(x => new { x.ServiceId, x.OccurredOnUtc });
         builder.HasIndex(x => x.Outcome);
+    }
+}
+
+public sealed class CdsPayerConfiguration : IEntityTypeConfiguration<CdsPayer>
+{
+    public void Configure(EntityTypeBuilder<CdsPayer> builder)
+    {
+        builder.ToTable("CdsPayers");
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Name).HasMaxLength(CdsPayer.NameMaxLength).IsRequired();
+        builder.PrimitiveCollection(x => x.Identifiers).IsRequired();
+        builder.PrimitiveCollection(x => x.PlanValues).IsRequired();
+        builder.Property(x => x.IsEnabled).IsRequired();
+        builder.Property(x => x.RelayEnabled).IsRequired();
+        builder.Property(x => x.RelayServiceUrl).HasMaxLength(CdsPayer.UrlMaxLength);
+        builder.Property(x => x.RelayTimeoutMs).IsRequired();
+        builder.Property(x => x.FallbackToLocalRules).IsRequired();
+        builder.Property(x => x.ForwardFhirAuthorization).IsRequired();
+        builder.Property(x => x.RelayClientId).HasMaxLength(CdsPayer.ClientIdMaxLength);
+        builder.Ignore(x => x.UsesRelay);
+
+        // One payer per name among live rows (PostgreSQL filter text: FHIRBridgeDbContext).
+        builder.HasIndex(x => x.Name).IsUnique().HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public sealed class CdsCoverageRuleConfiguration : IEntityTypeConfiguration<CdsCoverageRule>
+{
+    public void Configure(EntityTypeBuilder<CdsCoverageRule> builder)
+    {
+        builder.ToTable("CdsCoverageRules");
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.PayerId).IsRequired();
+        builder.Property(x => x.System).HasMaxLength(CdsCoverageRule.SystemMaxLength).IsRequired();
+        builder.Property(x => x.Code).HasMaxLength(CdsCoverageRule.CodeMaxLength).IsRequired();
+        builder.Property(x => x.CodePrefixMatch).IsRequired();
+        builder.Property(x => x.Covered).HasMaxLength(30).IsRequired();
+        builder.Property(x => x.PaNeeded).HasMaxLength(30);
+        builder.Property(x => x.DocNeeded).HasMaxLength(30);
+        builder.PrimitiveCollection(x => x.DocPurposes).IsRequired();
+        builder.PrimitiveCollection(x => x.InfoNeeded).IsRequired();
+        builder.Property(x => x.Reason).HasMaxLength(CdsCoverageRule.ReasonMaxLength);
+        builder.Property(x => x.PolicyUrl).HasMaxLength(CdsCoverageRule.UrlMaxLength);
+        builder.Property(x => x.QuestionnaireCanonical).HasMaxLength(CdsCoverageRule.UrlMaxLength);
+        builder.Property(x => x.EffectiveFrom).IsRequired();
+        builder.Property(x => x.EffectiveTo);
+        builder.Property(x => x.IsEnabled).IsRequired();
+
+        // No navigation to the payer: payers and rules are soft-deleted together by the payer service.
+        builder.HasIndex(x => new { x.PayerId, x.System, x.Code, x.EffectiveFrom }).IsUnique().HasFilter("[IsDeleted] = 0");
+        builder.HasIndex(x => x.Code);
     }
 }

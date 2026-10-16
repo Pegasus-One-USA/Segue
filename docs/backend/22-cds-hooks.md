@@ -3,7 +3,9 @@
 > Part of the [Backend Architecture Guide](README.md). Admin how-to: [Clinical Decision Support user guide](../user-guide/clinical-decision-support.md).
 > **Status: v1 built 2026-10-12 on `feature/cds-hooks`, then extended the same day with Phase 1b (Epic
 > compatibility) and Phase 2 (FHIR callback, one-click fixes, per-service dismiss reasons and card links, Epic setup
-> sheet). Uncommitted at the time of writing.** Solution builds, architecture tests 11/11, unit tests green.
+> sheet). Uncommitted at the time of writing.** Phase 3 (Epic go-live readiness: readiness report, clinical sign-off,
+> go-live checklist; sections 20 and 21) added 2026-10-16. Phase 4 (Da Vinci Coverage Requirements Discovery, CRD:
+> payers, payer rules with file import, payer relay, systemActions; section 23) added 2026-10-16. Solution builds, architecture tests 11/11, unit tests green.
 > Exercised end to end through the real DI graph with in-memory repositories and self-signed ES384 tokens; not yet
 > run against a live Epic build or the live public sandbox.
 
@@ -46,7 +48,7 @@ observability, retention purge).
 | Entity | Key fields | Notes |
 |---|---|---|
 | `CdsTrustedIssuer` | Name, Vendor (free text), Issuer (`iss`), JwksUrl?, JwksJson?, Audience?, IsEnabled, **ExpectedSubject?** (`sub`, ≤500), **FhirBaseUrl?** (https, ≤1000, trailing `/` trimmed), **AllowCallback** (default true) | `AuditableEntity<Guid>`, soft delete, RowVersion. Issuer unique among non-deleted rows. JwksUrl or JwksJson required. `EffectiveFhirBaseUrl` = FhirBaseUrl, else Issuer (Epic's `iss` is its FHIR base). |
-| `CdsServiceInstance` | ServiceId (URL slug), Title, HandlerKey, Hook, Description, IsEnabled, SettingsJson, CardSourceLabel, CardSourceUrl?, AllowedIssuerIds, **FetchMissingData** (default true), **FixesJson?**, **OverrideReasonsJson?**, **LinksJson?** | Same base. ServiceId `^[a-z0-9]+(?:-[a-z0-9]+)*$`, 3–100 chars, unique among non-deleted rows. Empty allow-list = any enabled trusted issuer. The three JSON columns hold the Domain value objects in `ValueObjects/CdsServiceOptions.cs`; null means fixes off / default reasons / no links. |
+| `CdsServiceInstance` | ServiceId (URL slug), Title, HandlerKey, Hook, Description, IsEnabled, SettingsJson, CardSourceLabel, CardSourceUrl?, AllowedIssuerIds, **FetchMissingData** (default true), **FixesJson?**, **OverrideReasonsJson?**, **LinksJson?**, *SignedOffBy?* (≤200), *SignedOffAtUtc?*, *SignOffNote?* (≤500) | Same base. ServiceId `^[a-z0-9]+(?:-[a-z0-9]+)*$`, 3–100 chars, unique among non-deleted rows. Empty allow-list = any enabled trusted issuer. The three JSON columns hold the Domain value objects in `ValueObjects/CdsServiceOptions.cs`; null means fixes off / default reasons / no links. |
 | `CdsCallLog` (Governance) | OccurredOnUtc, Kind, ServiceId, ServiceInstanceId?, HandlerKey, Hook, HookInstance, Issuer, TrustedIssuerId?, Outcome, HttpStatus, CardCount, DurationMs, Detail, **TriggerAction?** (20), **EpicVersion?** (50), **CriteriaId?** (100), **ImplementationVersion?** (50), **CallbackResourceCount?**, **CallbackMs?**, **SuggestionsOffered**, **SuggestionsAccepted**, **OverrideReasonCodes?** (300) | Append-only, metadata only. Purged by the retention job under data class `CdsCallLog`. New values are written through `CdsCallLogExtras`. |
 
 Enums: `CdsCallKind` (Invoke, Feedback) and `CdsCallOutcome` (Success, NoCards, Degraded, PreconditionFailed,
@@ -58,16 +60,18 @@ Migrations:
 |---|---|---|---|
 | `AddCdsHooks` | `20261012053425` | `20261012053457` | The three tables. Unique indexes filtered to non-deleted rows; the PostgreSQL filter syntax is overridden in `FHIRBridgeDbContext`. |
 | `AddCdsEpicAndFixes` | `20261012090809` | `20261012090906` | The columns in bold above. `AllowCallback` and `FetchMissingData` are added with default `true` for existing rows (the model has no store default, so EF never mistakes an explicit `false` for "unset"); the counters default to 0; everything else is nullable. |
+| `AddCdsClinicalSignOff` | `20261016052653` | `20261016052726` | The three nullable sign-off columns in italics above (section 20). Existing services start "not clinically reviewed". |
+| `AddCdsCoverageRequirements` | `20261016062127` | `20261016062144` | Tables `CdsPayers` and `CdsCoverageRules`, and the coverage requirements columns of `CdsCallLogs` (section 23). `SystemActionCount` defaults to 0; the rest are nullable. |
 
-Neither migration has been applied to any shared database.
+None of these migrations has been applied to any shared database.
 
 ### Where the code lives
 
 | Layer | Files |
 |---|---|
 | Domain | `Entities/CdsTrustedIssuer.cs`, `Entities/CdsServiceInstance.cs`, `Entities/Governance/CdsCallLog.cs`, `Enums/CdsCall*.cs`, `ValueObjects/CdsServiceOptions.cs` (fixes, dismiss reasons, links and their shape rules) |
-| Application | `Abstractions/Cds/*` (handler interface, registry, settings values, `CdsHandlerContext` with the suggestion builders and `CdsSuggestionRules`, `CdsFixTypeCatalog`, `ICdsFhirCallbackClient`, `ICdsHooksService`, `ICdsTestService`, base-URL resolver), `DTOs/Cds/CdsHooksWireModels.cs` (spec JSON), `DTOs/Cds/CdsEpicWireSupport.cs` (Epic extension keys, fix code systems, `CdsRequestMetadata`, `CdsTopic`), `DTOs/Cds/CdsAdminDtos.cs`, `DTOs/Cds/CdsSetupSheetDtos.cs`, `Services/Cds/*` (admin services, registry, resolver, `CdsSetupSheetService`, `CdsCallbackTestService`) |
-| Infrastructure | `Cds/CdsHooksService.cs`, `CdsEvaluator.cs`, `CdsJwtValidator.cs`, `CdsJwksProvider.cs`, `CdsJwksHttpHandler.cs` (address guard, shared with the callback), `CdsFhirCallbackClient.cs`, `CdsTestService.cs`, `CdsOptions.cs`, `Cds/Handlers/*`, EF / in-memory repositories, `Persistence/Configurations/CdsConfigurations.cs` |
+| Application | `Services/Cds/CdsReadinessRules.cs` + `DTOs/Cds/CdsReadinessDtos.cs` (go-live readiness, section 20), `Abstractions/Cds/*` (handler interface, registry, settings values, `CdsHandlerContext` with the suggestion builders and `CdsSuggestionRules`, `CdsFixTypeCatalog`, `ICdsFhirCallbackClient`, `ICdsHooksService`, `ICdsTestService`, base-URL resolver), `DTOs/Cds/CdsHooksWireModels.cs` (spec JSON), `DTOs/Cds/CdsEpicWireSupport.cs` (Epic extension keys, fix code systems, `CdsRequestMetadata`, `CdsTopic`), `DTOs/Cds/CdsAdminDtos.cs`, `DTOs/Cds/CdsSetupSheetDtos.cs`, `Services/Cds/*` (admin services, registry, resolver, `CdsSetupSheetService`, `CdsCallbackTestService`) |
+| Infrastructure | `Cds/CdsReadinessService.cs`, `Cds/CdsHooksService.cs`, `CdsEvaluator.cs`, `CdsJwtValidator.cs`, `CdsJwksProvider.cs`, `CdsJwksHttpHandler.cs` (address guard, shared with the callback), `CdsFhirCallbackClient.cs`, `CdsTestService.cs`, `CdsOptions.cs`, `Cds/Handlers/*`, EF / in-memory repositories, `Persistence/Configurations/CdsConfigurations.cs` |
 | Api | `Controllers/CdsHooksController.cs` (public), `Controllers/V1/Cds*Controller.cs` (admin), `Security/CdsHooksAuthenticationHandler.cs`, CORS policy in `Cors/DynamicPortalCorsPolicyProvider.cs`, rate policy in `Program.cs` |
 | Observability | `SharedKernel/Observability/ICdsMetrics.cs`, `Observability/FhirBridgeCdsMetrics.cs` |
 | Portal | `portal/src/app/clinical-decision-support/` |
@@ -207,6 +211,8 @@ One path serves both the live endpoint and the admin Test screen.
    ending in "…", never splitting a surrogate pair); indicator forced to `info | warning | critical` (else
    `info`); a uuid is added if missing; `source.label` / `source.url` always come from the instance
    (`CardSourceLabel`, `CardSourceUrl`, the handler's `source.topic` is kept); at most 25 cards.
+   **Links** are kept only when they have a label, an absolute **https** URL (≤ 2048), type `absolute` or `smart`
+   and an `appContext` of at most 4096 characters; `source.icon` only when it is an absolute https URL.
    **Suggestions:** all are dropped when the instance's fixes are off; otherwise each must pass
    `CdsSuggestionRules` (section 11) and at most 10 are kept per card. `selectionBehavior` is set to `"any"`
    exactly when suggestions remain. Only the **count** of dropped suggestions is logged.
@@ -214,7 +220,22 @@ One path serves both the live endpoint and the admin Test screen.
 
 Cards carry: summary, detail (markdown), indicator, source (label, url, static `topic`), links (the handler's own
 plus the instance's, section 12), uuid, `overrideReasons` (the instance's list, section 12), and, when fixes are on,
-`suggestions` + `selectionBehavior: "any"`. No `systemActions`.
+`suggestions` + `selectionBehavior: "any"`.
+
+**systemActions** are sent **only** by a handler whose `ReturnsSystemActions` is true (today only
+`coverage-requirements`, section 23); the evaluator drops every systemAction of any other handler (count logged
+only). Each kept action must be `type: "update"` of a resource of this request (its draft / dispatched orders,
+appointments or encounter, matched by `Type/id`), must carry the CRD coverage-information extension, and **apart
+from its coverage-information extensions it must equal the request's own copy of that resource** (a systemAction
+may add coverage information, never change the order: code, status, quantity, other extensions); at most 25
+are sent. A handler may also set `CdsHandlerResult.SourceLabel` to replace the instance's card `source.label` (the
+CRD relay uses "&lt;payer&gt; via Segue").
+
+**Preparers.** A handler type may have an `ICdsHandlerPreparer` (found by handler key in a dictionary, never a
+switch). It runs after the prefetch rule and callback, inside the same time budget, and does the I/O the pure
+handler may not (the coverage engine: payer rules, payer relay). Its `Data` reaches the handler as
+`CdsHandlerContext.Prepared`; its `Note` becomes the call's Detail on success; its coverage facts go to the call
+log. A preparer that throws or runs out of time gives 200 with no cards, `Degraded`.
 
 ## 8. Handler registry and the built-in handlers
 
@@ -229,6 +250,7 @@ all go through it.
 | `renal-dose` | Renal dose check | order-select, order-sign | `egfr` (latest eGFR Observation) | `egfrThreshold` (60), `useDrugThresholds` (true), `maxResultAgeDays` (365), `indicator` (warning), `avoidIndicator` (critical) | critical: metformin at eGFR 25 |
 | `care-gap` | Care-gap reminders | patient-view | `patient`, `conditions`, `hba1c`, `immunizations`, `procedures` | `checkHba1c` (true), `hba1cIntervalMonths` (6), `checkInfluenza` (true), `influenzaIntervalMonths` (12), `checkColorectalScreening` (true), `colorectalIntervalYears` (10), `colorectalAgeFrom` (45), `colorectalAgeTo` (75), `indicator` (info) | 3 info cards (HbA1c, influenza, colorectal screening) |
 | `prior-auth` | Prior-authorization reminder | order-sign | none (context only) | `codes` (list, sample CPT codes), `payerName` (""), `submissionUrl` (""), `indicator` (warning) | warning: CPT 70553 (MRI brain) |
+| `coverage-requirements` | Coverage requirements (CRD) | order-sign, order-select, appointment-book, encounter-start, encounter-discharge | `coverage` (all hooks), `encounter` (encounter hooks) | see section 23 | systemAction + card once a payer with identifier `EXAMPLE-PAYER` (or name "Example Health Plan") has a rule for CPT 70553 |
 
 Prefetch templates use `{{context.patientId}}`, for example `AllergyIntolerance?patient={{context.patientId}}`.
 The same templates are the handlers' **fallback queries** for the callback (`GetFallbackQueries`, defaulting to
@@ -251,6 +273,7 @@ with `CdsTopic.Create`, letters and digits only, ≤ 100 characters):
 | `renal-dose` | `RenalDoseReview`, `RenalDoseAvoid` |
 | `care-gap` | `CareGapHba1c`, `CareGapInfluenza`, `CareGapColorectal` |
 | `prior-auth` | `PriorAuthRequired` |
+| `coverage-requirements` | `CoverageInformation`, `CoveragePolicy`, `CoverageDocumentation`, `CoverageUnknown` (or the CRD card type `coverage-info`, setting `topicCodes = crd`) |
 
 Epic ties a clinician's override to the topic code, so **never change an existing code**; add a new one for a new
 rule.
@@ -293,7 +316,9 @@ default → 400. Handlers read values with `context.Settings.GetNumber / GetText
    (every key you return is treated as **required**), `BuildSampleRequest(hook)` (made-up data in Epic's shape that
    produces at least one card with default settings) and `Evaluate(context, token)`. Optionally override
    `GetFallbackQueries(hook)` (callback queries; defaults to the prefetch templates) and `SupportedFixTypes` (build
-   descriptors with `CdsFixTypeCatalog`; default none).
+   descriptors with `CdsFixTypeCatalog`; default none). `UsesSampleReferenceData` is `true` in
+   `CdsServiceHandlerBase` (every built-in rule set reads `CdsSampleReferenceData`); override it with `false` only
+   for rules backed by reviewed reference data, so the readiness report stops asking for a sample-data sign-off.
 3. Build cards with `context.CreateCard(...)`, passing a static `CdsTopic.Create("YourRuleCode")`,
    `context.OverrideReasons`, the instance's `context.Links` (after your own links) and any suggestions from
    `context.CreateDeleteSuggestion` / `CreateCreateSuggestion` (they return null when the fix is off; resources come
@@ -510,7 +535,8 @@ for them). Smart links must be on the health system's SMART app allow-list; the 
   sub, expected aud (override else service URL), effective FHIR base URL, allow-callback, enabled;
 - warnings: `Cds:PublicBaseUrl` not set; service off; rule type unavailable; no enabled issuer; enabled issuer with
   no JWKS URL (Epic's jku would be refused); enabled issuer with no expected sub; no callback possible (Epic must
-  send every prefetch key); fixes on (review codes); SMART links need the allow-list.
+  send every prefetch key); fixes on (review codes); not clinically reviewed; SMART links need the allow-list;
+- the clinical sign-off (`isClinicallySignedOff`, `signedOffBy`, `signedOffAtUtc`, `signOffNote`; section 20).
 
 ## 14. Admin API (`api/v1/cds`)
 
@@ -521,10 +547,10 @@ All routes are `[Authorize]` plus `[StandardPermission]` in the new group `Permi
 
 | Controller | Routes |
 |---|---|
-| `CdsServicesController` | `GET/POST /cds/services`, `GET/PUT/DELETE /cds/services/{id}`, `GET /cds/services/{id}/sample-request` (view), **`GET /cds/services/{id}/setup-sheet` (view, section 13)**, `POST /cds/services/{id}/test` (test) |
-| | A service DTO carries `settings` (stored values with defaults filled in, what the rules use) and `storedSettings` (only what an admin set). Clients save `storedSettings` back, and the portal sends a value equal to its default as `null`, so a service keeps following the handler's defaults when a release changes them (e.g. after clinical review of the SAMPLE data). It also carries `fetchMissingData`, `fixes` (+ `fixesEnabled`), `overrideReasons` (+ `overrideReasonsAreDefault`), `links` and the handler's `supportedFixTypes`. **PUT replaces the whole service**, so clients must send these back (null/empty reasons = defaults; null fixes = off). |
+| `CdsServicesController` | `GET/POST /cds/services`, `GET/PUT/DELETE /cds/services/{id}`, `GET /cds/services/{id}/sample-request` (view), **`GET /cds/services/{id}/setup-sheet` (view, section 13)**, `POST /cds/services/{id}/test` (test), **`POST` and `DELETE /cds/services/{id}/sign-off` (edit, section 20)** |
+| | A service DTO also carries `isClinicallySignedOff`, `signedOffBy`, `signedOffAtUtc`, `signOffNote` and `usesSampleReferenceData` (section 20); they are not part of the save body, so a PUT keeps the sign-off unless it changes reviewed content. A service DTO carries `settings` (stored values with defaults filled in, what the rules use) and `storedSettings` (only what an admin set). Clients save `storedSettings` back, and the portal sends a value equal to its default as `null`, so a service keeps following the handler's defaults when a release changes them (e.g. after clinical review of the SAMPLE data). It also carries `fetchMissingData`, `fixes` (+ `fixesEnabled`), `overrideReasons` (+ `overrideReasonsAreDefault`), `links` and the handler's `supportedFixTypes`. **PUT replaces the whole service**, so clients must send these back (null/empty reasons = defaults; null fixes = off). |
 | `CdsTrustedIssuersController` | `GET/POST /cds/trusted-issuers`, `GET/PUT/DELETE /cds/trusted-issuers/{id}`, **`POST /cds/trusted-issuers/{id}/test-callback` (test, section 10)**. Delete is refused (400) while the issuer is on an instance's allow-list. Issuer DTOs carry `expectedSubject`, `fhirBaseUrl`, `allowCallback` (default true). |
-| `CdsCatalogController` | `GET /cds/handlers` (now with each handler's `supportedFixTypes`), `GET /cds/discovery-info` (base URL, whether `Cds:PublicBaseUrl` is set, discovery and per-service URLs), `GET /cds/activity` (paged, filter by service, kind, outcome, date; page size max 200; rows now include trigger action, Epic version, criteria id, implementation version, callback count/ms, fixes offered/accepted and override reason codes) |
+| `CdsCatalogController` | **`GET /cds/readiness` (view, section 20)**, `GET /cds/handlers` (now with each handler's `supportedFixTypes`), `GET /cds/discovery-info` (base URL, whether `Cds:PublicBaseUrl` is set, discovery and per-service URLs), `GET /cds/activity` (paged, filter by service, kind, outcome, date; page size max 200; rows now include trigger action, Epic version, criteria id, implementation version, callback count/ms, fixes offered/accepted and override reason codes) |
 
 The **Test** endpoint (`CdsTestService`) runs the same `CdsEvaluator` with **no JWT and no issuer**, also on
 disabled instances, so it never calls back to a FHIR server; fixes are produced and checked exactly as live. It
@@ -563,7 +589,7 @@ entity `CdsService`) with outcome and counts.
 | SSRF via callback | Callback only to the trusted issuer's FHIR base, matched after normalisation; queries must stay under it; address guard (incl. NAT64 / 6to4 / IPv4-compatible IPv6), no proxy, no redirects; https only by default. |
 | Token leak | `fhirAuthorization.access_token` is used only for that call's callback, sent only to that FHIR base, never logged, stored or traced. Test callback sends no token at all. |
 | Patient ids in logs / traces | Callback HttpClient has no loggers and is excluded from HttpClient tracing; spans carry counts only. |
-| Unwanted EHR changes | Fixes off by default (confirm dialog in the portal); suggestions dropped when off; delete only of a draft order present in the request; created orders must be drafts; one action per suggestion; no `systemActions`. |
+| Unwanted EHR changes | Fixes off by default (confirm dialog in the portal); suggestions dropped when off; delete only of a draft order present in the request; created orders must be drafts; one action per suggestion; `systemActions` only from the coverage requirements handler, only `update` of the request's own resources carrying coverage information. |
 | PHI in feedback | Only short reason codes are recorded; `userComment`, displays and titles are never read into storage. |
 
 ## 16. Metrics and tracing
@@ -607,10 +633,13 @@ are skipped by the HttpClient trace instrumentation, so no URL holding a patient
   any fix code mappings.
 - **Callback is best-effort.** It fetches only what the handler's fallback queries name, only from the trusted
   issuer's FHIR base, within ~0.9 s. A slow EHR gives a degraded empty answer, never a slow one.
-- **Fixes are draft-level only.** Create/delete one resource per suggestion; no `systemActions`; Epic uses its own
-  order defaults for created orders. The `remove-draft-order` fix removes MedicationRequests only.
-- **Five built-in handler types.** No admin-authored rules; a new type is code (section 8).
-- Hooks supported: `patient-view`, `order-select`, `order-sign`.
+- **Fixes are draft-level only.** Create/delete one resource per suggestion; Epic uses its own order defaults for
+  created orders. The `remove-draft-order` fix removes MedicationRequests only. systemActions exist only for
+  coverage requirements (section 23).
+- **Six built-in handler types.** Admin-authored rules exist only for coverage requirements (payer rules, section
+  23); any other new rule type is code (section 8).
+- Hooks supported: `patient-view`, `order-select`, `order-sign`; plus `appointment-book`, `encounter-start`,
+  `encounter-discharge` for coverage requirements only (`order-dispatch` is not offered, section 23).
 - No Epic `card.detail.content-type` extension is sent (detail is markdown).
 - Rate-limit changes need a restart; JWKS keys are cached in memory per API instance.
 
@@ -625,3 +654,339 @@ are skipped by the HttpClient trace instrumentation, so no URL holding a patient
 
 In every case the token's `aud` must match the service URL the EHR was given, so set `Cds:PublicBaseUrl` to the
 address the EHR actually uses before registering.
+
+## 20. Go-live readiness and clinical sign-off
+
+### Readiness report
+
+`GET /api/v1/cds/readiness` (`cdshooks.view`, `ICdsReadinessService` → `CdsReadinessService` in Infrastructure,
+rules in `CdsReadinessRules`, pure and unit-tested) returns `CdsReadinessDto { status, checks[], generatedOnUtc }`.
+Each check is `{ key, label, status, detail, howToFix }`; `status` is `ok | warning | blocker` and the report's
+status is the worst check. `howToFix` is null when ok. Details name services and issuers (configuration) but never
+hold secrets: no keys, pasted JWKS, tokens or connection strings. The portal shows it as the **Go-live readiness**
+panel on Connect your EHR.
+
+| Key | Blocker | Warning | Ok |
+|---|---|---|---|
+| `public-base-url` | `Cds:PublicBaseUrl` unset, not an absolute http(s) URL (or has a query / fragment), or `http` outside Development | `http` in Development | `https` |
+| `replay-protection` | – | jti replay record in process memory (`CdsReplayGuard.IsShared` false: no `ConnectionStrings:Redis`) | Redis |
+| `trusted-issuer` | no enabled trusted issuer | – | at least one enabled |
+| `issuer-jwks-url` *(only with an enabled issuer)* | an enabled issuer whose vendor contains "Epic" has no JWKS URL (Epic always sends `jku`) | another vendor's enabled issuer has pasted keys only | every enabled issuer has a JWKS URL |
+| `issuer-subject` *(idem)* | – | an enabled issuer has no expected `sub` | all have one |
+| `issuer-fhir-base-url` *(idem)* | – | an enabled issuer that allows callbacks has no https `EffectiveFhirBaseUrl` (FhirBaseUrl, else iss) | all usable |
+| `enabled-service` | no service switched on | – | at least one on |
+| `fixes-sign-off` | – | a service with `FixesEnabled` has no clinical sign-off | none, or all signed off |
+| `sample-data-sign-off` | – | a service whose handler `UsesSampleReferenceData` (all five built-in) has no clinical sign-off | none, or all signed off |
+| `license` | not Active (Unlicensed, Expired, Invalid): CDS calls get 503 | Active but ends within 30 days; Grace | Active |
+| `rate-limit` | `RateLimiting:Cds:PermitPerWindow` or `WindowMinutes` ≤ 0 | fewer than 60 calls per minute per client IP | otherwise |
+
+The sign-off checks look at every service, on or off, so services waiting to be switched on are listed too. The
+rate limit is read the way `Program.cs` reads it (System Settings, then config, defaults 600 / 1), but the running
+limiter only picks up a change after a restart; the detail says so. Since all of `/api/v1` sits behind the license
+gate, an unlicensed install cannot open the report at all, so `license` matters mostly for "ends soon".
+
+### Clinical sign-off
+
+Advisory, per service instance: it **never blocks** creating, saving or switching on a service.
+
+- Columns `SignedOffBy` (the reviewing clinician's name and role as typed, 1–200), `SignedOffAtUtc`, `SignOffNote`
+  (≤ 500, optional, no patient data). `IsClinicallySignedOff` = both name and time set (not mapped).
+- `POST /api/v1/cds/services/{id}/sign-off` body `{ signedOffBy, note?, contentVersion }` → the updated service
+  DTO; blank name, too-long values or no `contentVersion` → 400; unknown id → 404; **409 Conflict** when
+  `contentVersion` is not the service's current one (someone saved new settings, fixes, dismiss reasons or links
+  after the reviewer opened it). `contentVersion` is on every service DTO: a short SHA-256 fingerprint of the handler
+  key, hook, settings, fixes, dismiss reasons and links (`CdsServiceInstance.ContentVersion`, not stored). The
+  portal sends the version it showed and explains a 409 (reload, review again). `DELETE` on the same path clears it (no-op when none). Both need
+  `cdshooks.edit`. Who recorded it is in the entity audit trail (`ModifiedBy`), separate from the reviewer's name.
+- **Cleared automatically** inside `CdsServiceInstance.Update` when the content a clinician reviewed changes: the
+  handler key, the hook, the settings (compared by JSON value, so key order and spacing do not count), the fixes, the
+  dismiss reasons or the links. Title, service id, description, card source, on/off, the issuer allow-list and
+  fetch-missing-data keep it (the Services list's on/off switch resends the whole service and must not clear it).
+- A **coverage requirements** service's sign-off also covers the payers and payer rules it answers with: any payer
+  or rule create, update or delete, and any applied import that changes something, clears the sign-off of every
+  coverage requirements service (`CdsCoverageSignOff.ClearAsync` in `CdsCoverageAdminServices.cs`).
+- Shown as a badge on the Services list ("Reviewed by X on date" / "Not clinically reviewed"), as its own section on
+  the service setup page (outside the main form; disabled while the page has unsaved edits, since it covers the
+  saved version; each action asks first), and on the Epic setup sheet (fields plus a "Not clinically reviewed"
+  warning).
+
+## 21. Go-live checklist (Epic)
+
+The order that works for a first Epic customer. The readiness panel covers the Segue side of steps 2–4 and 7.
+
+1. **Epic app and APIs.** The CDS client is registered in Epic with the **CDS Hooks Framework** API. When one-click
+   fixes will be used, also select: MedicationRequest **Read**, **Create** and **Delete (Unsigned Order)**;
+   ServiceRequest **Read**, **Create** and **Delete (Unsigned Order)**; Condition **Create** for **Problems** and
+   for **Encounter Diagnosis**. For fetch-missing-data, the read (search) APIs for every prefetch resource the
+   services use (AllergyIntolerance, MedicationRequest, Observation, Condition, Immunization, Procedure, Patient).
+2. **HTTPS deployment.** Segue behind https on the address Epic will call, with `Cds:PublicBaseUrl` set to it (the
+   token's `aud` is checked against it). Plain http is a blocker outside Development.
+3. **Redis.** `ConnectionStrings:Redis` (with `ssl=true`), so the one-time token check holds across nodes and
+   restarts.
+4. **Register the Epic issuer** (Connect your EHR > Trusted issuers): `iss` = the organisation's FHIR base (e.g.
+   `https://host/api/FHIR/R4`), JWKS URL = the URL Epic names in `jku`, expected `sub` = the CDS client id. Leave the
+   FHIR base URL blank unless it differs from `iss`. Run **Test callback**.
+5. **Hand over the Epic setup sheet** for each service (Download JSON). The health system configures in Epic: the
+   OPA / BPA records that fire each hook, the service endpoint and `aud`, the prefetch, the mapping of each dismiss
+   reason code to an Epic override reason, the preference list (or order set) items behind each fix code, and the
+   SMART app allow-list for SMART links.
+6. **Test in Epic's non-production environment**, per service: each check fires and shows the expected card;
+   each fix adds or removes the right draft; feedback arrives (Activity shows **Feedback received** with reason
+   codes); missing prefetch is fetched by callback (Activity shows the fetched count). Fix what Activity reports as
+   Not signed in, Missing data or Error.
+7. **Clinical sign-off.** A clinician reviews each service's rules, settings, fix codes, dismiss reasons and links
+   with the Epic team; record it on the service setup page. Any later change to that content removes it.
+8. **Go live one service at a time.** Switch on one service in production, watch **Activity** (outcomes, timings,
+   feedback, override reasons) for a few days, then the next.
+
+## 23. Coverage Requirements Discovery (Da Vinci CRD)
+
+Built to the [Da Vinci CRD IG STU 2](https://hl7.org/fhir/us/davinci-crd/STU2/) (v2.0.1). Epic calls it through its
+"CRD Request" outgoing CDS Hooks call. While the clinician orders (or books, or starts / discharges an encounter),
+Segue tells them what the patient's payer requires — covered or not, prior authorization, documentation — and
+writes the answer onto the order itself as the CRD **coverage-information** extension through a `systemAction`.
+**DTR (Documentation Templates and Rules) and PAS (Prior Authorization Support) are out of scope**: Segue only
+points at a DTR app (a link) and names the payer's Questionnaire.
+
+### Roles: local rules and payer relay
+
+Segue plays both CRD server roles, per payer:
+
+- **Local rules** (default): Segue answers from the payer's `CdsCoverageRule` rows, edited in the portal or imported
+  from CSV / JSON.
+- **Relay** (`RelayEnabled` with an https `RelayServiceUrl`): Segue acts as an intermediary and forwards the call to
+  the payer's own CRD service, signed with Segue's key, then returns the payer's answer. If the relay fails or times
+  out, `FallbackToLocalRules` (default **on**) answers from local rules; off → no cards, outcome `Degraded`.
+- Admin **Test** runs never relay (pasted data is never sent anywhere); the payer's **Test relay** button sends a
+  synthetic request instead.
+
+### Data model (migration `AddCdsCoverageRequirements`: SQL Server `20261016062127`, PostgreSQL `20261016062144`)
+
+| Entity | Fields | Notes |
+|---|---|---|
+| `CdsPayer` | Name (≤200, unique among live rows, case-insensitive), **Identifiers** (1–20, each ≤200), **PlanValues** (0–50), IsEnabled, RelayEnabled, RelayServiceUrl (https, no query, ≤1000; required when RelayEnabled), RelayTimeoutMs (100–10 000, default 1000), FallbackToLocalRules (default true), **ForwardFhirAuthorization (default false)**, RelayClientId (≤200, the JWT `sub`) | `AuditableEntity<Guid>`, soft delete, RowVersion. Identifiers/PlanValues are primitive collections (JSON on SQL Server, `text[]` on PostgreSQL). Deleting a payer soft-deletes its rules. |
+| `CdsCoverageRule` | PayerId, System (≤200), Code (≤100), CodePrefixMatch, Covered, PaNeeded?, DocNeeded?, DocPurposes[], InfoNeeded[], Reason? (≤500), PolicyUrl? (https), QuestionnaireCanonical? (url or url\|version), EffectiveFrom (date, default 2000-01-01), EffectiveTo? (date, inclusive), IsEnabled | Same base. Unique (PayerId, System, Code, EffectiveFrom) among live rows. No FK navigation (soft delete is handled by the payer service). |
+| `CdsCallLog` (new columns) | SystemActionCount (default 0), PayerId?, PayerName? (200), CoverageDecisions? (200), RelayUsed?, RelayMs?, RelayOutcome? (50), CoverageAssertionCount? | Codes and configuration only, never order, coverage or patient data. |
+
+Rule validation (`CdsCoverageRule.Validate`, shared by save and import): `covered` ∈ covered / not-covered /
+conditional; `paNeeded` ∈ no-auth / auth-needed / performpa / conditional (**`satisfied` is refused**: it needs a
+payer-issued `satisfied-pa-id` per patient); `docNeeded` ∈ clinical / admin / both / conditional; `docPurpose` ∈
+withpa / withclaim / withorder / retain-doc / OTH (only with docNeeded); `infoNeeded` ∈ performer / location /
+timeframe / contract-window / OTH (`OTH` is v3-NullFlavor "other", which the CRD value sets include; the file import
+reads it in any case). The code **system is stored in canonical form** (`CdsCoverageCodes.CodeSystems.Canonical`:
+trimmed, no trailing `/`, an OID alias replaced by its URL), so `urn:oid:2.16.840.1.113883.6.12` and
+`http://www.ama-assn.org/go/cpt` are one system for the unique key, the import key and matching.
+CRD invariants enforced: crd-ci-q2 (not-covered has no pa-needed), crd-ci-q3 (info-needed needs a conditional
+value), crd-ci-q1 (questionnaire needs doc-needed).
+
+### Where the code lives
+
+| Layer | Files |
+|---|---|
+| Domain | `Entities/CdsPayer.cs`, `Entities/CdsCoverageRule.cs` (+ `CdsCoverageRuleValues`), `ValueObjects/CdsCoverageCodes.cs`, new columns in `Governance/CdsCallLog.cs` |
+| Application | `Abstractions/Cds/ICdsHandlerPreparer.cs`, `Abstractions/Cds/CdsCoverageModels.cs` (decision, prepared data, rule snapshot + cache, relay client, JWKS provider interfaces), `Abstractions/Persistence/ICdsCoverageRepositories.cs`, `DTOs/Cds/CdsCoverageDtos.cs`, `Services/Cds/CdsCoverageAdminServices.cs` (payer and rule services, import/export), `Services/Cds/CdsCoverageRuleFile.cs` (CSV / JSON parser and writer) |
+| Infrastructure | `Cds/Handlers/CoverageRequirementsCdsHandler.cs` (pure), `Cds/Handlers/CdsCrdItems.cs`, `Cds/Handlers/CdsCoverageInformation.cs` (extension builder / reader), `Cds/Coverage/CdsCoverageEngine.cs` (the preparer), `CdsCoverageMatcher.cs`, `CdsCoverageRuleCache.cs`, `CdsPayerRelayClient.cs`, `CdsRelaySigningKeyProvider.cs`, `CdsPayerRelayTestService.cs`, `Persistence/CdsCoverageRepositories.cs` (EF + in-memory) |
+| Api | `Controllers/V1/CdsCoverageController.cs` (`CdsPayersController`, `CdsCoverageRulesController`), JWKS action on `Controllers/CdsHooksController.cs` |
+
+### Hooks, prefetch and what is checked
+
+| Hook | Items checked (`CdsCrdItems`) | Prefetch (all required) |
+|---|---|---|
+| `order-sign` | every order in `context.draftOrders` | `coverage`: `Coverage?patient={{context.patientId}}&status=active&_include=Coverage:payor` (the payor Organizations come along, so a payer can be matched by the Organization's identifier or name when `Coverage.payor` is only a reference) |
+| `order-select` | the selected draft orders (`context.selections`), else all | `coverage` |
+| `appointment-book` | `context.appointments` Appointments (codes from serviceType, appointmentType, serviceCategory) | `coverage` |
+| `encounter-start`, `encounter-discharge` | the Encounter `context.encounterId` names (codes from type, serviceType) | `coverage`, `encounter`: `Encounter?_id={{context.encounterId}}` |
+
+`order-dispatch` is **not offered** in v1: its `context.dispatchedOrders` are references, which no prefetch
+template can fetch (tokens resolve to strings, not arrays), and EHRs rarely contain the orders in
+`fulfillmentTasks`, so a live call would never find an order. (`CdsCrdItems` still reads the hook, for when an
+order lookup is added.)
+
+Missing prefetch uses the normal callback path (section 10). Only `coverage` is required so that a missing optional
+resource never blanks the answer; `patient` is not requested (no rule reads it).
+
+### Engine (`CdsCoverageEngine`, preparer for `coverage-requirements`)
+
+1. **Coverage**: the active Coverages in prefetch `coverage` (status active or absent; cancelled / draft /
+   entered-in-error ignored), in `Coverage.order` (primary first).
+2. **Payer**: the first Coverage whose payor matches an **enabled** payer. Each payer identifier is compared
+   (case-insensitive) with `payor.identifier.value`, `system|value` with the identifier's system and value, or a
+   bare name with `payor.display` / the referenced Organization's `name` / `alias` (the Organization may be a Bundle
+   entry or contained) and its identifiers. When `PlanValues` is not empty one must equal a `Coverage.class.value`.
+   One coverage per call (the first match).
+3. **Relay or local**: relay for a relay payer on live calls; else local rules.
+4. **Rule match** per item (`CdsCoverageMatcher.MatchRule`, rules effective today, UTC): system equal (case-insensitive;
+   URL and OID forms of CPT, HCPCS, LOINC, SNOMED, RxNorm, ICD-10-PCS, NDC are the same), then exact code beats prefix,
+   a longer prefix beats a shorter one, ties go to the latest EffectiveFrom.
+
+The payer/rule **snapshot** (`CdsCoverageRuleCache`, singleton) is rebuilt after any admin change on this node
+(`Invalidate`) and at most 60 s after it was built (other nodes).
+
+### Answer (pure `CoverageRequirementsCdsHandler`)
+
+Per item with a decision:
+
+- **systemAction** `{ type: "update", description: "Coverage information from <payer>", resource: <copy of the order
+  with the extension> }` when `useSystemActions` is on, the item has an id, the Coverage has an id, and the type is
+  ServiceRequest, ProcedureRequest, DeviceRequest, NutritionOrder or Appointment. **MedicationRequest is never
+  updated** (Epic supports ServiceRequest.Update (Unsigned Order) only, Feb 2024+): it gets an instructions card.
+  An existing coverage-information extension for the same coverage is replaced; other extensions are kept. No
+  action is sent when the order already carries the same covered / pa-needed / doc-needed for that coverage (CRD:
+  no update unless something is new).
+- **Extension** `http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information`, sub-extensions in
+  this order: `coverage` (valueReference `Coverage/<id>`), `covered` (valueCode), `pa-needed`, `doc-needed`,
+  `doc-purpose`*, `info-needed`*, `reason` (valueCodeableConcept.text), `questionnaire` (valueCanonical, only with
+  doc-needed), `date` (valueDate, today), `coverage-assertion-id` (valueString, a new uuid per order).
+- **Instructions card** (`includeInstructionsCard`, default on; always when no systemAction carries the decision):
+  summary such as "Prior authorization required by &lt;payer&gt;: &lt;order&gt;", markdown detail listing coverage,
+  prior authorization, documentation (purposes), information needed and the reason; indicator warning for
+  not-covered, `authNeededIndicator` (warning) for auth-needed / performpa, else info. The rule's **policy URL** is
+  an absolute link on it (when the instructions card is off: a separate "external reference" card with the link).
+- **Documentation (DTR) card** when doc-needed is set and `dtrAppUrl` is an https URL: a `smart` link (appContext
+  JSON `{"order":"Type/id","coverage":"Coverage/id","questionnaire":["<canonical>"]}`) or `absolute` link.
+- No rule (or no coverage / no payer): nothing, or with `noRuleBehavior = conditional` an info card "Coverage
+  requirements unknown".
+
+**Relay answers** (a payer's answer is never trusted as it is):
+
+- **Cards**: the topic follows `topicCodes` (segue: letters-only, `coverage-info` → `CoverageInformation`, another
+  CRD card type such as `therapy-alternatives-opt` → `PayerTherapyAlternativesOpt`, none → `PayerCoverage`; crd: the
+  payer's CRD code when it is one, else `coverage-info`); links are kept only when absolute https, and a `smart` link
+  only when it launches this service's own `dtrAppUrl` (same scheme, host and path; appContext ≤ 2048); the payer's
+  icon and card `extension` are dropped. Then the normal card clean-up (uuid, summary, https-only links, at most 25),
+  labelled "&lt;payer&gt; via Segue".
+- **systemActions are rebuilt, never forwarded**: from each payer action that names one of this request's items,
+  only its coverage-information extensions are taken, each through `CdsCoverageInformation.Clean` (required:
+  `coverage` naming one of this request's Coverages, `covered` from the value set, a valid `date` and a
+  `coverage-assertion-id`; kept when well formed: pa-needed, doc-needed, doc-purpose, info-needed, reason (text and
+  codings), questionnaire (http(s), only with doc-needed), satisfied-pa-id (only with pa-needed satisfied),
+  billingCode; anything else, including nested or unknown sub-extensions, is dropped). They are then added with
+  `Annotate` to **the request's own copy** of the order, so the payer can add coverage information but cannot change
+  the code, status, quantity or any other part of the order. One action per item; none when nothing would change.
+- When this service may not send a systemAction for the item (systemActions off, or a MedicationRequest), the
+  cleaned coverage information is shown as an instructions card so it is not lost.
+
+Settings (`GET /api/v1/cds/handlers`, key `coverage-requirements`):
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `useSystemActions` | boolean | true | Annotate orders / appointments with systemActions. |
+| `includeInstructionsCard` | boolean | true | Plain-language card per decision. |
+| `noRuleBehavior` | select `none` \| `conditional` | none | What to show when no rule / payer / coverage. |
+| `dtrAppUrl` | text | "" | https launch URL of the DTR app (empty = no DTR card). |
+| `dtrLinkType` | select `smart` \| `absolute` | smart | DTR link type. |
+| `topicCodes` | select `segue` \| `crd` | segue | Epic-safe letters-only topics, or the CRD card type `coverage-info` (system `http://hl7.org/fhir/us/davinci-crd/CodeSystem/temp`). |
+| `authNeededIndicator` | select info \| warning \| critical | warning | Card level for prior authorization needed. |
+
+`UsesSampleReferenceData` is false (payer rules are admin data), so the sample-data sign-off does not apply; the
+`crd-sign-off` readiness check asks for a review instead. `GET /api/v1/cds/handlers` reports it per handler
+(`usesSampleReferenceData`), so the portal shows its sample-data warning only for checks that use sample rules.
+
+### Relay (`CdsPayerRelayClient`)
+
+- **Outbound request**: same hook, **new hookInstance**, context and prefetch as received plus what the callback
+  fetched; no vendor extensions; `fhirServer` and `fhirAuthorization` **only when the payer's
+  ForwardFhirAuthorization is on** (off by default — the EHR's token is never forwarded otherwise).
+- **JWT** (Segue's own key): header `alg: RS384`, `typ: JWT`, `kid`, `jku = {Cds:PublicBaseUrl}/cds-services/.well-known/jwks.json`;
+  claims `iss = Cds:PublicBaseUrl`, `aud = RelayServiceUrl`, `sub = RelayClientId` (when set), `iat`, `nbf`,
+  `exp = iat + Cds:RelayTokenLifetimeSeconds` (60, clamped 10–300), `jti` (uuid). Without a configured
+  `Cds:PublicBaseUrl` nothing is relayed ("Cds:PublicBaseUrl is not set").
+- **Key** (`CdsRelaySigningKeyProvider`): RSA 2048 created on first use; private key (PKCS#8 PEM) written via
+  `ISecretWriter` to the `signing-keys` vault (DbSecretStore / Key Vault); only `{vault, secret, kid}` is stored, in
+  System Setting `Cds:RelaySigningKey`. A stored reference whose secret is unusable is an error, never silently
+  replaced (delete the setting to rotate, then tell payers to refresh the JWKS). **Creation is atomic across Segue
+  instances**: the reference is written with `ISystemSettingRepository.AddIfAbsentAsync` (insert only, on the unique
+  `IX_SystemSettings_Key`), so when two instances create a key at the same moment the loser adopts the winner's key
+  and every instance signs with, and publishes, the same key (the loser's unused secret is logged by name and can
+  be deleted).
+- **JWKS**: `GET /cds-services/.well-known/jwks.json`, anonymous, `Cache-Control: public, max-age=3600`, one RSA key
+  (`kty`, `use: sig`, `alg: RS384`, `kid`, `n`, `e`). 503 when the key cannot be read. Like every `/cds-services`
+  path it is behind the license gate.
+- **SSRF / transport**: https only; primary handler `CdsJwksHttpHandler.CreateGuarded` (no private, loopback,
+  link-local or CGNAT addresses unless `Cds:AllowPrivateRelayAddresses`; no redirects; no proxy); no loggers, no
+  `ApiRequestLoggingHandler`, no resilience handler (no retries); requests marked untraced.
+- **Timeout**: `min(RelayTimeoutMs, remaining call budget − 150 ms)`; under 100 ms left → not called. Raise
+  `Cds:TimeoutMs` (default 1500) for slow payers.
+- **Response**: capped at `Cds:RelayMaxResponseBytes` (1 MB); must be JSON with a `cards` array. Outcomes: `ok`,
+  `timed out`, `HTTP <n>`, `unreachable`, `response too large`, `invalid response`, `not https`,
+  `signing key unavailable`, `Cds:PublicBaseUrl is not set`, `no time left in the call's budget`.
+
+### Admin API (all `[Authorize]`, group CdsHooks)
+
+| Method and path | Permission | Body / query → result |
+|---|---|---|
+| `GET /api/v1/cds/payers` | `cdshooks.view` | → `CdsPayerDto[]` |
+| `GET /api/v1/cds/payers/{id}` | view | → `CdsPayerDto` / 404 |
+| `POST /api/v1/cds/payers` | `cdshooks.create` | `SaveCdsPayerRequest` → 201 `CdsPayerDto` |
+| `PUT /api/v1/cds/payers/{id}` | `cdshooks.edit` | `SaveCdsPayerRequest` (replaces all) → `CdsPayerDto` |
+| `DELETE /api/v1/cds/payers/{id}` | `cdshooks.delete` | → 204 (rules deleted too) |
+| `POST /api/v1/cds/payers/{id}/test-relay` | `cdshooks.test` | → `CdsPayerRelayTestResultDto` (audited `CdsHooks/TestRelay`) |
+| `GET /api/v1/cds/coverage-rules?payerId&code&search&enabled&page&pageSize` | view | → `CdsCoverageRulePageDto` (page size default 50, max 200) |
+| `GET /api/v1/cds/coverage-rules/{id}` | view | → `CdsCoverageRuleDto` / 404 |
+| `POST /api/v1/cds/coverage-rules` | create | `SaveCdsCoverageRuleRequest` → 201 |
+| `PUT /api/v1/cds/coverage-rules/{id}` | edit | `SaveCdsCoverageRuleRequest` → `CdsCoverageRuleDto` (payer cannot change) |
+| `DELETE /api/v1/cds/coverage-rules/{id}` | delete | → 204 |
+| `POST /api/v1/cds/coverage-rules/import?format&mode&strategy&payerId` | edit (**plus `cdshooks.delete` for `mode=apply&strategy=replace`**, 403 without: replace deletes rules) | multipart field `file` or raw body (≤5 MB, ≤5000 rules) → `CdsCoverageRuleImportResultDto` |
+| `GET /api/v1/cds/coverage-rules/export?format&payerId` | view | file download (csv `text/csv` / json `application/json`) |
+| `GET /api/v1/cds/coverage-rules/import-template?format` | view | file download with two made-up rows |
+
+Import: `mode=preview` (default) writes nothing; `mode=apply` saves **all or nothing** (any row error → nothing).
+`strategy=merge` (default) adds new and updates matching rules (key: payer + canonical system + code +
+effectiveFrom, case-insensitive); `strategy=replace` also deletes the rules of every payer named in the file (or `payerId`) that
+the file does not list. `payerId` makes every row belong to that payer (payer column optional, must match when set).
+Validation errors are 400 `BusinessRuleException` like the other CDS admin endpoints.
+
+**CSV columns** (header row; any order, case-insensitive; `system`, `code`, `covered` required, `payer` required
+without `payerId`): `payer, system, code, codeMatch (exact|prefix, default exact), covered, paNeeded, docNeeded,
+docPurpose (;-separated), infoNeeded (;-separated), reason, policyUrl, questionnaire, effectiveFrom (yyyy-MM-dd),
+effectiveTo (yyyy-MM-dd), enabled (true|false|yes|no|1|0, default true)`. RFC 4180 quoting; UTF-8 (BOM allowed).
+Export prefixes cells starting with `=`, `+`, `@`, tab, CR or a non-numeric `-` with `'` (import strips it). JSON:
+`{"rules":[{ same names; docPurpose / infoNeeded arrays or ;-strings; enabled boolean }]}` or a bare array.
+
+### Call log, Activity, readiness, setup sheet
+
+- **Activity** rows (`CdsCallLogDto`) add: `systemActionCount`, `payerId`, `payerName`, `coverageDecisions`
+  (string[] "covered/pa-needed/doc-needed", `-` = not stated), `relayUsed` (null for non-CRD calls), `relayMs`,
+  `relayOutcome` (`ok`, a failure reason, or "&lt;reason&gt;; local rules used"), `coverageAssertionCount`.
+  Detail carries the engine's note (e.g. "No enabled payer matches the patient's coverage.").
+- **Readiness** (only when a coverage requirements service or a payer exists): `crd-payer-coverage` (blocker: a
+  CRD service is on and no payer is on; warning: an enabled payer with no rule **in effect today** (enabled and
+  within its dates) and no relay),
+  `crd-relay-https` (blocker: relay URL not https; warning: a payer receives the EHR's token), `crd-rules-expiring`
+  (warning: enabled rules of enabled payers ending within 30 days), `crd-sign-off` (warning: CRD services without
+  sign-off).
+- **Setup sheet**: `crd` section (null for other services): `hook`, `epicApis` (CDS Hooks Framework; Coverage.Search;
+  ServiceRequest.Update (Unsigned Order) when systemActions are on; Encounter.Search for encounter hooks),
+  `useSystemActions`, `dtrAppUrl`, `dtrLinkType`, `segueJwksUrl`, `payers[]` (`id, name, isEnabled, identifiers,
+  planValues, enabledRuleCount, relayEnabled, relayServiceUrl, forwardFhirAuthorization`) and `notes[]` (configure
+  the CRD Request with Coverage prefetch, MedicationRequests get cards, add the DTR app to the SMART allow-list, payers
+  verify relays with Segue's JWKS). A warning is added when no payer is on.
+
+### Configuration keys (added)
+
+| Key | Default | Purpose |
+|---|---|---|
+| `Cds:AllowPrivateRelayAddresses` | false | Lets relay URLs resolve to private / loopback addresses. |
+| `Cds:RelayMaxResponseBytes` | 1048576 | Largest payer answer read. |
+| `Cds:RelayTokenLifetimeSeconds` | 60 | Lifetime of Segue's relay JWT (10–300). |
+| `Cds:RelaySigningKey` (System Setting, written by Segue) | – | Reference to the relay signing key. Do not edit. |
+
+### Differences from the IG and judgment calls
+
+- coverage-information has **no `expiry-date`** in STU2; validity is in `detail` (not produced in v1). `date`
+  (1..1) is today. `billingCode`, `detail`, `dependency`, `response`, `contact` and `satisfied-pa-id` are not
+  produced by local rules. From a relayed payer, `billingCode` and `satisfied-pa-id` are kept (cleaned); `detail`,
+  `dependency`, `response` and `contact` are dropped (the rebuilt extension keeps only what Segue can check).
+- The IG says DTR launches go through coverage-information (`questionnaire`), not launch cards. Segue sends the
+  questionnaire in the extension **and**, when `dtrAppUrl` is set, a DTR link card (Epic shows cards, not the
+  extension).
+- The IG binds `source.topic` to CRD card types (`coverage-info`, hyphenated); Epic needs letters-only static codes.
+  Default `topicCodes = segue`; `crd` gives the IG codes.
+- The IG prefetch examples also include encounter / appointment with `_include`s and use `{{context.patient}}`;
+  Segue requires only `coverage` (`{{context.patientId}}`, with `_include=Coverage:payor`), plus `encounter` for
+  encounter hooks.
+- One Coverage per call (the first matching, in `order`); the IG allows one extension per coverage.
+- `satisfied` is refused in local rules (needs a per-patient satisfied-pa-id).
+- Not built in v1 (later): propose-alternate-request, companions / prerequisites, request-form-completion,
+  create-or-update-coverage-information cards, `order-dispatch` order lookup by query, DTR and PAS themselves, the
+  CRD metric reporting, configuration options in discovery (`extension.davinci-crd.configuration-options`).

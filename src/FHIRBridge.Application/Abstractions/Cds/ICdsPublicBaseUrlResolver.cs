@@ -24,4 +24,10 @@ public sealed record CdsPublicBaseUrl(string BaseUrl, bool IsConfigured)
     public string ServiceUrl(string serviceId) => $"{DiscoveryUrl}/{serviceId}";
 
     public string FeedbackUrl(string serviceId) => $"{ServiceUrl(serviceId)}/feedback";
+
+    /// <summary>
+    /// Segue's own public JWK Set (GET /cds-services/.well-known/jwks.json): the jku of the JWTs Segue signs when it
+    /// relays a coverage requirements call to a payer's CRD service.
+    /// </summary>
+    public string JwksUrl => $"{DiscoveryUrl}/.well-known/jwks.json";
 }

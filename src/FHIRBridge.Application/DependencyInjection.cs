@@ -97,6 +97,8 @@ public static class DependencyInjection
         services.AddScoped<Services.Cds.ICdsCatalogService, Services.Cds.CdsCatalogService>();
         services.AddScoped<Services.Cds.ICdsSetupSheetService, Services.Cds.CdsSetupSheetService>();
         services.AddScoped<Services.Cds.ICdsCallbackTestService, Services.Cds.CdsCallbackTestService>();
+        services.AddScoped<Services.Cds.ICdsPayerService, Services.Cds.CdsPayerService>();
+        services.AddScoped<Services.Cds.ICdsCoverageRuleService, Services.Cds.CdsCoverageRuleService>();
         services.AddSingleton<IScopeGeneratorService, ScopeGeneratorService>();
         services.AddScoped<IUserAccessService, UserAccessService>();
         services.AddScoped<ILocalAuthService, LocalAuthService>();

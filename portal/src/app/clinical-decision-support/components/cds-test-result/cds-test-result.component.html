@@ -13,6 +13,9 @@
     @if (fixCount() > 0) {
       <span class="status__meta">{{ fixCount() }} {{ fixCount() === 1 ? 'fix' : 'fixes' }} offered</span>
     }
+    @if (systemActions().length > 0) {
+      <span class="status__meta">{{ systemActions().length }} {{ systemActions().length === 1 ? 'order update' : 'order updates' }}</span>
+    }
   </div>
 
   @if (result().messages.length) {
@@ -29,9 +32,11 @@
         <app-cds-card-preview [card]="card" />
       }
     </div>
-  } @else if (result().outcome === 'NoCards') {
+  } @else if (result().outcome === 'NoCards' && systemActions().length === 0) {
     <p class="none">The service ran and had no advice for this request. That is a normal answer.</p>
   }
+
+  <app-cds-system-actions [actions]="systemActions()" />
 
   <div class="raw">
     <button type="button" class="btn btn-secondary btn-sm" [attr.aria-expanded]="showRaw()" (click)="showRaw.set(!showRaw())">

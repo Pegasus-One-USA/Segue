@@ -221,6 +221,7 @@ public static class DependencyInjection
         services.AddSingleton<Application.Abstractions.Cds.ICdsServiceHandler, Cds.Handlers.RenalDoseCdsHandler>();
         services.AddSingleton<Application.Abstractions.Cds.ICdsServiceHandler, Cds.Handlers.CareGapCdsHandler>();
         services.AddSingleton<Application.Abstractions.Cds.ICdsServiceHandler, Cds.Handlers.PriorAuthCdsHandler>();
+        services.AddSingleton<Application.Abstractions.Cds.ICdsServiceHandler, Cds.Handlers.CoverageRequirementsCdsHandler>();
         // JWKS fetches get their own short timeout; HttpClient.Timeout also caps the default resilience retries.
         // Its primary handler refuses private/loopback/link-local addresses (admin-entered URL → no internal SSRF).
         services.AddHttpClient(Cds.CdsJwksProvider.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
@@ -261,6 +262,38 @@ public static class DependencyInjection
         services.AddScoped<Cds.CdsEvaluator>();
         services.AddScoped<Application.Abstractions.Cds.ICdsHooksService, Cds.CdsHooksService>();
         services.AddScoped<Application.Abstractions.Cds.ICdsTestService, Cds.CdsTestService>();
+        services.AddScoped<Application.Services.Cds.ICdsReadinessService, Cds.CdsReadinessService>();
+
+        // Coverage requirements (Da Vinci CRD): the engine is the coverage-requirements handler's preparer (found by
+        // handler key in the evaluator); payer rules are matched from an in-memory snapshot; relayed calls to a payer's
+        // own CRD service are signed with Segue's key and sent through a guarded, logger-free, untraced client.
+        services.AddSingleton<Application.Abstractions.Cds.ICdsCoverageRuleCache, Cds.Coverage.CdsCoverageRuleCache>();
+        services.AddSingleton<Cds.Coverage.CdsRelaySigningKeyProvider>();
+        services.AddSingleton<Application.Abstractions.Cds.ICdsRelayJwksProvider>(sp => sp.GetRequiredService<Cds.Coverage.CdsRelaySigningKeyProvider>());
+        services.AddScoped<Application.Abstractions.Cds.ICdsHandlerPreparer, Cds.Coverage.CdsCoverageEngine>();
+        services.AddScoped<Application.Services.Cds.ICdsPayerRelayTestService, Cds.Coverage.CdsPayerRelayTestService>();
+        var relayClient = services.AddHttpClient<Application.Abstractions.Cds.ICdsPayerRelayClient, Cds.Coverage.CdsPayerRelayClient>(
+                Cds.Coverage.CdsPayerRelayClient.HttpClientName,
+                client => client.Timeout = TimeSpan.FromSeconds(30))
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+            {
+                var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<Cds.CdsOptions>>();
+                return Cds.CdsJwksHttpHandler.CreateGuarded(() => options.CurrentValue.AllowPrivateRelayAddresses);
+            })
+            .RemoveAllLoggers()
+            .ConfigureAdditionalHttpMessageHandlers((handlers, _) =>
+            {
+                for (var i = handlers.Count - 1; i >= 0; i--)
+                {
+                    if (handlers[i] is ApiRequestLoggingHandler)
+                    {
+                        handlers.RemoveAt(i);
+                    }
+                }
+            });
+#pragma warning disable EXTEXP0001 // Evaluation-only, but the documented way to drop a ConfigureHttpClientDefaults resilience handler.
+        relayClient.RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
 
         // Registered unconditionally — resolves against IUserAccessRepository, so it works identically whether
         // that's the in-memory or EF-backed implementation registered below.
@@ -285,6 +318,8 @@ public static class DependencyInjection
             services.AddSingleton<ICdsTrustedIssuerRepository, InMemoryCdsTrustedIssuerRepository>();
             services.AddSingleton<ICdsServiceInstanceRepository, InMemoryCdsServiceInstanceRepository>();
             services.AddSingleton<ICdsCallLogRepository, InMemoryCdsCallLogRepository>();
+            services.AddSingleton<ICdsPayerRepository, InMemoryCdsPayerRepository>();
+            services.AddSingleton<ICdsCoverageRuleRepository, InMemoryCdsCoverageRuleRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<IEhrWriteLedgerRepository, InMemoryEhrWriteLedgerRepository>();
@@ -387,6 +422,8 @@ public static class DependencyInjection
             services.AddScoped<ICdsTrustedIssuerRepository, EfCdsTrustedIssuerRepository>();
             services.AddScoped<ICdsServiceInstanceRepository, EfCdsServiceInstanceRepository>();
             services.AddScoped<ICdsCallLogRepository, EfCdsCallLogRepository>();
+            services.AddScoped<ICdsPayerRepository, EfCdsPayerRepository>();
+            services.AddScoped<ICdsCoverageRuleRepository, EfCdsCoverageRuleRepository>();
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
             services.AddScoped<IUserFhirContextBindingRepository, EfUserFhirContextBindingRepository>();
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();

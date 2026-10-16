@@ -38,12 +38,19 @@ public sealed record CdsInstanceSnapshot(
 /// <summary>Everything a handler gets for one evaluation.</summary>
 public sealed class CdsHandlerContext
 {
-    public CdsHandlerContext(CdsInstanceSnapshot instance, CdsRequest request, CdsSettingsValues settings)
+    public CdsHandlerContext(CdsInstanceSnapshot instance, CdsRequest request, CdsSettingsValues settings, object? prepared = null)
     {
         Instance = instance;
         Request = request;
         Settings = settings;
+        Prepared = prepared;
     }
+
+    /// <summary>
+    /// What the handler type's <see cref="ICdsHandlerPreparer"/> produced for this call (e.g. the coverage engine's
+    /// <see cref="CdsCoveragePrepared"/>); null for handlers without a preparer.
+    /// </summary>
+    public object? Prepared { get; }
 
     public CdsInstanceSnapshot Instance { get; }
 

@@ -36,6 +36,8 @@ export interface CdsHandler {
   prefetchByHook: Record<string, Record<string, string>>;
   /** The one-click fixes this check can offer (empty when none). */
   fixTypes: CdsFixTypeDescriptor[];
+  /** True when the check's rules are the SAMPLE data shipped with Segue (false for coverage requirements). */
+  usesSampleReferenceData?: boolean;
 }
 
 // ─── One-click fixes (CDS Hooks suggestions) ────────────────────────────────────
@@ -153,6 +155,26 @@ export interface CdsServiceInstance {
   links: CdsCardLinkOption[];
   /** The check's fix types (empty when the check is unavailable or offers none). */
   supportedFixTypes: CdsFixTypeDescriptor[];
+  /** True while a clinician's sign-off is on record for the current rules, fixes, dismiss reasons and links. */
+  isClinicallySignedOff: boolean;
+  /** The reviewing clinician as recorded. Null when not reviewed. */
+  signedOffBy: string | null;
+  signedOffAtUtc: string | null;
+  signOffNote: string | null;
+  /** The check runs on the SAMPLE rules shipped with Segue (every built-in check does). */
+  usesSampleReferenceData: boolean;
+  /** Fingerprint of what a sign-off covers. Sent back with a sign-off, which is refused (409) if the service changed. */
+  contentVersion?: string | null;
+}
+
+/** POST services/{id}/sign-off. Advisory: it never blocks switching a service on. */
+export interface CdsSignOffRequest {
+  /** The reviewing clinician's name and role, up to 200 characters. */
+  signedOffBy: string;
+  /** Optional, up to 500 characters. Never patient data. */
+  note: string | null;
+  /** The contentVersion of the service as the clinician reviewed it (the API requires it). */
+  contentVersion: string | null;
 }
 
 /** Create and update body. The whole service is replaced on update, so always send every member. */
@@ -284,6 +306,65 @@ export interface CdsSetupSheet {
   issuers: CdsSetupSheetIssuer[];
   warnings: string[];
   generatedOnUtc: string;
+  isClinicallySignedOff: boolean;
+  signedOffBy: string | null;
+  signedOffAtUtc: string | null;
+  signOffNote: string | null;
+  /** Coverage requirements (Da Vinci CRD) only; null or missing for other services. */
+  crd?: CdsSetupSheetCrd | null;
+}
+
+/** The coverage requirements part of a setup sheet. */
+export interface CdsSetupSheetCrd {
+  /** The hook to configure in Epic's "CRD Request" outgoing call. */
+  hook: string;
+  /** The Epic APIs the CDS client registration needs. */
+  epicApis: string[];
+  /** True when orders are annotated through systemActions (needs ServiceRequest.Update (Unsigned Order)). */
+  useSystemActions: boolean;
+  /** The documentation (DTR) app the cards link to; null when none. */
+  dtrAppUrl: string | null;
+  /** "smart" or "absolute". */
+  dtrLinkType: string | null;
+  /** Segue's public key set; payers that receive relayed calls register it. */
+  segueJwksUrl: string;
+  payers: CdsSetupSheetPayer[];
+  /** Plain-language steps for the Epic team. */
+  notes: string[];
+}
+
+export interface CdsSetupSheetPayer {
+  id: string;
+  name: string;
+  isEnabled: boolean;
+  identifiers: string[];
+  planValues: string[];
+  enabledRuleCount: number;
+  relayEnabled: boolean;
+  relayServiceUrl: string | null;
+  forwardFhirAuthorization: boolean;
+}
+
+// ─── Go-live readiness ──────────────────────────────────────────────────────────
+
+export type CdsReadinessStatus = 'ok' | 'warning' | 'blocker';
+
+/** One go-live check. Details name services and issuers, never secrets. */
+export interface CdsReadinessCheck {
+  /** Stable key, e.g. "public-base-url". */
+  key: string;
+  label: string;
+  status: CdsReadinessStatus;
+  detail: string;
+  /** Null when the check is ok. */
+  howToFix: string | null;
+}
+
+/** GET readiness: the worst status and every check. */
+export interface CdsReadiness {
+  status: CdsReadinessStatus;
+  checks: CdsReadinessCheck[];
+  generatedOnUtc: string;
 }
 
 // ─── Discovery info ─────────────────────────────────────────────────────────────
@@ -361,6 +442,20 @@ export interface CdsCallLog {
   overrideReasonCodes?: string[];
   /** Feedback: how many items of the call (Epic batches feedback) carried each reason code. */
   overrideReasonCounts?: CdsReasonCount[];
+  /** Coverage requirements: systemActions returned (orders updated with coverage information). */
+  systemActionCount?: number;
+  /** Coverage requirements: the matched payer; null when none matched or not a coverage call. */
+  payerId?: string | null;
+  payerName?: string | null;
+  /** Coverage requirements: one "covered/pa-needed/doc-needed" per order ("-" = not stated). */
+  coverageDecisions?: string[] | null;
+  /** Coverage requirements: true when relayed to the payer's own service; null for other calls. */
+  relayUsed?: boolean | null;
+  relayMs?: number | null;
+  /** Coverage requirements: "ok", or why the relay failed (e.g. "timed out; local rules used"). */
+  relayOutcome?: string | null;
+  /** Coverage requirements: coverage-information entries (coverage assertion ids) returned. */
+  coverageAssertionCount?: number | null;
 }
 
 export interface CdsReasonCount {
@@ -442,7 +537,7 @@ export interface CdsLink {
 export interface CdsAction {
   type: CdsActionType | string;
   description?: string;
-  /** create: the resource the EHR adds as a draft. */
+  /** create: the resource the EHR adds as a draft. update (systemActions only): the order with coverage information. */
   resource?: Record<string, unknown>;
   /** delete: the draft order to remove, e.g. "MedicationRequest/123". */
   resourceId?: string;
@@ -473,6 +568,8 @@ export interface CdsCard {
 
 export interface CdsResponse {
   cards: CdsCard[];
+  /** Coverage requirements only: changes the EHR applies to the orders itself (coverage information). */
+  systemActions?: CdsAction[];
 }
 
 export type CdsTestOutcome = 'Success' | 'NoCards' | 'Degraded' | 'PreconditionFailed' | 'BadRequest' | 'Error';

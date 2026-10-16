@@ -20,6 +20,9 @@ public sealed class CdsCallLog : Entity<Guid>, IAppendOnlyEntity
     public const int VersionMaxLength = 50;
     public const int CriteriaIdMaxLength = 100;
     public const int OverrideReasonCodesMaxLength = 300;
+    public const int PayerNameMaxLength = 200;
+    public const int CoverageDecisionsMaxLength = 200;
+    public const int RelayOutcomeMaxLength = 50;
 
     private CdsCallLog()
     {
@@ -68,6 +71,14 @@ public sealed class CdsCallLog : Entity<Guid>, IAppendOnlyEntity
         SuggestionsOffered = Math.Max(extras.SuggestionsOffered, 0);
         SuggestionsAccepted = Math.Max(extras.SuggestionsAccepted, 0);
         OverrideReasonCodes = Truncate(extras.OverrideReasonCodes, OverrideReasonCodesMaxLength);
+        SystemActionCount = Math.Max(extras.SystemActionCount, 0);
+        PayerId = extras.PayerId;
+        PayerName = Truncate(extras.PayerName, PayerNameMaxLength);
+        CoverageDecisions = Truncate(extras.CoverageDecisions, CoverageDecisionsMaxLength);
+        RelayUsed = extras.RelayUsed;
+        RelayMs = extras.RelayMs;
+        RelayOutcome = Truncate(extras.RelayOutcome, RelayOutcomeMaxLength);
+        CoverageAssertionCount = extras.CoverageAssertionCount;
     }
 
     public DateTime OccurredOnUtc { get; private set; }
@@ -126,6 +137,33 @@ public sealed class CdsCallLog : Entity<Guid>, IAppendOnlyEntity
     /// </summary>
     public string? OverrideReasonCodes { get; private set; }
 
+    /// <summary>Invoke: systemActions returned (coverage requirements only; other services never return any).</summary>
+    public int SystemActionCount { get; private set; }
+
+    /// <summary>Coverage requirements: the matched payer (configuration id); null when none matched or not a CRD call.</summary>
+    public Guid? PayerId { get; private set; }
+
+    /// <summary>Coverage requirements: the matched payer's name at the time of the call.</summary>
+    public string? PayerName { get; private set; }
+
+    /// <summary>
+    /// Coverage requirements: the decision codes returned, one "covered/pa-needed/doc-needed" triple per order,
+    /// comma-separated (e.g. "covered/auth-needed/clinical,not-covered/-/-"). Codes only, never order or patient data.
+    /// </summary>
+    public string? CoverageDecisions { get; private set; }
+
+    /// <summary>Coverage requirements: true when the call was relayed to the payer's CRD service; null for non-CRD calls.</summary>
+    public bool? RelayUsed { get; private set; }
+
+    /// <summary>Coverage requirements: time spent waiting for the payer's CRD service.</summary>
+    public long? RelayMs { get; private set; }
+
+    /// <summary>Coverage requirements: the relay's outcome ("ok", "timed out", "HTTP 503", "fell back to local rules", ...).</summary>
+    public string? RelayOutcome { get; private set; }
+
+    /// <summary>Coverage requirements: coverage-information extensions (coverage-assertion-ids) returned.</summary>
+    public int? CoverageAssertionCount { get; private set; }
+
     private static string? Truncate(string? value, int maxLength) =>
         value is null ? null : value.Length > maxLength ? value[..maxLength] : value;
 }
@@ -140,7 +178,15 @@ public sealed record CdsCallLogExtras(
     long? CallbackMs = null,
     int SuggestionsOffered = 0,
     int SuggestionsAccepted = 0,
-    string? OverrideReasonCodes = null)
+    string? OverrideReasonCodes = null,
+    int SystemActionCount = 0,
+    Guid? PayerId = null,
+    string? PayerName = null,
+    string? CoverageDecisions = null,
+    bool? RelayUsed = null,
+    long? RelayMs = null,
+    string? RelayOutcome = null,
+    int? CoverageAssertionCount = null)
 {
     public static CdsCallLogExtras None { get; } = new();
 }

@@ -8,9 +8,11 @@ import {
   CdsCallbackTestResult,
   CdsDiscoveryInfo,
   CdsHandler,
+  CdsReadiness,
   CdsRequest,
   CdsServiceInstance,
   CdsSetupSheet,
+  CdsSignOffRequest,
   CdsTestResult,
   CdsTrustedIssuer,
   SaveCdsServiceInstanceRequest,
@@ -58,6 +60,16 @@ export class CdsApiService {
     return this.http.get<CdsSetupSheet>(CDS_ENDPOINTS.setupSheet(id));
   }
 
+  /** Records a clinician's sign-off for the service as last saved. Returns the updated service. */
+  signOffService(id: string, request: CdsSignOffRequest): Observable<CdsServiceInstance> {
+    return this.http.post<CdsServiceInstance>(CDS_ENDPOINTS.signOff(id), request);
+  }
+
+  /** Removes the clinical sign-off. Returns the updated service. */
+  clearSignOff(id: string): Observable<CdsServiceInstance> {
+    return this.http.delete<CdsServiceInstance>(CDS_ENDPOINTS.signOff(id));
+  }
+
   // ─── Trusted issuers ─────────────────────────────────────────────────────────
 
   getTrustedIssuers(): Observable<CdsTrustedIssuer[]> {
@@ -89,6 +101,11 @@ export class CdsApiService {
 
   getDiscoveryInfo(): Observable<CdsDiscoveryInfo> {
     return this.http.get<CdsDiscoveryInfo>(CDS_ENDPOINTS.discoveryInfo);
+  }
+
+  /** Go-live readiness: every check with ok / warning / blocker and how to fix it. */
+  getReadiness(): Observable<CdsReadiness> {
+    return this.http.get<CdsReadiness>(CDS_ENDPOINTS.readiness);
   }
 
   getActivity(filter: CdsActivityFilter): Observable<CdsActivityPage> {

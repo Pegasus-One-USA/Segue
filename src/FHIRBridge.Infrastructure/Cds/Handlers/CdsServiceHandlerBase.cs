@@ -27,6 +27,12 @@ public abstract class CdsServiceHandlerBase : ICdsServiceHandler
 
     public abstract string Key { get; }
 
+    /// <summary>Every built-in rule set reads <see cref="CdsSampleReferenceData"/>, which needs clinical review.</summary>
+    public virtual bool UsesSampleReferenceData => true;
+
+    /// <summary>Only the coverage requirements handler returns systemActions.</summary>
+    public virtual bool ReturnsSystemActions => false;
+
     public abstract string DisplayName { get; }
 
     public abstract string Description { get; }

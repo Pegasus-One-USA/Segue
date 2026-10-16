@@ -1,0 +1,31 @@
+<div class="chips" [class.chips--error]="invalid()" [class.chips--disabled]="disabled()">
+  @for (value of values(); track value; let i = $index) {
+    <span class="chip" data-testid="cds-chip">
+      <span class="chip__text">{{ value }}</span>
+      @if (!disabled()) {
+        <button type="button" class="chip__remove" [attr.aria-label]="'Remove ' + value" (click)="remove(i)">
+          <mat-icon>close</mat-icon>
+        </button>
+      }
+    </span>
+  }
+  @if (!disabled()) {
+    <input
+      type="text"
+      class="chips__input"
+      autocomplete="off"
+      [id]="inputId()"
+      [value]="draft()"
+      [placeholder]="full() ? '' : placeholder()"
+      [disabled]="full()"
+      (input)="onInput($any($event.target).value)"
+      (keydown)="onKeydown($event)"
+      (blur)="commit()"
+    />
+  }
+</div>
+@if (tooLong()) {
+  <p class="cds-field__error">Each value must be {{ maxLength() }} characters or fewer.</p>
+} @else if (full() && !disabled()) {
+  <p class="cds-field__help">That is the most allowed ({{ maxItems() }}).</p>
+}

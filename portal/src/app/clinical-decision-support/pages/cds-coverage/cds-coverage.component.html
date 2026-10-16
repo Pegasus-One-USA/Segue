@@ -1,0 +1,25 @@
+<div class="coverage-page">
+  <div class="page-header">
+    <h1 class="page-title">Coverage requirements (CRD)</h1>
+    <p class="page-sub">
+      While a clinician orders, Segue tells them what the patient's payer requires: whether it is covered, whether prior
+      authorization is needed, and what documentation to gather. Add each payer and its rules here.
+    </p>
+  </div>
+
+  @if (hasCoverageService() === false) {
+    <div class="cds-notice" data-testid="cds-coverage-no-service">
+      <mat-icon>info</mat-icon>
+      <p>
+        No Coverage requirements service yet, so the EHR is not asking Segue. Go to
+        <a routerLink="/clinical-decision-support/services">Services</a>, choose Add service, and pick
+        "Coverage requirements (CRD)".
+      </p>
+    </div>
+  }
+
+  @if (!loading()) {
+    <app-cds-payer-list [payers]="payers()" (changed)="onPayersChanged()" />
+    <app-cds-coverage-rule-list [payers]="payers()" (changed)="loadPayers()" />
+  }
+</div>

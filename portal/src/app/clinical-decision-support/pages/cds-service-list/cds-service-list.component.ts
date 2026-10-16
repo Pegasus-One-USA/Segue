@@ -22,6 +22,7 @@ import { PermissionService } from '../../../auth/services/permission.service';
 import { PermissionActionGuard } from '../../../auth/services/permission-action-guard.service';
 import { HideWithoutPermissionDirective } from '../../../auth/directives/hide-without-permission.directive';
 import { CdsFixesBadgeComponent } from '../../components/cds-fixes-badge/cds-fixes-badge.component';
+import { CdsSignOffBadgeComponent } from '../../components/cds-sign-off-badge/cds-sign-off-badge.component';
 import { cdsSavedOptions } from '../../models/cds-service-options.util';
 
 /** The configured CDS services: one row per instance, with an on/off switch and an Add service picker. */
@@ -39,6 +40,7 @@ import { cdsSavedOptions } from '../../models/cds-service-options.util';
     MatSlideToggleModule,
     HideWithoutPermissionDirective,
     CdsFixesBadgeComponent,
+    CdsSignOffBadgeComponent,
   ],
   templateUrl: './cds-service-list.component.html',
   styleUrl: './cds-service-list.component.scss',

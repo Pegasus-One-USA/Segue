@@ -3,12 +3,16 @@ import { MatIconModule } from '@angular/material/icon';
 import { CdsTestResult } from '../../models/cds.models';
 import { cdsOutcomeLabel, cdsOutcomeTone } from '../../models/cds-labels';
 import { CdsCardPreviewComponent } from '../cds-card-preview/cds-card-preview.component';
+import { CdsSystemActionsComponent } from '../cds-system-actions/cds-system-actions.component';
 
-/** The outcome of a test run: status line, any messages, the cards as an EHR would show them, and the raw JSON. */
+/**
+ * The outcome of a test run: status line, any messages, the cards as an EHR would show them, any order updates
+ * (systemActions), and the raw JSON.
+ */
 @Component({
   selector: 'app-cds-test-result',
   standalone: true,
-  imports: [MatIconModule, CdsCardPreviewComponent],
+  imports: [MatIconModule, CdsCardPreviewComponent, CdsSystemActionsComponent],
   templateUrl: './cds-test-result.component.html',
   styleUrl: './cds-test-result.component.scss',
 })
@@ -18,6 +22,8 @@ export class CdsTestResultComponent {
   readonly showRaw = signal(false);
 
   readonly cards = computed(() => this.result().response?.cards ?? []);
+  /** Coverage requirements only: order updates the EHR applies by itself. */
+  readonly systemActions = computed(() => this.result().response?.systemActions ?? []);
   /** One-click fixes offered across the cards. */
   readonly fixCount = computed(() => this.cards().reduce((n, c) => n + (c.suggestions?.length ?? 0), 0));
   readonly outcomeLabel = computed(() => cdsOutcomeLabel(this.result().outcome));

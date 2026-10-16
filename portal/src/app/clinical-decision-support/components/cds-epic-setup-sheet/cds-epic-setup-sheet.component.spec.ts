@@ -1,12 +1,13 @@
 import { TestBed, fakeAsync, flushMicrotasks } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideRouter } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { CdsEpicSetupSheetComponent } from './cds-epic-setup-sheet.component';
 import { ToastService } from '../../../services/toast.service';
 import { CdsApiService } from '../../services/cds-api.service';
 import { CdsDiscoveryInfoService } from '../../models/cds.models';
-import { makeCdsApiSpy, makeSetupSheet, makeToastSpy } from '../../testing/cds-test-data';
+import { makeCdsApiSpy, makeSetupSheet, makeSetupSheetCrd, makeToastSpy } from '../../testing/cds-test-data';
 
 describe('CdsEpicSetupSheetComponent', () => {
   let api: ReturnType<typeof makeCdsApiSpy>;
@@ -27,7 +28,12 @@ describe('CdsEpicSetupSheetComponent', () => {
     toast = makeToastSpy();
     TestBed.configureTestingModule({
       imports: [CdsEpicSetupSheetComponent],
-      providers: [provideNoopAnimations(), { provide: CdsApiService, useValue: api }, { provide: ToastService, useValue: toast }],
+      providers: [
+        provideNoopAnimations(),
+        provideRouter([]),
+        { provide: CdsApiService, useValue: api },
+        { provide: ToastService, useValue: toast },
+      ],
     });
     const fixture = TestBed.createComponent(CdsEpicSetupSheetComponent);
     fixture.componentRef.setInput('services', services);
@@ -58,6 +64,38 @@ describe('CdsEpicSetupSheetComponent', () => {
     expect(text).toContain('Contains settings only, no patient data.');
     const options = Array.from((el.querySelector('[data-testid="cds-setup-sheet-service"]') as HTMLSelectElement).options);
     expect(options.map(o => o.textContent?.trim())).toEqual(['Renal dose check', 'Care gaps (off)']);
+  });
+
+  it('shows the coverage requirements part only for a coverage requirements service', () => {
+    const { el, fixture } = create();
+    expect(el.querySelector('[data-testid="cds-setup-sheet-crd"]')).toBeNull();
+
+    api.getSetupSheet.and.returnValue(of(makeSetupSheet({ crd: makeSetupSheetCrd() })));
+    fixture.componentInstance.select('svc-2');
+    fixture.detectChanges();
+    const crd = el.querySelector('[data-testid="cds-setup-sheet-crd"]');
+    expect(crd?.textContent).toContain('7. Coverage requirements (CRD)');
+    expect(crd?.textContent).toContain('ServiceRequest.Update (Unsigned Order)');
+    expect(crd?.textContent).toContain('Acme Health Plan');
+  });
+
+  it('shows whether the service is clinically reviewed', () => {
+    const { el } = create();
+    expect(el.querySelector('[data-testid="cds-setup-sheet-sign-off"]')?.textContent).toContain('Not clinically reviewed');
+  });
+
+  it('shows who reviewed the service and the note', () => {
+    const { el, fixture } = create();
+    api.getSetupSheet.and.returnValue(of(makeSetupSheet({
+      isClinicallySignedOff: true, signedOffBy: 'Dr A. Patel', signedOffAtUtc: '2026-10-15T14:00:00Z', signOffNote: 'P&T review',
+    })));
+    (el.querySelector('[data-testid="cds-setup-sheet-service"]') as HTMLSelectElement).value = 'svc-2';
+    el.querySelector('[data-testid="cds-setup-sheet-service"]')!.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const cell = el.querySelector('[data-testid="cds-setup-sheet-sign-off"]')?.textContent ?? '';
+    expect(cell).toContain('Reviewed by Dr A. Patel');
+    expect(cell).toContain('P&T review');
   });
 
   it('opens the service named by ?service= first', () => {

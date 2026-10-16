@@ -90,6 +90,37 @@ public sealed class CdsServicesController : ControllerBase
         Ok(await setupSheetService.GetAsync(id, $"{Request.Scheme}://{Request.Host}{Request.PathBase}", cancellationToken));
 
     /// <summary>
+    /// Records a clinician's sign-off for the service's current rules, settings, fixes, dismiss reasons and links.
+    /// Advisory: it never blocks switching a service on. A later save that changes that content clears it.
+    /// The body must carry the contentVersion the reviewer saw; 409 Conflict when the service changed since.
+    /// </summary>
+    [HttpPost("{id:guid}/sign-off")]
+    [StandardPermission(PermissionGroupCode.CdsHooks, PermissionActionCode.Edit, description: "Edit a CDS Hooks service or trusted issuer.")]
+    [ProducesResponseType(typeof(CdsServiceInstanceDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SignOff(Guid id, [FromBody] CdsSignOffRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await _service.SignOffAsync(id, request, cancellationToken));
+        }
+        catch (CdsContentChangedException changed)
+        {
+            return Conflict(new { error = changed.UserMessage });
+        }
+    }
+
+    /// <summary>Removes the clinical sign-off (the service shows "Not clinically reviewed" again).</summary>
+    [HttpDelete("{id:guid}/sign-off")]
+    [StandardPermission(PermissionGroupCode.CdsHooks, PermissionActionCode.Edit, description: "Edit a CDS Hooks service or trusted issuer.")]
+    [ProducesResponseType(typeof(CdsServiceInstanceDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ClearSignOff(Guid id, CancellationToken cancellationToken) =>
+        Ok(await _service.ClearSignOffAsync(id, cancellationToken));
+
+    /// <summary>
     /// Runs a pasted CDS request against this instance without a JWT. Nothing is written to the CDS call log.
     /// The test service is resolved per call so the CRUD endpoints above never depend on it.
     /// </summary>

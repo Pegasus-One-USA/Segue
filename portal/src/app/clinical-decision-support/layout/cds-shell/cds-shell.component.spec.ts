@@ -17,7 +17,7 @@ describe('CdsShellComponent', () => {
   }
 
   it('shows every tab but Test to a view-only role', () => {
-    expect(labels(makeTestUser(['cdshooks.view']))).toEqual(['Services', 'Connect your EHR', 'Activity']);
+    expect(labels(makeTestUser(['cdshooks.view']))).toEqual(['Services', 'Connect your EHR', 'Coverage (CRD)', 'Activity']);
   });
 
   it('shows Test only with both view and test', () => {
@@ -29,6 +29,6 @@ describe('CdsShellComponent', () => {
   });
 
   it('shows every tab to an admin', () => {
-    expect(labels(makeTestUser([], 'Admin'))).toEqual(['Services', 'Connect your EHR', 'Test', 'Activity']);
+    expect(labels(makeTestUser([], 'Admin'))).toEqual(['Services', 'Connect your EHR', 'Test', 'Coverage (CRD)', 'Activity']);
   });
 });

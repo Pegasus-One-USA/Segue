@@ -112,12 +112,23 @@ export const CDS_ENDPOINTS = {
   sampleRequest:     (id: string) => `${API_V1_BASE}/cds/services/${id}/sample-request`,
   test:              (id: string) => `${API_V1_BASE}/cds/services/${id}/test`,
   setupSheet:        (id: string) => `${API_V1_BASE}/cds/services/${id}/setup-sheet`,
+  signOff:           (id: string) => `${API_V1_BASE}/cds/services/${id}/sign-off`,
   trustedIssuers:    `${API_V1_BASE}/cds/trusted-issuers`,
   trustedIssuerById: (id: string) => `${API_V1_BASE}/cds/trusted-issuers/${id}`,
   testCallback:      (id: string) => `${API_V1_BASE}/cds/trusted-issuers/${id}/test-callback`,
   handlers:          `${API_V1_BASE}/cds/handlers`,
   discoveryInfo:     `${API_V1_BASE}/cds/discovery-info`,
   activity:          `${API_V1_BASE}/cds/activity`,
+  readiness:         `${API_V1_BASE}/cds/readiness`,
+  // Coverage requirements (Da Vinci CRD): payers and their coverage rules (CdsCoverageController).
+  payers:              `${API_V1_BASE}/cds/payers`,
+  payerById:           (id: string) => `${API_V1_BASE}/cds/payers/${id}`,
+  testRelay:           (id: string) => `${API_V1_BASE}/cds/payers/${id}/test-relay`,
+  coverageRules:       `${API_V1_BASE}/cds/coverage-rules`,
+  coverageRuleById:    (id: string) => `${API_V1_BASE}/cds/coverage-rules/${id}`,
+  coverageRulesImport: `${API_V1_BASE}/cds/coverage-rules/import`,
+  coverageRulesExport: `${API_V1_BASE}/cds/coverage-rules/export`,
+  coverageRulesTemplate: `${API_V1_BASE}/cds/coverage-rules/import-template`,
 };
 
 // ─── Source Connections (ConfigurationsController — api/v1/source-connections) ─

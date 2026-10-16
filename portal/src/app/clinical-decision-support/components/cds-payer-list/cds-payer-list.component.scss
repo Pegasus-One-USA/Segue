@@ -1,0 +1,93 @@
+@use '../../cds' as *;
+
+:host { display: block; }
+
+.empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.table-scroll { overflow-x: auto; }
+
+.name   { display: block; font-weight: 600; }
+.muted  { font-size: 13px; color: var(--color-muted); }
+
+.col-actions {
+  width: 48px;
+  text-align: right;
+}
+
+.btn-more {
+  --mat-icon-button-state-layer-size: 32px;
+
+  color: var(--color-muted);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.payer-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th {
+    padding: 10px 12px;
+    background: var(--color-side);
+    border-bottom: 2px solid var(--color-border);
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+    font-size: 13.5px;
+    color: var(--color-ink);
+  }
+
+  tr:last-child td { border-bottom: none; }
+}
+
+.sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.url {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-side);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--color-ink-2);
+}

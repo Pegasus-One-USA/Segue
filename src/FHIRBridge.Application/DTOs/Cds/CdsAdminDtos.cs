@@ -22,6 +22,15 @@ namespace FHIRBridge.Application.DTOs.Cds;
 /// <param name="OverrideReasonsAreDefault">True when the instance has no list of its own (send null/empty to keep it so).</param>
 /// <param name="Links">Links added to every card (empty when none).</param>
 /// <param name="SupportedFixTypes">The handler's fix types (empty when the handler is unavailable or offers none).</param>
+/// <param name="IsClinicallySignedOff">True while a clinical sign-off is on record (the Services list shows "Reviewed by ...").</param>
+/// <param name="SignedOffBy">The reviewing clinician's name as recorded; null when not reviewed.</param>
+/// <param name="SignedOffAtUtc">When the sign-off was recorded; null when not reviewed.</param>
+/// <param name="SignOffNote">Short note on the review; null when none.</param>
+/// <param name="UsesSampleReferenceData">True when the check's rules are the SAMPLE data shipped with Segue.</param>
+/// <param name="ContentVersion">
+/// Fingerprint of what a sign-off covers (check type, hook, settings, fixes, dismiss reasons, links). Send it back
+/// in <see cref="CdsSignOffRequest.ContentVersion"/> so a sign-off is never recorded for content changed meanwhile.
+/// </param>
 public sealed record CdsServiceInstanceDto(
     Guid Id,
     string ServiceId,
@@ -47,7 +56,25 @@ public sealed record CdsServiceInstanceDto(
     IReadOnlyList<CdsOverrideReasonOption> OverrideReasons,
     bool OverrideReasonsAreDefault,
     IReadOnlyList<CdsCardLinkOption> Links,
-    IReadOnlyList<CdsFixTypeDescriptor> SupportedFixTypes);
+    IReadOnlyList<CdsFixTypeDescriptor> SupportedFixTypes,
+    bool IsClinicallySignedOff = false,
+    string? SignedOffBy = null,
+    DateTime? SignedOffAtUtc = null,
+    string? SignOffNote = null,
+    bool UsesSampleReferenceData = false,
+    string? ContentVersion = null);
+
+/// <summary>
+/// Body of POST api/v1/cds/services/{id}/sign-off: records that a clinician reviewed the service's current rules,
+/// fixes, dismiss reasons and links. Advisory: it never blocks switching the service on.
+/// </summary>
+/// <param name="SignedOffBy">The reviewing clinician's name and role, 1-200 characters (e.g. "Dr A. Patel, CMIO").</param>
+/// <param name="Note">Optional, up to 500 characters. Never patient data.</param>
+/// <param name="ContentVersion">
+/// Required: the <see cref="CdsServiceInstanceDto.ContentVersion"/> the reviewer saw. 409 Conflict when the service
+/// changed since (reload, have the clinician review the new content, then sign off again).
+/// </param>
+public sealed record CdsSignOffRequest(string SignedOffBy, string? Note, string? ContentVersion = null);
 
 /// <summary>Create and update body for a CDS service instance.</summary>
 /// <param name="ServiceId">URL slug: 3-100 chars, lower-case letters, digits, single hyphens. Upper case is lowered.</param>
@@ -116,6 +143,7 @@ public sealed record SaveCdsTrustedIssuerRequest(
 
 /// <summary>One built-in handler type, for the "new service" picker and the settings form.</summary>
 /// <param name="PrefetchByHook">Hook → (prefetch key → FHIR query template).</param>
+/// <param name="UsesSampleReferenceData">True when the check's rules are the SAMPLE data shipped with Segue (the portal warns).</param>
 public sealed record CdsHandlerDto(
     string Key,
     string DisplayName,
@@ -123,7 +151,8 @@ public sealed record CdsHandlerDto(
     IReadOnlyList<string> SupportedHooks,
     IReadOnlyList<CdsSettingDescriptor> Settings,
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> PrefetchByHook,
-    IReadOnlyList<CdsFixTypeDescriptor> FixTypes);
+    IReadOnlyList<CdsFixTypeDescriptor> FixTypes,
+    bool UsesSampleReferenceData = false);
 
 /// <summary>The URLs to register with an EHR.</summary>
 /// <param name="PublicBaseUrl">Base with no trailing slash.</param>
@@ -156,6 +185,14 @@ public sealed record CdsDiscoveryInfoServiceDto(
 /// <param name="SuggestionsAccepted">Feedback: fixes accepted.</param>
 /// <param name="OverrideReasonCodes">Feedback: distinct override reason codes (codes only).</param>
 /// <param name="OverrideReasonCounts">Feedback: how many items of the call (Epic batches) carried each reason code.</param>
+/// <param name="SystemActionCount">Invoke: systemActions returned (coverage requirements only).</param>
+/// <param name="PayerId">Coverage requirements: the matched payer; null when none matched or not a CRD call.</param>
+/// <param name="PayerName">Coverage requirements: the payer's name at the time of the call.</param>
+/// <param name="CoverageDecisions">Coverage requirements: one "covered/pa-needed/doc-needed" per order ("-" = not stated).</param>
+/// <param name="RelayUsed">Coverage requirements: true when relayed to the payer's CRD service; null for other calls.</param>
+/// <param name="RelayMs">Coverage requirements: time spent on the relay.</param>
+/// <param name="RelayOutcome">Coverage requirements: "ok", or why the relay failed (e.g. "timed out; local rules used").</param>
+/// <param name="CoverageAssertionCount">Coverage requirements: coverage-information extensions (coverage-assertion-ids) returned.</param>
 public sealed record CdsCallLogDto(
     Guid Id,
     DateTime OccurredOnUtc,
@@ -183,7 +220,15 @@ public sealed record CdsCallLogDto(
     int SuggestionsOffered,
     int SuggestionsAccepted,
     IReadOnlyList<string> OverrideReasonCodes,
-    IReadOnlyList<CdsReasonCountDto> OverrideReasonCounts);
+    IReadOnlyList<CdsReasonCountDto> OverrideReasonCounts,
+    int SystemActionCount = 0,
+    Guid? PayerId = null,
+    string? PayerName = null,
+    IReadOnlyList<string>? CoverageDecisions = null,
+    bool? RelayUsed = null,
+    long? RelayMs = null,
+    string? RelayOutcome = null,
+    int? CoverageAssertionCount = null);
 
 /// <summary>One override reason code and how many feedback items of a call carried it.</summary>
 public sealed record CdsReasonCountDto(string Code, int Count);

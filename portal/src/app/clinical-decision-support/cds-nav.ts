@@ -14,5 +14,6 @@ export const CDS_TABS: CdsTab[] = [
   { label: 'Connect your EHR', route: '/clinical-decision-support/connect', icon: 'cable', permissions: ['cdshooks.view'] },
   // Test lists the services to pick from, so it needs view as well as test.
   { label: 'Test', route: '/clinical-decision-support/test', icon: 'science', permissions: ['cdshooks.view', 'cdshooks.test'], requireAll: true },
+  { label: 'Coverage (CRD)', route: '/clinical-decision-support/coverage', icon: 'health_and_safety', permissions: ['cdshooks.view'] },
   { label: 'Activity', route: '/clinical-decision-support/activity', icon: 'history', permissions: ['cdshooks.view'] },
 ];
