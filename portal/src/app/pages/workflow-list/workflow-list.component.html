@@ -155,7 +155,10 @@
         </thead>
         <tbody>
           @for (w of paged(); track w.workflowId; let i = $index) {
-            <tr class="data-row">
+            <tr
+              class="data-row"
+              [class.data-row--highlight]="w.workflowId === highlightedId()"
+            >
               <td class="col-menu">
                 <button
                   mat-icon-button

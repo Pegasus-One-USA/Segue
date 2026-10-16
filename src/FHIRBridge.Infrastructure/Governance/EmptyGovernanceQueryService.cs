@@ -9,8 +9,11 @@ public sealed class EmptyGovernanceQueryService : IGovernanceQueryService
 {
     public Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(
         string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken,
-        string? sortColumn = null, string? sortDirection = null)
+        string? sortColumn = null, string? sortDirection = null, AuditLogFilter? filter = null)
         => Task.FromResult(new PagedResult<AuditLogDto>([], 0, 1, take));
+
+    public Task<AuditLogFilterOptionsDto> GetAuditLogFilterOptionsAsync(CancellationToken cancellationToken)
+        => Task.FromResult(new AuditLogFilterOptionsDto([], []));
 
     public Task<PagedResult<DataAccessLogDto>> GetDataAccessLogsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken)
         => Task.FromResult(new PagedResult<DataAccessLogDto>([], 0, 1, take));

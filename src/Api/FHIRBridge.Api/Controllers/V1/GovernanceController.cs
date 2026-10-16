@@ -36,12 +36,25 @@ public sealed class GovernanceController : ControllerBase
         [FromQuery] int take,
         CancellationToken cancellationToken,
         [FromQuery] string? sortColumn = null,
-        [FromQuery] string? sortDirection = null)
+        [FromQuery] string? sortDirection = null,
+        [FromQuery] string? module = null,
+        [FromQuery] string? actor = null,
+        [FromQuery] string? action = null,
+        [FromQuery] DateTime? fromUtc = null,
+        [FromQuery] DateTime? toUtc = null)
     {
         var results = await _governanceQueryService.GetAuditLogsAsync(
-            correlationId, entityType, entityId, skip, take, cancellationToken, sortColumn, sortDirection);
+            correlationId, entityType, entityId, skip, take, cancellationToken, sortColumn, sortDirection,
+            new AuditLogFilter(module, actor, action, fromUtc, toUtc));
         return Ok(results);
     }
+
+    /// <summary>The modules and actors the Audit Logs filters can offer, taken from the trail itself.</summary>
+    [HttpGet("audit-logs/filter-options")]
+    [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View the audit trail.")]
+    [ProducesResponseType(typeof(AuditLogFilterOptionsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAuditLogFilterOptions(CancellationToken cancellationToken) =>
+        Ok(await _governanceQueryService.GetAuditLogFilterOptionsAsync(cancellationToken));
 
     [HttpGet("authentication-logs")]
     [StandardPermission(PermissionGroupCode.Governance, PermissionActionCode.Read, description: "View authentication logs.")]

@@ -99,6 +99,8 @@ export interface WorkflowEdgeDto {
 export interface WorkflowDefinitionDto {
   id: string;
   name: string;
+  /** Unique, human-quotable id (e.g. WLW-150926-0042). Null for pre-numbering workflows or with numbering off. */
+  workflowNumber?: string | null;
   description?: string | null;
   version: number;
   isEnabled: boolean;

@@ -13,7 +13,10 @@ public interface IGovernanceQueryService
     /// </summary>
     Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(
         string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken,
-        string? sortColumn = null, string? sortDirection = null);
+        string? sortColumn = null, string? sortDirection = null, AuditLogFilter? filter = null);
+
+    /// <summary>The distinct modules and actors present in the audit trail, for the Audit Logs screen's filters.</summary>
+    Task<AuditLogFilterOptionsDto> GetAuditLogFilterOptionsAsync(CancellationToken cancellationToken);
 
     Task<PagedResult<DataAccessLogDto>> GetDataAccessLogsAsync(string? correlationId, int skip, int take, CancellationToken cancellationToken);
 

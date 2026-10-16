@@ -25,6 +25,41 @@
 // Workflows / Source Connections / Execution History. The Search button uses .btn-search from that
 // partial; the table action buttons below keep this component's own .btn / .btn-ghost / .btn-sm.
 
+// Filter bar: one grid, so the reference id search does not stretch across the row while the two selects
+// wrap underneath it at full width. Same layout as Audit Logs.
+.errors-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) repeat(2, minmax(170px, 1fr)) auto;
+  gap: 12px;
+  align-items: center;
+
+  .search-wrap,
+  .select-box {
+    min-width: 0;
+  }
+
+  .filter-actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 1024px) {
+  .errors-filter-grid {
+    grid-template-columns: repeat(2, minmax(170px, 1fr));
+  }
+
+  .errors-filter-grid .search-wrap,
+  .errors-filter-grid .filter-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .errors-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .filter-note {
   margin: 0;
   font-size: 13px;

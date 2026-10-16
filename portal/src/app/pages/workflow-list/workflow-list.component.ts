@@ -1,9 +1,10 @@
 ﻿import { Component, OnInit, OnDestroy, HostListener, DestroyRef, inject, signal, computed } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { timeout } from 'rxjs';
 import { CommonModule, DatePipe } from '@angular/common';
 import { HttpResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -38,6 +39,10 @@ import {
 
 /** Debounce before a search-box keystroke triggers a server round-trip (see onSearch). */
 const SEARCH_DEBOUNCE_MS = 300;
+/** How long the just-saved workflow's row stays highlighted after arriving from the builder. */
+const HIGHLIGHT_DURATION_MS = 3000;
+/** How long the arrival waits for the saved workflow's number before searching by its name instead. */
+const ARRIVAL_LOOKUP_TIMEOUT_MS = 1500;
 
 interface LaunchModal {
   name: string;
@@ -71,6 +76,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly customDialog = inject(DialogService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly runStatusHub = inject(RunStatusHubService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly permissions = inject(PermissionService);
@@ -99,6 +105,11 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  spinner in the search box instead of the app-wide global loader, which would otherwise blur the very
    *  input the user is still typing into (AppComponent marks the routed content `[inert]` while busy). */
   readonly searching = signal(false);
+  /** Workflow id whose row is briefly highlighted after a save in the builder — see applyArrivalParams. */
+  readonly highlightedId = signal<string | null>(null);
+  private highlightHandle: ReturnType<typeof setTimeout> | undefined;
+  /** True from a builder-Save arrival until its first list result (or failure); see reload. */
+  private arrivalInFlight = false;
 
   /** Workflow id currently running/launching — disables its action button. Not set for an async ("background") run,
    *  which returns immediately so the row stays interactive; see runAsync. */
@@ -218,7 +229,50 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.reload();
+    this.applyArrivalParams();
+  }
+
+  /** The builder's Save lands here with ?search=<name>&highlight=<id> so the just-saved workflow isn't lost in a
+   *  long list: the search box is pre-filled (so the filtering is visible and clearable) and its row flashes.
+   *  The params are then stripped without a history entry, so a refresh or Back shows the full list again.
+   *
+   *  The search term is the workflow's unique number (WLW-…), looked up by id — not its name, which is only a
+   *  substring match: a workflow called "a" would otherwise pull in every workflow with an "a" anywhere in its
+   *  name or description. The name is only the fallback for an unnumbered workflow or a failed lookup. */
+  private applyArrivalParams(): void {
+    const params = this.route.snapshot.queryParamMap;
+    const name = params.get('search')?.trim() ?? '';
+    const highlight = params.get('highlight');
+    if (!name && !highlight) {
+      this.reload();
+      return;
+    }
+
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {},
+      replaceUrl: true,
+    });
+    this.pageIndex.set(0);
+    const searchFor = (term: string) => {
+      this.searchQuery.set(term);
+      this.reload();
+    };
+    if (!highlight) {
+      searchFor(name);
+      return;
+    }
+
+    this.highlightedId.set(highlight);
+    this.arrivalInFlight = true;
+    // Bounded, so a slow lookup cannot hold up the first list: past the limit it searches by name, as on a failure.
+    this.api
+      .load(highlight)
+      .pipe(timeout({ first: ARRIVAL_LOOKUP_TIMEOUT_MS }))
+      .subscribe({
+        next: (workflow) => searchFor(workflow.workflowNumber?.trim() || name),
+        error: () => searchFor(name),
+      });
   }
 
   optionsFor(category: FilterCategory): string[] {
@@ -397,11 +451,23 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
     if (this.searchDebounceHandle) {
       clearTimeout(this.searchDebounceHandle);
     }
+    clearTimeout(this.highlightHandle);
+  }
+
+  private clearHighlight(): void {
+    clearTimeout(this.highlightHandle);
+    this.highlightHandle = undefined;
+    this.highlightedId.set(null);
   }
 
   /** `silent` (only ever passed from onSearch's debounce) skips the app-wide global loader for this request —
    *  see WorkflowApiService.summary for why: without it, every debounced keystroke blurs the search box mid-type. */
   reload(silent = false): void {
+    // The highlight marks the arrival's own result. Any later reload (page, sort, filter, search, a row action)
+    // means the user has moved on, and the row may no longer be the one on screen.
+    if (!this.arrivalInFlight) {
+      this.clearHighlight();
+    }
     this.loading.set(true);
     if (silent) this.searching.set(true);
     this.api
@@ -430,6 +496,17 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
           this.availableLastRunStatuses.set(result.availableLastRunStatuses ?? []);
           this.loading.set(false);
           this.searching.set(false);
+          // Start the highlight's countdown only once the arrival's rows are on screen, not while a cold load is
+          // in flight.
+          if (this.arrivalInFlight) {
+            this.arrivalInFlight = false;
+            if (this.highlightedId()) {
+              this.highlightHandle = setTimeout(
+                () => this.clearHighlight(),
+                HIGHLIGHT_DURATION_MS,
+              );
+            }
+          }
           // A delete/copy (or a filter/page-size change) can shrink the matching set out from under a page index
           // that pointed past the new last page — snap back and refetch rather than showing an empty page.
           const lastPageIndex = Math.max(0, Math.ceil(result.totalCount / this.pageSize()) - 1);
@@ -441,6 +518,9 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         error: err => {
           this.loading.set(false);
           this.searching.set(false);
+          // No rows to point at: drop the highlight rather than leave it to land on a later, unrelated list.
+          this.arrivalInFlight = false;
+          this.clearHighlight();
           this.toast.error(this.messageOf(err, 'Failed to load workflows.'));
         },
       });

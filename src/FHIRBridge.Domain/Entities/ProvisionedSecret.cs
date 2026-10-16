@@ -34,6 +34,7 @@ public sealed class ProvisionedSecret : IAuditableEntity
     public Guid Id { get; private set; }
     public string KeyVaultName { get; private set; } = default!;
     public string SecretName { get; private set; } = default!;
+    [AuditRedact]
     public string ProtectedValue { get; private set; } = default!;
     public DateTime CreatedOnUtc { get; private set; }
 

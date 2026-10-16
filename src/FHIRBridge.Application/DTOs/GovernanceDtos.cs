@@ -15,6 +15,23 @@ public sealed record AuditLogDto(
     string? IpAddress,
     string? CorrelationId);
 
+/// <summary>Audit Logs screen filters. <paramref name="Actor"/> is the stored actor value (a user id, or
+/// "anonymous"/"system"); <paramref name="FromUtc"/> is inclusive and <paramref name="ToUtc"/> exclusive.</summary>
+public sealed record AuditLogFilter(
+    string? Module = null,
+    string? Actor = null,
+    string? Action = null,
+    DateTime? FromUtc = null,
+    DateTime? ToUtc = null);
+
+/// <summary>One choice for the Audit Logs Actor filter: the stored value to filter on, and the name to show.</summary>
+public sealed record AuditLogActorOptionDto(string Value, string Name);
+
+/// <summary>The values the Audit Logs screen's Module and Actor filters can offer, taken from the trail itself.</summary>
+public sealed record AuditLogFilterOptionsDto(
+    IReadOnlyList<string> Modules,
+    IReadOnlyList<AuditLogActorOptionDto> Actors);
+
 public sealed record DataAccessLogDto(
     Guid Id,
     DateTime OccurredOnUtc,

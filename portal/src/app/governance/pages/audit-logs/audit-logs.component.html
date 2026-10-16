@@ -1,25 +1,27 @@
 <div class="list-page">
   <div class="page-header">
-    <h1>Audit Logs</h1>
+    <div class="page-title-row">
+      <h1>Audit Logs</h1>
+      <app-page-help heading="How to read Audit Logs">
+        <div class="info-body">
+          <p class="info-lead">Every row is <strong>one configuration or record change</strong> — creating, editing, or deleting a source connection, destination, mapping profile, user, role, or any other governed setting. It's tamper-evident: each row is cryptographically chained to the one before it, so a row can never be quietly altered or deleted without breaking the chain.</p>
+
+          <section class="info-section">
+            <h4 class="info-heading">Reading a row</h4>
+            <p><strong>Actor</strong> is who made the change. <strong>Entity</strong> shows the display name of the record that was changed — not who changed it. If Actor shows <span class="info-tag">anonymous</span>, that usually means a self-service action taken before login (like a password reset) — not a suspicious unauthenticated change.</p>
+          </section>
+
+          <p class="info-note">Click <strong>"View diff"</strong> on a row to see exactly which fields changed, old value vs. new value.</p>
+        </div>
+      </app-page-help>
+    </div>
     <p class="page-sub">Immutable, hash-chained record of every configuration and entity change — who, what, when.</p>
   </div>
 
-  <details class="info-panel">
-    <summary>What am I looking at?</summary>
-    <div class="info-body">
-      <p class="info-lead">Every row is <strong>one configuration or record change</strong> — creating, editing, or deleting a source connection, destination, mapping profile, user, role, or any other governed setting. It's tamper-evident: each row is cryptographically chained to the one before it, so a row can never be quietly altered or deleted without breaking the chain.</p>
-
-      <section class="info-section">
-        <h4 class="info-heading">Reading a row</h4>
-        <p><strong>Actor</strong> is who made the change. <strong>Entity</strong> shows the display name of the record that was changed — not who changed it. If Actor shows <span class="info-tag">anonymous</span>, that usually means a self-service action taken before login (like a password reset) — not a suspicious unauthenticated change.</p>
-      </section>
-
-      <p class="info-note">Click <strong>"View diff"</strong> on a row to see exactly which fields changed, old value vs. new value.</p>
-    </div>
-  </details>
-
-  <div class="filter-card filter-card--compact-search">
-    <div class="filter-row">
+  <div class="filter-card">
+    <!-- One grid for the whole bar: correlation id, then the four filters at equal widths, then Search/Reset, all
+         on one line. Nothing applies until Search (or Enter in the correlation box). -->
+    <div class="audit-filter-grid" [class.audit-filter-grid--history]="historyMode()">
       <div class="search-wrap">
         <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
@@ -29,14 +31,67 @@
           type="search"
           class="search-input"
           aria-label="Filter by correlation ID"
-          placeholder="Filter by Correlation ID…"
+          placeholder="Correlation ID…"
           [value]="correlationId()"
           (input)="onCorrelationIdChange($any($event.target).value)"
-          (keyup.enter)="load()"
+          (keyup.enter)="search()"
         />
       </div>
+
+      @if (!historyMode()) {
+        <div class="select-box">
+          <select aria-label="Time period" [value]="period()" [disabled]="correlationIgnoresPeriod()"
+                  [title]="correlationIgnoresPeriod() ? 'A correlation ID is searched across all dates' : ''"
+                  (change)="onPeriodChange($any($event.target).value)">
+            <option value="24h" [selected]="period() === '24h'">Last 24 hours</option>
+            <option value="7d" [selected]="period() === '7d'">Last 7 days</option>
+            <option value="30d" [selected]="period() === '30d'">Last 30 days</option>
+            <option value="custom" [selected]="period() === 'custom'">Custom range…</option>
+          </select>
+          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <div class="select-box">
+          <select aria-label="Actor" [value]="actor()" (change)="onFilterChange('actor', $any($event.target).value)">
+            <option value="" [selected]="!actor()">All actors</option>
+            @for (option of filterOptions().actors; track option.value) {
+              <option [value]="option.value" [selected]="option.value === actor()">{{ option.name }}</option>
+            }
+          </select>
+          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <div class="select-box">
+          <select aria-label="Module" [value]="module()" (change)="onFilterChange('module', $any($event.target).value)">
+            <option value="" [selected]="!module()">All modules</option>
+            @for (option of filterOptions().modules; track option) {
+              <option [value]="option" [selected]="option === module()">{{ option }}</option>
+            }
+          </select>
+          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <div class="select-box">
+          <select aria-label="Action" [value]="action()" (change)="onFilterChange('action', $any($event.target).value)">
+            <option value="" [selected]="!action()">All actions</option>
+            @for (option of actions; track option) {
+              <option [value]="option" [selected]="option === action()">{{ option }}</option>
+            }
+          </select>
+          <svg class="select-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M2 4.5 6 8l4-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      }
+
       <div class="filter-actions">
-        <button class="btn-search" type="button" (click)="load()">Search</button>
+        <button class="btn-search" type="button" (click)="search()">Search</button>
         <button class="btn-reset" type="button" (click)="reset()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
@@ -45,7 +100,36 @@
           Reset
         </button>
       </div>
+
+      @if (!historyMode() && period() === 'custom' && !correlationIgnoresPeriod()) {
+        <div class="custom-range">
+          <label class="date-field">
+            <span>From</span>
+            <input type="date" class="date-input" aria-label="From date" [value]="fromDate()" [max]="toDate() || null"
+                   (change)="onFilterChange('fromDate', $any($event.target).value)" />
+          </label>
+          <label class="date-field">
+            <span>To</span>
+            <input type="date" class="date-input" aria-label="To date" [value]="toDate()" [min]="fromDate() || null"
+                   (change)="onFilterChange('toDate', $any($event.target).value)" />
+          </label>
+        </div>
+      }
     </div>
+
+    @if (!historyMode() && filterError()) {
+      <div class="filter-footer">
+        <span class="filter-error" role="alert">{{ filterError() }}</span>
+      </div>
+    } @else if (!historyMode() && dirty()) {
+      <div class="filter-footer" aria-live="polite">
+        <span class="dirty-note">Filters changed. Press <strong>Search</strong> to update the list.</span>
+      </div>
+    } @else if (!historyMode() && correlationIgnoresPeriod()) {
+      <div class="filter-footer" aria-live="polite">
+        <span class="period-note">Searching all dates for this correlation ID; the period is not applied.</span>
+      </div>
+    }
   </div>
 
   @if (historyMode()) {

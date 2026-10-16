@@ -5,6 +5,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Entities.Governance;
 using FHIRBridge.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using FHIRBridge.Application.Governance;
 
 namespace FHIRBridge.Infrastructure.Governance;
@@ -18,22 +19,25 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
     private readonly IConfiguredPipelineRunRepository _pipelineRunRepository;
     private readonly IReadOnlyList<IPurgeableStore> _purgeableStores;
     private readonly IRetentionPolicyService _retentionPolicyService;
+    private readonly IMemoryCache? _cache;
 
     public EfGovernanceQueryService(
         FHIRBridgeDbContext dbContext,
         IConfiguredPipelineRunRepository pipelineRunRepository,
         IEnumerable<IPurgeableStore> purgeableStores,
-        IRetentionPolicyService retentionPolicyService)
+        IRetentionPolicyService retentionPolicyService,
+        IMemoryCache? cache = null)
     {
         _dbContext = dbContext;
         _pipelineRunRepository = pipelineRunRepository;
         _purgeableStores = purgeableStores.ToList();
         _retentionPolicyService = retentionPolicyService;
+        _cache = cache;
     }
 
     public async Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(
         string? correlationId, string? entityType, string? entityId, int skip, int take, CancellationToken cancellationToken,
-        string? sortColumn = null, string? sortDirection = null)
+        string? sortColumn = null, string? sortDirection = null, AuditLogFilter? filter = null)
     {
         var query = _dbContext.AuditLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -48,36 +52,267 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
         {
             query = query.Where(x => x.EntityId == entityId);
         }
+        if (!string.IsNullOrWhiteSpace(filter?.Module))
+        {
+            query = query.Where(x => x.Module == filter.Module);
+        }
+        if (!string.IsNullOrWhiteSpace(filter?.Actor))
+        {
+            // One person can be stored under their user id and, on rows written before ids were stored, their e-mail
+            // or external id, in any letter case. Compared lower-cased: PostgreSQL's equality is case-sensitive.
+            var storedValues = (await StoredActorValuesForAsync(filter.Actor, cancellationToken))
+                .Select(value => value.ToLowerInvariant())
+                .ToList();
+            query = query.Where(x => storedValues.Contains(x.Actor.ToLower()));
+        }
+        if (!string.IsNullOrWhiteSpace(filter?.Action))
+        {
+            query = query.Where(x => x.Action == filter.Action);
+        }
+        if (filter?.FromUtc is { } fromUtc)
+        {
+            var from = AsUtc(fromUtc);
+            query = query.Where(x => x.OccurredOnUtc >= from);
+        }
+        if (filter?.ToUtc is { } toUtc)
+        {
+            var to = AsUtc(toUtc);
+            query = query.Where(x => x.OccurredOnUtc < to);
+        }
 
         var normalizedTake = NormalizeTake(take);
         var totalCount = await query.CountAsync(cancellationToken);
-        var items = await ApplyAuditLogSort(query, sortColumn, sortDirection)
-            .Skip(NormalizeSkip(skip))
-            .Take(normalizedTake)
+        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
+        // ThenBy: many rows share an actor, module or action; without a tie-break, paging through them can repeat
+        // or skip rows.
+        List<AuditLog> rows;
+        if (sortColumn == "actor")
+        {
+            // Only sorting by actor needs the name inside the query, so the order holds across pages.
+            var withName = WithActorName(query);
+            var ordered = descending
+                ? withName.OrderByDescending(x => x.ActorName.ToLower())
+                : withName.OrderBy(x => x.ActorName.ToLower());
+            rows = await ordered
+                .ThenByDescending(x => x.Log.SequenceNumber)
+                .Skip(NormalizeSkip(skip))
+                .Take(normalizedTake)
+                .Select(x => x.Log)
+                .ToListAsync(cancellationToken);
+        }
+        else
+        {
+            rows = await ApplyAuditLogSort(query, sortColumn, descending)
+                .ThenByDescending(x => x.SequenceNumber)
+                .Skip(NormalizeSkip(skip))
+                .Take(normalizedTake)
+                .ToListAsync(cancellationToken);
+        }
+
+        // Names for this page's actors only.
+        var actors = await LoadActorResolverAsync(rows.Select(x => x.Actor), cancellationToken);
+        var items = rows
             .Select(x => new AuditLogDto(
-                x.Id, x.OccurredOnUtc, x.Actor, x.Module, x.Action, x.EntityType, x.EntityId, x.EntityName,
-                x.OldValueJson, x.NewValueJson, x.Status, x.IpAddress, x.CorrelationId))
-            .ToListAsync(cancellationToken);
+                x.Id, x.OccurredOnUtc, actors.Resolve(x.Actor).Name, x.Module, x.Action, x.EntityType, x.EntityId,
+                x.EntityName, x.OldValueJson, x.NewValueJson, x.Status, x.IpAddress, x.CorrelationId))
+            .ToList();
 
         return ToPaged(items, totalCount, skip, normalizedTake);
     }
+
+    /// <summary>How long the Audit Logs filter options are reused. They come from two DISTINCT scans of the whole
+    /// append-only table, and a new module or actor appearing a few minutes late in a dropdown costs nothing.</summary>
+    private static readonly TimeSpan FilterOptionsCacheDuration = TimeSpan.FromMinutes(5);
+
+    private const string FilterOptionsCacheKey = "governance:audit-log-filter-options";
+
+    public async Task<AuditLogFilterOptionsDto> GetAuditLogFilterOptionsAsync(CancellationToken cancellationToken)
+    {
+        if (_cache is not null && _cache.TryGetValue(FilterOptionsCacheKey, out AuditLogFilterOptionsDto? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        var modules = await _dbContext.AuditLogs.AsNoTracking()
+            .Select(x => x.Module)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToListAsync(cancellationToken);
+
+        // The set of distinct actors is small (the users, plus "anonymous"/"system"), even when the trail is large.
+        var actorValues = await _dbContext.AuditLogs.AsNoTracking()
+            .Select(x => x.Actor)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        // One option per person: a user's id rows and legacy e-mail rows share their user id as the option value.
+        var actors = await LoadActorResolverAsync(actorValues, cancellationToken);
+        var options = actorValues
+            .Select(actors.Resolve)
+            .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new AuditLogActorOptionDto(g.First().Key, g.First().Name))
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Value, StringComparer.Ordinal)
+            .ToList();
+
+        var result = new AuditLogFilterOptionsDto(modules, options);
+        _cache?.Set(FilterOptionsCacheKey, result, FilterOptionsCacheDuration);
+        return result;
+    }
+
+    /// <summary>Treats a timestamp that carries no offset as UTC (as the portal sends it), and converts a local one;
+    /// PostgreSQL rejects a non-UTC <see cref="DateTime"/> compared against a timestamptz column.</summary>
+    private static DateTime AsUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+    };
+
+    /// <summary>The name columns of a user, and nothing else: resolving actors must not read credentials.</summary>
+    private sealed record ActorUser(
+        Guid Id,
+        string? Email,
+        string ExternalUserId,
+        string? DisplayName,
+        string? FirstName,
+        string? LastName,
+        bool IsDeleted)
+    {
+        public string Name => Domain.Entities.User.DisplayNameFrom(DisplayName, FirstName, LastName, Email, ExternalUserId);
+    }
+
+    /// <summary>Loads only the users the given actor values can refer to, by id, e-mail or external id.</summary>
+    private async Task<ActorResolver> LoadActorResolverAsync(IEnumerable<string> actorValues, CancellationToken cancellationToken)
+    {
+        var values = actorValues.Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToList();
+        var ids = values.Select(v => Guid.TryParse(v, out var id) ? id : (Guid?)null).OfType<Guid>().ToList();
+        if (values.Count == 0)
+        {
+            return new ActorResolver([]);
+        }
+
+        // Logins compared lower-cased: a legacy row may carry the e-mail in a different case than the user record.
+        var logins = values.Select(v => v.ToLowerInvariant()).ToList();
+        var users = await _dbContext.Users.IgnoreQueryFilters().AsNoTracking()
+            .Where(u => ids.Contains(u.Id)
+                || logins.Contains(u.Email!.ToLower())
+                || logins.Contains(u.ExternalUserId.ToLower()))
+            .Select(u => new ActorUser(u.Id, u.Email, u.ExternalUserId, u.DisplayName, u.FirstName, u.LastName, u.IsDeleted))
+            .ToListAsync(cancellationToken);
+
+        return new ActorResolver(users);
+    }
+
+    /// <summary>Every stored actor value that belongs to the person <paramref name="key"/> names (a user id, or a
+    /// plain value such as "anonymous").</summary>
+    private async Task<IReadOnlyList<string>> StoredActorValuesForAsync(string key, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(key, out var id))
+        {
+            return [key];
+        }
+
+        var user = await _dbContext.Users.IgnoreQueryFilters().AsNoTracking()
+            .Where(u => u.Id == id)
+            .Select(u => new { u.Email, u.ExternalUserId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (user is null)
+        {
+            return [key];
+        }
+
+        return new[] { id.ToString(), user.Email, user.ExternalUserId }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Maps a stored <c>AuditLog.Actor</c> to the person behind it and their name. The actor is the user's id, or, on
+    /// rows written before ids were stored, their e-mail (or external id). Deleted users are included, since their
+    /// past actions stay in the trail. Anything else ("anonymous", "system") is its own key and name.
+    /// <para>Same precedence as <see cref="WithActorName"/>, so the list and the actor sort always agree: an id match
+    /// wins; among several users sharing an e-mail or external id, an active user before a deleted one, then the
+    /// lowest id.</para>
+    /// </summary>
+    private sealed class ActorResolver
+    {
+        private readonly Dictionary<Guid, ActorUser> _byId;
+        private readonly Dictionary<string, ActorUser> _byLogin = new(StringComparer.OrdinalIgnoreCase);
+
+        public ActorResolver(IReadOnlyCollection<ActorUser> users)
+        {
+            _byId = users.ToDictionary(u => u.Id);
+            foreach (var user in users.OrderBy(u => u.IsDeleted).ThenBy(u => u.Id.ToString(), StringComparer.Ordinal))
+            {
+                foreach (var login in new[] { user.Email, user.ExternalUserId })
+                {
+                    if (!string.IsNullOrWhiteSpace(login))
+                    {
+                        _byLogin.TryAdd(login, user);
+                    }
+                }
+            }
+        }
+
+        public (string Key, string Name) Resolve(string actor)
+        {
+            var user = Guid.TryParse(actor, out var id) && _byId.TryGetValue(id, out var byId)
+                ? byId
+                : _byLogin.GetValueOrDefault(actor);
+
+            return user is null ? (actor, actor) : (user.Id.ToString(), user.Name);
+        }
+    }
+
+    /// <summary>An audit row with its actor's name resolved inside the query, for sorting by actor across pages.</summary>
+    private sealed class AuditLogWithActorName
+    {
+        public AuditLog Log { get; init; } = default!;
+        public string ActorName { get; init; } = default!;
+    }
+
+    /// <summary>
+    /// SQL form of <see cref="ActorResolver.Resolve"/>, used only to sort by actor: the user whose id is the actor,
+    /// else (an active user first, then the lowest id) one whose e-mail or external id is, named as
+    /// <c>User.DisplayNameFrom</c> does: DisplayName, else "FirstName LastName", else Email, else external id.
+    /// </summary>
+    private IQueryable<AuditLogWithActorName> WithActorName(IQueryable<AuditLog> query) =>
+        query.Select(x => new AuditLogWithActorName
+        {
+            Log = x,
+            ActorName = _dbContext.Users
+                .IgnoreQueryFilters()
+                .Where(u => u.Id.ToString() == x.Actor
+                    || u.Email!.ToLower() == x.Actor.ToLower()
+                    || u.ExternalUserId.ToLower() == x.Actor.ToLower())
+                .OrderBy(u => u.Id.ToString() == x.Actor ? 0 : 1)
+                .ThenBy(u => u.IsDeleted)
+                .ThenBy(u => u.Id.ToString())
+                .Select(u => !string.IsNullOrWhiteSpace(u.DisplayName)
+                    ? u.DisplayName
+                    : !(string.IsNullOrWhiteSpace(u.FirstName) && string.IsNullOrWhiteSpace(u.LastName))
+                        ? ((u.FirstName ?? string.Empty) + " " + (u.LastName ?? string.Empty)).Trim()
+                        : u.Email ?? u.ExternalUserId)
+                .FirstOrDefault() ?? x.Actor,
+        });
 
     // A null/unrecognized sortColumn always falls back to the original hardcoded ordering (newest-first
     // by the hash-chain's own sequence) regardless of sortDirection — version-history mode (see
     // AuditLogsComponent.historyMode/versionByEntryId on the frontend) depends on that exact default and
     // never sends a sortColumn itself, so this stays correct even if a stale sort param somehow arrives.
     private static IOrderedQueryable<AuditLog> ApplyAuditLogSort(
-        IQueryable<AuditLog> query, string? sortColumn, string? sortDirection)
+        IQueryable<AuditLog> query, string? sortColumn, bool descending)
     {
-        var descending = !string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
-
         IOrderedQueryable<AuditLog> Order<TKey>(Expression<Func<AuditLog, TKey>> keySelector) =>
             descending ? query.OrderByDescending(keySelector) : query.OrderBy(keySelector);
 
         return sortColumn switch
         {
             "occurredOnUtc" => Order(x => x.OccurredOnUtc),
-            "actor"         => Order(x => x.Actor),
             "module"        => Order(x => x.Module),
             "action"        => Order(x => x.Action),
             "entity"        => Order(x => x.EntityName ?? x.EntityId ?? string.Empty),

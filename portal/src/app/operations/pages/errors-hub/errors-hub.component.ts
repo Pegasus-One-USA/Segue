@@ -4,6 +4,7 @@ import { Subscription } from 'rxjs';
 import { ErrorDashboardComponent } from '../error-dashboard/error-dashboard.component';
 import { ErrorsComponent } from '../errors/errors.component';
 import { ErrorListTarget } from '../../components/error-detail-dialog/error-detail-dialog.component';
+import { PageHelpComponent } from '../../../components/shared/page-help/page-help.component';
 
 type ErrorsView = 'overview' | 'list';
 
@@ -18,7 +19,7 @@ type ErrorsView = 'overview' | 'list';
 @Component({
   selector: 'app-errors-hub',
   standalone: true,
-  imports: [ErrorDashboardComponent, ErrorsComponent],
+  imports: [PageHelpComponent, ErrorDashboardComponent, ErrorsComponent],
   templateUrl: './errors-hub.component.html',
   styleUrl: './errors-hub.component.scss',
 })

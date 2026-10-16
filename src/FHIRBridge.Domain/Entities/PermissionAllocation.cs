@@ -6,8 +6,10 @@ namespace FHIRBridge.Domain.Entities;
 /// Grants (or explicitly denies) a permission to either a Role or a User — exactly one of
 /// <see cref="RoleId"/>/<see cref="UserId"/> is set. Role-level rows are the built-in RBAC grants;
 /// user-level rows are direct overrides that take precedence over whatever the user's roles imply.
+/// <para>Revoking one is a physical delete (<see cref="IHardDeletable"/>): a soft-deleted row would keep occupying the
+/// (RoleId|UserId, PermissionId) unique index and block granting the same permission again.</para>
 /// </summary>
-public sealed class PermissionAllocation : AuditableChildEntity<Guid>
+public sealed class PermissionAllocation : AuditableChildEntity<Guid>, IHardDeletable
 {
     private PermissionAllocation()
     {

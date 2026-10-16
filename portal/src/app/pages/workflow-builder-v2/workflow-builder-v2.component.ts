@@ -1265,10 +1265,15 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   /** Post-save wrap-up — always returns to the Workflows list, where the save (new or updated) is now
    *  visible, instead of leaving you staring at a blanked-out or unchanged canvas. markSaved() first,
    *  or the unsaved-changes guard (which only ever saw the canvas reset itself clean via reset() before)
-   *  intercepts this very navigation and asks "Leave this page?" right after a successful save. */
+   *  intercepts this very navigation and asks "Leave this page?" right after a successful save.
+   *  The list arrives pre-searched for this workflow and highlights its row, so it isn't lost in a long list. */
   private finishSave(): void {
     this.store.markSaved();
-    this.router.navigate(['/workflows']);
+    const search = this.workflowName().trim();
+    const highlight = this.currentWorkflowId();
+    this.router.navigate(['/workflows'], {
+      queryParams: { search: search || null, highlight: highlight || null },
+    });
   }
 
   // Writes each node's real, server-created id back onto its own fields instead of wiping the canvas —

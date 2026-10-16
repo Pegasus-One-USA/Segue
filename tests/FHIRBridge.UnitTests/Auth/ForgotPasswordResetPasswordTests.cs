@@ -115,6 +115,36 @@ public sealed class ForgotPasswordResetPasswordTests
     }
 
     [Fact]
+    public async Task ForgotPasswordAsync_records_the_request_in_the_authentication_log()
+    {
+        // The reset-token columns are [AuditIgnore], so this is the request's only durable record.
+        var user = LocalLoginUser();
+        _repository.Setup(x => x.GetUserByEmailAsync(Email, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        _passwordHasher.Setup(x => x.Hash(It.IsAny<string>())).Returns<string>(v => $"hashed:{v}");
+        _email.Setup(x => x.SendAsync(Email, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        await Service().ForgotPasswordAsync(new ForgotPasswordRequest(Email), CancellationToken.None);
+
+        _governanceLogger.Verify(x => x.LogAuthenticationAsync(
+            It.Is<AuthenticationEntry>(e => e.AuthenticationType == "PasswordResetRequest" && e.Success && e.UserEmail == Email),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_nonexistent_email_writes_no_authentication_log_entry()
+    {
+        // Logging an unknown address would let the log itself be used to probe which accounts exist.
+        _repository.Setup(x => x.GetUserByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((User?)null);
+
+        await Service().ForgotPasswordAsync(new ForgotPasswordRequest("nobody@nowhere.test"), CancellationToken.None);
+
+        _governanceLogger.Verify(x => x.LogAuthenticationAsync(
+            It.IsAny<AuthenticationEntry>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ForgotPasswordAsync_stores_a_genuine_hash_not_the_raw_token()
     {
         // Uses the REAL Pbkdf2PasswordHasher (not a mock) so this proves the stored value is actually a

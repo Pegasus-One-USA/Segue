@@ -44,33 +44,46 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     /// <summary>Falls back to "FirstName LastName" (then Email) when no explicit DisplayName was ever set —
     /// e.g. an SSO-provisioned user gets FirstName/LastName from the IdP's claims but DisplayName is never
     /// populated by that path, unlike local invite/signup which always sets it.</summary>
-    public string EffectiveDisplayName
+    public string EffectiveDisplayName =>
+        DisplayNameFrom(DisplayName, FirstName, LastName, Email, ExternalUserId);
+
+    /// <summary>The <see cref="EffectiveDisplayName"/> rule over plain values, for callers that read only the name
+    /// columns (e.g. resolving audit-trail actors) and must not load the whole user, credentials included.</summary>
+    public static string DisplayNameFrom(
+        string? displayName, string? firstName, string? lastName, string? email, string externalUserId)
     {
-        get
+        if (!string.IsNullOrWhiteSpace(displayName))
         {
-            if (!string.IsNullOrWhiteSpace(DisplayName))
-            {
-                return DisplayName;
-            }
-
-            var composedName = $"{FirstName} {LastName}".Trim();
-            if (!string.IsNullOrWhiteSpace(composedName))
-            {
-                return composedName;
-            }
-
-            return Email ?? ExternalUserId;
+            return displayName;
         }
+
+        var composedName = $"{firstName} {lastName}".Trim();
+        if (!string.IsNullOrWhiteSpace(composedName))
+        {
+            return composedName;
+        }
+
+        return email ?? externalUserId;
     }
 
+    // Audit classification: credentials whose change matters are [AuditRedact] (the trail shows that they changed,
+    // never their value); sign-in and session bookkeeping is [AuditIgnore] (the authentication log already records
+    // every sign-in). An unclassified credential column fails AuditedSecretPropertyTests.
+    [AuditRedact]
     public string? PasswordHash { get; private set; }
     public bool IsLocalLoginEnabled { get; private set; }
     public bool MustChangePassword { get; private set; }
+    // A reset request can be made by anyone who knows an e-mail address, before signing in; recording it would let an
+    // anonymous caller grow the append-only trail at will. The reset that follows changes PasswordHash, which is.
+    [AuditIgnore]
     public string? PasswordResetTokenHash { get; private set; }
+    [AuditIgnore]
     public DateTime? PasswordResetTokenExpiresOnUtc { get; private set; }
 
     /// <summary>Hash of the short-lived, single-use passwordless "magic link" sign-in token.</summary>
+    [AuditIgnore]
     public string? MagicLinkTokenHash { get; private set; }
+    [AuditIgnore]
     public DateTime? MagicLinkTokenExpiresOnUtc { get; private set; }
 
     /// <summary>Account status: Active, Inactive, or Invited.</summary>
@@ -81,10 +94,14 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
 
     /// <summary>Account enable/disable. When false the user cannot authenticate.</summary>
     public bool IsEnabled { get; private set; }
+    [AuditIgnore]
     public DateTime? LastLoginOnUtc { get; private set; }
 
-    // Security hardening columns.
+    // Security hardening columns. Failed attempts and lockouts are recorded in the authentication log and as security
+    // events; in the change trail every wrong password would add a row an unauthenticated caller controls.
+    [AuditIgnore]
     public int FailedLoginCount { get; private set; }
+    [AuditIgnore]
     public DateTime? LockoutEndUtc { get; private set; }
     public DateTime? LastPasswordChangedOnUtc { get; private set; }
     public DateTime? PasswordExpiresOnUtc { get; private set; }
@@ -100,16 +117,20 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
         MustChangePassword || (PasswordExpiresOnUtc is { } expiresOnUtc && expiresOnUtc < DateTime.UtcNow);
 
     /// <summary>Base32 TOTP shared secret. Staged during enrollment, active once <see cref="MfaEnabled"/> is true.</summary>
+    [AuditRedact]
     public string? MfaSecret { get; private set; }
 
     /// <summary>Newline-separated hashes of the user's remaining one-time MFA backup codes.</summary>
+    [AuditRedact]
     public string? MfaBackupCodeHashes { get; private set; }
 
     /// <summary>When the user last completed MFA enrollment (confirmed a code against the staged secret).</summary>
     public DateTime? MfaEnrolledOnUtc { get; private set; }
 
     /// <summary>Hash of the short-lived, single-use token issued after password verification when MFA is required to finish logging in.</summary>
+    [AuditIgnore]
     public string? MfaChallengeTokenHash { get; private set; }
+    [AuditIgnore]
     public DateTime? MfaChallengeExpiresOnUtc { get; private set; }
 
     /// <summary>
@@ -125,11 +146,14 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     public bool IsMfaSetupRequired => MustSetupMfa && !MfaEnabled;
 
     // Invitation flow fields.
+    [AuditRedact]
     public string? InvitationTokenHash { get; private set; }
     public DateTime? InvitationTokenExpiresOnUtc { get; private set; }
 
     // Refresh token fields.
+    [AuditIgnore]
     public string? RefreshTokenHash { get; private set; }
+    [AuditIgnore]
     public DateTime? RefreshTokenExpiresOnUtc { get; private set; }
     // Whether THIS refresh token was issued from a "Remember me" login — carried forward across
     // every rotation (see LocalAuthService.RefreshTokenAsync, which reads this back in rather than
@@ -138,6 +162,7 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     // before this column existed, when every refresh cookie was unconditionally persistent) keep
     // behaving exactly as they do today after the migration backfills it — see the migration's own
     // defaultValue for the DB-side half of that guarantee.
+    [AuditIgnore]
     public bool RefreshTokenRememberMe { get; private set; } = true;
 
     /// <summary>True when the account is currently locked out (failed-login threshold reached).</summary>

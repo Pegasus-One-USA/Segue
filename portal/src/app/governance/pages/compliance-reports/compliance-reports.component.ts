@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { GovernanceApiService } from '../../services/governance-api.service';
+import { PageHelpComponent } from '../../../components/shared/page-help/page-help.component';
 
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -9,7 +10,7 @@ function toDateInputValue(date: Date): string {
 @Component({
   selector: 'app-compliance-reports',
   standalone: true,
-  imports: [CommonModule],
+  imports: [PageHelpComponent, CommonModule],
   templateUrl: './compliance-reports.component.html',
   styleUrl: './compliance-reports.component.scss',
 })
