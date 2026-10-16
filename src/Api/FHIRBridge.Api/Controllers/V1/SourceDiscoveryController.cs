@@ -70,10 +70,13 @@ public sealed class SourceDiscoveryController : ControllerBase
         }
 
         IReadOnlyList<string> resourceTypes = [];
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? searchParameters = null;
         string? resourceTypesError = null;
         try
         {
-            resourceTypes = await _probeService.ProbeSupportedResourceTypesAsync(request.BaseUrl, cancellationToken);
+            var capabilities = await _probeService.ProbeCapabilitiesAsync(request.BaseUrl, cancellationToken);
+            resourceTypes = capabilities.ResourceTypes;
+            searchParameters = capabilities.SearchParametersByResourceType;
         }
         catch (Exception ex)
         {
@@ -81,7 +84,8 @@ public sealed class SourceDiscoveryController : ControllerBase
                 ex.Message, "Could not read the endpoint's supported resource types.");
         }
 
-        return Ok(new SourceDiscoveryProbeResult(smart, resourceTypes, resourceTypesError, smartConfigurationError));
+        return Ok(new SourceDiscoveryProbeResult(
+            smart, resourceTypes, resourceTypesError, smartConfigurationError, searchParameters));
     }
 
     /// <summary>

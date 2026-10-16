@@ -11,7 +11,9 @@ public sealed class WorkflowExecutionContext
         string? targetPatientId = null,
         string? patientSearchCriteria = null,
         string? callerId = null,
-        string? userIdentity = null)
+        string? userIdentity = null,
+        string? ehrEndpointCode = null,
+        FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides? sourceOverrides = null)
     {
         WorkflowRunId = workflowRunId == Guid.Empty ? Guid.NewGuid() : workflowRunId;
         CorrelationId = string.IsNullOrWhiteSpace(correlationId) ? WorkflowRunId.ToString("N") : correlationId;
@@ -22,6 +24,8 @@ public sealed class WorkflowExecutionContext
         PatientSearchCriteria = patientSearchCriteria;
         CallerId = callerId;
         UserIdentity = userIdentity;
+        EhrEndpointCode = ehrEndpointCode;
+        SourceOverrides = sourceOverrides;
     }
 
     public Guid WorkflowRunId { get; }
@@ -75,4 +79,26 @@ public sealed class WorkflowExecutionContext
     /// Null (the default for every existing trigger path) preserves prior behavior.
     /// </summary>
     public string? UserIdentity { get; }
+
+    /// <summary>
+    /// The vendor's own endpoint code (<c>EhrEndpoint.VendorEndpointId</c>), supplied only by the external
+    /// browser-redirect trigger (<c>POST /api/v1/workflows/external/run</c>) when a caller wants to run
+    /// against a specific hospital/practice endpoint rather than whatever a source node's own configuration
+    /// already points at. Validated to be non-blank at the API layer; NOT YET consumed by any source node
+    /// executor's own FHIR base-URL selection — that's vendor-specific follow-up work. Carried here (rather
+    /// than left out) so it reaches every node executor once that work lands, without another context-shape
+    /// change. Null (the default for every existing trigger path) preserves prior behavior.
+    /// </summary>
+    public string? EhrEndpointCode { get; }
+
+    /// <summary>This run's Group ID / Search Criteria replacing the source connection's saved ones. Null for every
+    /// ordinary run.</summary>
+    public FHIRBridge.Runtime.Application.Abstractions.Sources.RunSourceOverrides? SourceOverrides { get; }
+
+    /// <summary>Resolved by the orchestrator from <see cref="EhrEndpointCode"/> when the run explicitly names an EHR
+    /// Endpoint. Null for every ordinary run — the source nodes then behave exactly as before.</summary>
+    public FHIRBridge.Runtime.Application.Abstractions.Sources.EhrEndpointOverride? EhrEndpointOverride { get; private set; }
+
+    public void SetEhrEndpointOverride(FHIRBridge.Runtime.Application.Abstractions.Sources.EhrEndpointOverride? value) =>
+        EhrEndpointOverride = value;
 }

@@ -1,0 +1,49 @@
+<div class="page">
+  <div class="card" [class.card--error]="startupError() || (status() && status() !== 'Running' && status() !== 'Succeeded' && status() !== 'Triggered')"
+    [class.card--success]="status() === 'Succeeded' || status() === 'Triggered'">
+
+    @if (startupError()) {
+      <span class="badge badge--error">Error</span>
+      <h1>Could not run workflow</h1>
+      <p>{{ startupError() }}</p>
+    } @else {
+      @if (status() === 'Running') {
+        <div class="spinner" aria-hidden="true"></div>
+        <h1>Executing workflow…</h1>
+        @if (stepMessage()) {
+          <p>{{ stepMessage() }}</p>
+        }
+        @if (runId()) {
+          <p>Run ID: <code>{{ runId() }}</code></p>
+        }
+        @if (pollFailed()) {
+          <p class="hint">Having trouble reaching FHIRBridge to check status — still retrying…</p>
+        }
+      } @else if (status() === 'Succeeded') {
+        <span class="badge badge--success">Success</span>
+        <h1>Workflow succeeded</h1>
+        @if (runId()) {
+          <p>Run ID: <code>{{ runId() }}</code></p>
+        }
+      } @else if (status() === 'Triggered') {
+        <span class="badge badge--success">Started</span>
+        <h1>Workflow execution started</h1>
+        @if (runId()) {
+          <p>Run ID: <code>{{ runId() }}</code></p>
+        }
+      } @else if (status()) {
+        <span class="badge badge--error">{{ status() }}</span>
+        <h1>Workflow {{ status()!.toLowerCase() }}</h1>
+        @if (runId()) {
+          <p>Run ID: <code>{{ runId() }}</code></p>
+        }
+        @if (errorMessage()) {
+          <p class="detail">{{ errorMessage() }}</p>
+        }
+      }
+    }
+    @if (canCloseManually()) {
+      <p class="hint">Finished. Your browser did not allow this window to close itself — you can close it now.</p>
+    }
+  </div>
+</div>

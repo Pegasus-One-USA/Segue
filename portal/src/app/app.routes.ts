@@ -33,6 +33,17 @@ export const routes: Routes = [
       ),
   },
 
+  // ── External workflow trigger "watch it run" page (no shell, no login) ──────
+  // Landed on via FHIRBridge's own POST /api/v1/workflows/external/run-page redirect (browser-redirect
+  // external-trigger flow) — never receives the Client Secret, only a runId query param.
+  {
+    path: 'external-run',
+    loadComponent: () =>
+      import('./external-run/pages/external-run/external-run.component').then(
+        m => m.ExternalRunComponent
+      ),
+  },
+
   // ── App Shell — wraps every authenticated page ──────────────────────────────
   {
     path: '',

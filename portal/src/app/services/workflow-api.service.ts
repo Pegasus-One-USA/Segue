@@ -479,11 +479,22 @@ export class WorkflowApiService {
    * `async: true` returns as soon as the run is accepted (202, with the run id) instead of blocking until the
    * whole DAG finishes — use with pollRunStatus so a long run survives navigating away from this screen.
    */
-  run(workflowId: string, async = false): Observable<WorkflowRunResultDto | WorkflowRunStatus> {
-    return this.http.post<WorkflowRunResultDto | WorkflowRunStatus>(
-      WORKFLOW_ENDPOINTS.run(workflowId),
-      async ? { async: true } : {},
-    );
+  run(workflowId: string, async = false, v2?: ExecuteV2RunOptions): Observable<WorkflowRunResultDto | WorkflowRunStatus> {
+    // v2 is the "Execute V2" path: run this once against another EHR Endpoint and/or with different Group ID / Search
+    // Criteria than the saved configuration. Omitted (every existing caller) the request body is exactly what it always was.
+    const body: Record<string, unknown> = async ? { async: true } : {};
+    if (v2?.targetEhrEndpointId) body['targetEhrEndpointId'] = v2.targetEhrEndpointId;
+    if (v2?.groupIdOverride != null) body['groupIdOverride'] = v2.groupIdOverride;
+    if (v2?.searchCriteriaOverride != null) body['searchCriteriaOverride'] = v2.searchCriteriaOverride;
+    if (v2?.resourceCriteriaOverrides && Object.keys(v2.resourceCriteriaOverrides).length > 0) {
+      body['resourceCriteriaOverrides'] = v2.resourceCriteriaOverrides;
+    }
+    return this.http.post<WorkflowRunResultDto | WorkflowRunStatus>(WORKFLOW_ENDPOINTS.run(workflowId), body);
+  }
+
+  /** What "Execute V2" needs: the workflow's default connection values and the EHR Endpoints it could run against. */
+  runOptions(workflowId: string): Observable<WorkflowRunOptions> {
+    return this.http.get<WorkflowRunOptions>(WORKFLOW_ENDPOINTS.runOptions(workflowId));
   }
 
   /** Poll target for an async run: 'Running' until the orchestrator persists a terminal status. */
@@ -583,4 +594,42 @@ export class WorkflowApiService {
       WORKFLOW_ENDPOINTS.copy(workflowId),
       description === undefined ? { name } : { name, description });
   }
+}
+
+export interface WorkflowRunConnectionValues {
+  baseUrl: string | null;
+  tokenEndpoint: string | null;
+  clientId: string | null;
+  keyId: string | null;
+  practiceId: string | null;
+}
+
+export interface WorkflowRunEhrEndpointOption extends WorkflowRunConnectionValues {
+  id: string;
+  name: string;
+  status: string;
+  jwksUrl: string | null;
+}
+
+export interface ExecuteV2RunOptions {
+  targetEhrEndpointId?: string | null;
+  groupIdOverride?: string | null;
+  searchCriteriaOverride?: string | null;
+  /** Resource type -> FHIR search criteria for this run only; replaces the saved criteria of each type named. */
+  resourceCriteriaOverrides?: Record<string, string> | null;
+}
+
+export interface WorkflowRunOptions {
+  supportsHospitalSwitch: boolean;
+  hospitalSwitchReason: string | null;
+  supportsRunCriteria: boolean;
+  /** Resource types mapped on the workflow's destination nodes (offered in the per-resource criteria dropdown). */
+  resourceTypes?: string[];
+  retrieval: { method: string | null; exportScope: string | null; groupId: string | null; searchCriteria: string | null } | null;
+  vendor: string | null;
+  sourceName: string | null;
+  defaults: WorkflowRunConnectionValues | null;
+  /** The EHR Endpoint whose base URL equals the workflow's saved one, i.e. "the selected hospital" today. */
+  matchedEhrEndpointId: string | null;
+  endpoints: WorkflowRunEhrEndpointOption[];
 }

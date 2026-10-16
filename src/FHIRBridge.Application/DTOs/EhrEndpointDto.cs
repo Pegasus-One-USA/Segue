@@ -14,7 +14,12 @@ public sealed record EhrEndpointDto(
     string? CreatedBy,
     DateTime? ModifiedOnUtc,
     string? ModifiedBy,
-    EhrEndpointType EndpointType = EhrEndpointType.MyChart);
+    EhrEndpointType EndpointType = EhrEndpointType.MyChart,
+    string? TokenEndpoint = null,
+    string? ClientId = null,
+    string? KeyId = null,
+    string? JwksUrl = null,
+    string? PracticeId = null);
 
 /// <summary>
 /// One server-side page of the admin EHR Endpoints screen. Same shape and reasoning as

@@ -830,9 +830,9 @@
                   <button type="button" class="btn btn-sm btn-primary" (click)="openGroupMapping(r)">
                     {{ configTab() === 'transformation' ? 'Transformation' : configTab() === 'deidentification' ? 'De-identification' : 'Map' }}
                   </button>
-                  <!-- Per-resource-type FHIR search criteria — appends to whatever this resource type already
-                       has (see openResourceCriteria/submitResourceCriteria). Scoped to the launch source node,
-                       so it filters what the extraction fetches for THIS type only. -->
+                  <!-- Per-resource-type FHIR search criteria — edited in place and saved as a replace (see
+                       openResourceCriteria/submitResourceCriteria); the dot marks a type that has some. Scoped to
+                       the launch source node, so it filters what the extraction fetches for THIS type only. -->
                   <button type="button" class="btn btn-sm btn-secondary" (click)="openResourceCriteria(r)">
                     Criteria@if (criteriaFor(r)) {<span class="dw-criteria-dot" aria-hidden="true">•</span>}
                   </button>
@@ -854,6 +854,19 @@
             }
           </tbody>
         </table>
+        <!-- athenahealth rejects a Patient search without an identifying criterion; the source form's Search
+             Criteria that used to cover this is gone, so Patient criteria have to (see athenaPatientNeedsCriteria). -->
+        @if (athenaPatientNeedsCriteria()) {
+          <div class="dw-criteria-warning" role="status">
+            <p>
+              athenahealth rejects a Patient search without an identifying criterion — e.g.
+              <code>identifier=…</code>, <code>name=…</code>, or <code>family=…&amp;birthdate=…</code>. Add Patient
+              criteria, or every run that isn't started from the API with its own criteria will fail on Patient.
+            </p>
+            <button type="button" class="btn btn-sm btn-secondary dw-criteria-warning-action"
+                    (click)="openResourceCriteria('Patient')">Add Patient criteria</button>
+          </div>
+        }
       } @else {
         <!-- ── Mapping canvas, scoped to the one selected group ── the outer Node Library header
              shows "Map fields — {group}" in place of its own title, so no title repeats here. ── -->
@@ -1231,30 +1244,25 @@
   }
 
   <!-- ── Per-resource-type FHIR search criteria ──────────────────────────────
-       One input box per resource type, raw FHIR search parameters. Saving APPENDS to whatever is already
-       stored (parameters whose key is already present are dropped, since a repeated key is not additive
-       filtering — Epic rejects a repeated identifier outright), so the box starts empty with the current
-       value shown above it. "Replace" is the escape hatch for removing/rewriting an existing parameter. ── -->
+       One input box per resource type, raw FHIR search parameters. The box opens prefilled with whatever is
+       stored and IS the criteria: saving replaces the stored value with exactly what's in it, and saving it
+       empty clears the criteria. ── -->
   @if (criteriaEditorResource(); as criteriaResource) {
+    <!-- No backdrop-click dismissal: a stray click outside would throw away a half-typed criteria. The dialog
+         closes only through its own buttons (or Escape, the keyboard equivalent of Cancel). -->
     <div class="dw-confirm-backdrop" tabindex="0"
-         (click)="onCriteriaBackdropClick($event)"
          (keydown.escape)="closeResourceCriteria()">
       <div class="dw-confirm-dialog dw-confirm-dialog--wide">
         <h3 class="dw-confirm-title">Search criteria for {{ criteriaResource }}</h3>
         <div class="dw-confirm-body">
-          @if (criteriaFor(criteriaResource); as current) {
-            <p class="dw-criteria-current-label">Currently applied</p>
-            <code class="dw-criteria-current">{{ current }}</code>
-          } @else {
+          @if (!criteriaFor(criteriaResource)) {
             <p class="dw-criteria-empty">
               No criteria yet — {{ criteriaResource }} is fetched unfiltered, apart from any
               connection-level search criteria and patient scoping the run already applies.
             </p>
           }
 
-          <label class="dw-criteria-label" for="dw-criteria-input">
-            {{ criteriaReplace() ? 'Replace with' : 'Add criteria' }}
-          </label>
+          <label class="dw-criteria-label" for="dw-criteria-input">Criteria</label>
           <input
             id="dw-criteria-input"
             class="dw-criteria-input"
@@ -1267,14 +1275,49 @@
           />
           <p class="dw-criteria-hint">
             Raw FHIR search parameters, joined with <code>&amp;</code>. Any parameter the source server accepts
-            is valid; nothing is validated here.
+            is valid.
           </p>
 
-          <label class="dw-criteria-replace">
-            <input type="checkbox" [checked]="criteriaReplace()"
-                   (change)="criteriaReplace.set($any($event.target).checked)" />
-            Replace existing criteria instead of adding to it
-          </label>
+          <!-- A bulk-export source sends no search criteria at all ($export doesn't take them), so the per-parameter
+               search warning below doesn't apply; instead, say which parameters the run applies to the exported
+               records after download and which can't affect the export. -->
+          @if (isBulkExportSource()) {
+            @if (criteriaBulkExportParameters().length) {
+              <div class="dw-criteria-warning" role="status">
+                <p>This source fetches with Bulk Export ($export), which doesn't take search criteria.</p>
+                @if (criteriaBulkExportApplied().length) {
+                  <p>Applied to the exported records after download:
+                    @for (parameter of criteriaBulkExportApplied(); track parameter.name; let last = $last) {
+                      <code>{{ parameter.name }}</code>@if (!last) {, }
+                    }
+                  </p>
+                }
+                @if (criteriaBulkExportIgnored().length) {
+                  <p>Can't be applied to a bulk export, so they'll be ignored:
+                    @for (parameter of criteriaBulkExportIgnored(); track parameter.name; let last = $last) {
+                      <code>{{ parameter.name }}</code>@if (!last) {, }
+                    }
+                  </p>
+                }
+              </div>
+            }
+          } @else if (criteriaIgnoredParameters().length) {
+            <div class="dw-criteria-warning" role="status">
+              <p>The source doesn't list these as search parameters for {{ criteriaResource }}, so it will ignore them:</p>
+              <ul>
+                @for (parameter of criteriaIgnoredParameters(); track parameter.name) {
+                  <li>
+                    <code>{{ parameter.name }}</code> —
+                    @if (parameter.enforced) {
+                      Segue filters the fetched records by it instead.
+                    } @else {
+                      it won't narrow what's fetched.
+                    }
+                  </li>
+                }
+              </ul>
+            </div>
+          }
 
           @if (criteriaError(); as error) {
             <p class="dw-criteria-error">{{ error }}</p>
@@ -1289,7 +1332,7 @@
                   (click)="closeResourceCriteria()">Cancel</button>
           <button type="button" class="btn btn-primary" [disabled]="criteriaSaving()"
                   (click)="submitResourceCriteria()">
-            {{ criteriaSaving() ? 'Saving…' : criteriaReplace() ? 'Replace' : 'Add' }}
+            {{ criteriaSaving() ? 'Saving…' : 'Save' }}
           </button>
         </div>
       </div>

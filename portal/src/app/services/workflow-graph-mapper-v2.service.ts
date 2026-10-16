@@ -285,9 +285,15 @@ export class WorkflowGraphMapperServiceV2 {
 
   /** The launch source node's CANVAS id — what a per-resource-type criteria row is keyed by (the backend
    *  stamps this same value onto the node's configuration as `canvasNodeId`; see nodeToRequest, which sends
-   *  node.id as the request id). Distinct from findLaunchSourceId above, which returns its saved CONNECTION id. */
+   *  node.id as the request id). Distinct from findLaunchSourceId above, which returns its saved CONNECTION id.
+   *  Prefers the stamped `canvasNodeId` field: once a saved workflow is reloaded, node.id is the persisted
+   *  WorkflowNode Guid (see nodeFromDto), which the backend regenerates on every save — keying criteria on it
+   *  hid the stored rows from the editor and orphaned new ones. node.id is only the right key for a node that
+   *  has never been saved, which has no stamp yet. */
   findLaunchSourceNodeId(): string | null {
-    return this.store.nodes().find(node => !node.kind)?.id ?? null;
+    const source = this.store.nodes().find(node => !node.kind);
+    if (!source) return null;
+    return source.fields['canvasNodeId'] || source.id;
   }
 
   private nodeToRequest(node: CanvasNode, catalog: WorkflowCatalogItem[]): WorkflowNodeRequest {

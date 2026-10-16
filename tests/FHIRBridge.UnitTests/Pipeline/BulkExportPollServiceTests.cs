@@ -890,4 +890,83 @@ public sealed class BulkExportPollServiceTests
             null,
             It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
     }
+
+    [Theory]
+    [InlineData(null, null, new[] { "p1", "p3" })]
+    [InlineData("gender=male", null, new[] { "p2" })]
+    [InlineData(null, "gender=male", new[] { "p2" })]
+    [InlineData(null, "status=active", new[] { "p1", "p3" })]
+    public async Task Completed_result_filters_exported_records_by_the_source_nodes_criteria_before_resuming(
+        string? apiCriteria, string? callerPatientCriteria, string[] expectedPatientIds)
+    {
+        // A $export request carries no search criteria, so the paused node's Patient criteria (gender=female) can only
+        // take effect on the downloaded records; an API run's own criteria win a parameter both set, and an external
+        // trigger's own Patient criteria (SourceOverrides.CriteriaByResourceType) are combined with the saved row, winning
+        // a parameter both set — so a caller's status=active keeps the saved gender=female.
+        const string canvasNodeId = "n-source-1";
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "ecw-bulk", 1);
+        var sourceNode = workflow.AddNode(
+            FHIRBridge.Runtime.Application.Workflows.Catalog.WorkflowNodeTypes.EClinicalWorksSource, WorkflowNodeCategory.Source, 0,
+            configurationJson: $$"""{"canvasNodeId":"{{canvasNodeId}}"}""");
+        var runId = Guid.NewGuid();
+        var contextJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            WorkflowRunId = runId,
+            CorrelationId = "corr",
+            PatientSearchCriteria = apiCriteria,
+            SourceOverrides = callerPatientCriteria is null
+                ? null
+                : new { GroupId = (string?)null, SearchCriteria = (string?)null, CriteriaByResourceType = new Dictionary<string, string> { ["Patient"] = callerPatientCriteria } },
+        });
+        var job = new BulkExportJob(
+            Guid.NewGuid(), BulkExportJobSourcePath.WorkflowNode, Guid.NewGuid(), sourceConfigurationId: null,
+            exportRequestJson: "{}", kickedOffOnUtc: DateTime.UtcNow,
+            workflowRunId: runId, workflowNodeId: sourceNode.Id, contextJson: contextJson);
+        job.MarkKickedOff("https://fhir.example.com/status/1");
+
+        var repository = new Mock<IBulkExportJobRepository>();
+        var client = new Mock<IFhirBulkExportClient>();
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        var orchestrator = new Mock<IRankedWorkflowOrchestrator>();
+        var runStore = new Mock<FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowRunStore>();
+        runStore.Setup(s => s.GetAsync(runId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WorkflowRun(runId, workflow.Id, DateTimeOffset.UtcNow));
+        var definitionStore = new Mock<FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore>();
+        definitionStore.Setup(s => s.GetAsync(workflow.Id, It.IsAny<CancellationToken>())).ReturnsAsync(workflow);
+        var criteriaRepository = new Mock<IResourceTypeCriteriaRepository>();
+        criteriaRepository.Setup(r => r.ListForWorkflowAsync(workflow.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ResourceTypeCriteria(workflow.Id, canvasNodeId, "Patient", "gender=female")]);
+
+        var service = new BulkExportPollService(
+            repository.Object, client.Object, resolver.Object, orchestrator.Object, _runCloser.Object, NullLogger<BulkExportPollService>.Instance,
+            runStore: runStore.Object, definitionStore: definitionStore.Object, criteriaRepository: criteriaRepository.Object);
+
+        IReadOnlyList<ResourceEnvelope> exported =
+        [
+            new ResourceEnvelope("Patient", "p1", """{"resourceType":"Patient","id":"p1","gender":"female"}""", null, null),
+            new ResourceEnvelope("Patient", "p2", """{"resourceType":"Patient","id":"p2","gender":"male"}""", null, null),
+            new ResourceEnvelope("Patient", "p3", """{"resourceType":"Patient","id":"p3","gender":"female"}""", null, null),
+            new ResourceEnvelope("Observation", "o1", """{"resourceType":"Observation","id":"o1","status":"final"}""", null, null),
+        ];
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkExportPollResult(BulkExportPollStatus.Completed, Files: [new BulkExportFile("Patient", "https://fhir.example.com/files/patient.ndjson")]));
+        client.Setup(c => c.DownloadResultsAsync(It.IsAny<IReadOnlyList<BulkExportFile>>(), Source, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(exported);
+        IReadOnlyList<ResourceEnvelope>? resumedWith = null;
+        orchestrator.Setup(o => o.ResumeAfterBulkExportAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyList<ResourceEnvelope>>(),
+                It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, Guid, string?, string?, IReadOnlyList<ResourceEnvelope>, IReadOnlyList<string>?, CancellationToken>(
+                (_, _, _, _, resources, _, _) => resumedWith = resources)
+            .ReturnsAsync(new WorkflowRunResult(new WorkflowRun(runId, workflow.Id, DateTimeOffset.UtcNow), new Dictionary<Guid, WorkflowNodeOutput>()));
+
+        await service.PollDueJobsAsync(50, 5, 120, CancellationToken.None);
+
+        resumedWith!.Where(r => r.ResourceType == "Patient").Select(r => r.ResourceId).Should().Equal(expectedPatientIds);
+        resumedWith!.Should().ContainSingle(r => r.ResourceType == "Observation");
+    }
 }
