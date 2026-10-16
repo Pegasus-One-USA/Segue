@@ -17,8 +17,19 @@ public sealed record SourceDiscoveryProbeRequest(string BaseUrl, Guid? SourceCon
 /// all — true of plain (non-SMART) FHIR R4 servers such as a bare HAPI instance — so the wizard can fall back to
 /// manual endpoint entry instead of failing the whole probe.
 /// </summary>
+/// <remarks><see cref="SearchParametersByResourceType"/> carries, per resource type, the search parameter names the
+/// CapabilityStatement declares (resource-level plus any common <c>rest.searchParam</c>), so the destination
+/// wizard's Criteria editor can warn when a parameter will be ignored by the source. A type that declares none is
+/// omitted — "nothing declared" is unknown, not "nothing supported".</remarks>
 public sealed record SourceDiscoveryProbeResult(
     SmartConfigurationDto SmartConfiguration,
     IReadOnlyList<string> ResourceTypes,
     string? ResourceTypesError,
-    string? SmartConfigurationError = null);
+    string? SmartConfigurationError = null,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? SearchParametersByResourceType = null);
+
+/// <summary>What a source's CapabilityStatement (<c>/metadata</c>) declares, read in one fetch: the resource types
+/// with a read/search interaction (sorted) and each declared type's search parameter names.</summary>
+public sealed record SourceEndpointCapabilities(
+    IReadOnlyList<string> ResourceTypes,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> SearchParametersByResourceType);

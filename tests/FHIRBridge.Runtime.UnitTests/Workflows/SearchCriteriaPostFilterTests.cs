@@ -1,0 +1,109 @@
+using FHIRBridge.Runtime.Application.Workflows;
+using FluentAssertions;
+using ResourceEnvelope = FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope;
+
+namespace FHIRBridge.Runtime.UnitTests.Workflows;
+
+public sealed class SearchCriteriaPostFilterTests
+{
+    private static readonly IReadOnlyList<ResourceEnvelope> Observations =
+    [
+        Observation("o1", "final"),
+        Observation("o2", "unknown"),
+        Observation("o3", "entered-in-error"),
+        Observation("o4", "final"),
+        Observation("o5", "corrected"),
+    ];
+
+    [Fact]
+    public void Drops_records_the_source_returned_despite_failing_a_code_filter()
+    {
+        var (kept, enforced) = SearchCriteriaPostFilter.Apply(Observations, "status=final");
+
+        kept.Select(r => r.ResourceId).Should().Equal("o1", "o4");
+        enforced.Should().Equal("status");
+    }
+
+    [Fact]
+    public void Comma_separated_codes_are_ored_and_a_system_prefix_is_ignored()
+    {
+        var (kept, _) = SearchCriteriaPostFilter.Apply(
+            Observations, "status=http://hl7.org/fhir/observation-status|final,corrected");
+
+        kept.Select(r => r.ResourceId).Should().Equal("o1", "o4", "o5");
+    }
+
+    [Fact]
+    public void Not_modifier_excludes_the_listed_codes()
+    {
+        var (kept, enforced) = SearchCriteriaPostFilter.Apply(Observations, "status:not=entered-in-error");
+
+        kept.Select(r => r.ResourceId).Should().Equal("o1", "o2", "o4", "o5");
+        enforced.Should().Equal("status:not");
+    }
+
+    [Fact]
+    public void Removes_nothing_when_the_source_already_applied_the_filter()
+    {
+        IReadOnlyList<ResourceEnvelope> alreadyFiltered = [Observation("o1", "final"), Observation("o4", "final")];
+
+        var (kept, _) = SearchCriteriaPostFilter.Apply(alreadyFiltered, "status=final");
+
+        kept.Select(r => r.ResourceId).Should().Equal("o1", "o4");
+    }
+
+    [Fact]
+    public void Leaves_non_enforceable_parameters_to_the_server()
+    {
+        var (kept, enforced) = SearchCriteriaPostFilter.Apply(
+            Observations, "category=laboratory&date=ge2024-01-01&code=1234-5&patient=p1&_lastUpdated=gt2024-01-01");
+
+        kept.Should().HaveCount(Observations.Count);
+        enforced.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Does_not_filter_on_an_element_no_record_carries()
+    {
+        // gender is not an Observation element — filtering on it would empty the result, so it's left alone.
+        var (kept, enforced) = SearchCriteriaPostFilter.Apply(Observations, "gender=female&status=final");
+
+        kept.Select(r => r.ResourceId).Should().Equal("o1", "o4");
+        enforced.Should().Equal("status");
+    }
+
+    [Fact]
+    public void Ignores_an_unsupported_modifier()
+    {
+        var (kept, enforced) = SearchCriteriaPostFilter.Apply(Observations, "status:missing=true");
+
+        kept.Should().HaveCount(Observations.Count);
+        enforced.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Patient", "gender=female", null, "gender=female")]
+    [InlineData("Patient", "gender=female&birthdate=ge1990-01-01", "gender=male", "gender=male&birthdate=ge1990-01-01")]
+    [InlineData("Patient", null, "identifier=MRN-1", "identifier=MRN-1")]
+    [InlineData("Observation", "status=final", "gender=male", "status=final")]
+    [InlineData("Observation", "date=ge2024-01-01&date=le2024-12-31", null, "date=ge2024-01-01&date=le2024-12-31")]
+    [InlineData("Observation", null, null, null)]
+    public void Bulk_export_criteria_combine_api_and_resource_criteria_with_the_api_winning_a_shared_parameter(
+        string resourceType, string? resourceCriteria, string? apiCriteria, string? expected)
+    {
+        SearchCriteriaPostFilter.BulkExportCriteria(resourceType, resourceCriteria, apiCriteria).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("identifier:exact=A", "identifier=B&gender=male", "identifier:exact=A&gender=male")]
+    [InlineData("identifier=A", "identifier:exact=B", "identifier=A")]
+    [InlineData("status:not=entered-in-error", "status=final&code=1234-5", "status:not=entered-in-error&code=1234-5")]
+    public void Combining_criteria_treats_a_modified_parameter_as_the_same_parameter(string higher, string lower, string expected)
+    {
+        // Sending identifier:exact=A AND identifier=B is a repeated identifier, which Epic rejects outright.
+        SearchCriteriaPostFilter.CombineCriteria(higher, lower).Should().Be(expected);
+    }
+
+    private static ResourceEnvelope Observation(string id, string status) =>
+        new("Observation", id, $$"""{"resourceType":"Observation","id":"{{id}}","status":"{{status}}"}""", null, null);
+}

@@ -29,6 +29,8 @@ import { ISourceConnectionService } from './source-connections/services/i-source
 import { ApiSourceConnectionService } from './source-connections/services/api-source-connection.service';
 import { IAllowedCorsOriginService } from './allowed-origins/services/i-allowed-cors-origin.service';
 import { ApiAllowedCorsOriginService } from './allowed-origins/services/api-allowed-cors-origin.service';
+import { IApiClientService } from './api-clients/services/i-api-client.service';
+import { ApiApiClientService } from './api-clients/services/api-api-client.service';
 import { ISystemSettingsService } from './system-settings/services/i-system-settings.service';
 import { ApiSystemSettingsService } from './system-settings/services/api-system-settings.service';
 import { IAppSecretsService } from './system-security/services/i-app-secrets.service';
@@ -135,6 +137,7 @@ export const appConfig: ApplicationConfig = {
     { provide: IEhrEndpointService, useClass: ApiEhrEndpointService },
     { provide: ISourceConnectionService, useClass: ApiSourceConnectionService },
     { provide: IAllowedCorsOriginService, useClass: ApiAllowedCorsOriginService },
+    { provide: IApiClientService, useClass: ApiApiClientService },
     { provide: ISystemSettingsService, useClass: ApiSystemSettingsService },
     { provide: IAppSecretsService, useClass: ApiAppSecretsService },
 

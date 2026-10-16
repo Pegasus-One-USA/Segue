@@ -2,6 +2,14 @@
   <!-- Login-free developer console for the ApiEndpoint destination's sample test APIs — see app.ts's
        API_TEST_CONSOLE_PATH remarks for why this bypasses the login gate entirely. -->
   <app-api-test-console></app-api-test-console>
+} @else if (isClientCredentialsConsole) {
+  <!-- Login-free developer console for FHIRBridge's OAuth 2.0 Client Credentials Grant — see app.ts's
+       CLIENT_CREDENTIALS_CONSOLE_PATH remarks. -->
+  <app-client-credentials-console></app-client-credentials-console>
+} @else if (isExternalTriggerConsole) {
+  <!-- Login-free developer console for FHIRBridge's browser-redirect external-trigger flow — see app.ts's
+       EXTERNAL_TRIGGER_CONSOLE_PATH remarks. -->
+  <app-external-trigger-console></app-external-trigger-console>
 } @else if (isProviderInAppLaunchFlow) {
   <!-- EHR-launch round-trip (inbound iss/launch OR post-OAuth workflowRunId) hands off directly to the launch
        component BEFORE the login gate — an embedded launch has no hb_session cookie, so gating on login here
@@ -34,6 +42,8 @@
       <button type="button" class="connect-btn" (click)="login()">Log In</button>
 
       <a class="api-test-console-link" href="/api-test-console">ApiEndpoint destination test console →</a>
+      <a class="api-test-console-link" href="/client-credentials-console">Client Credentials test console →</a>
+      <a class="api-test-console-link" href="/external-trigger-console">External Trigger test console →</a>
     </div>
   </main>
 } @else if (role() === 'ProviderInApp') {

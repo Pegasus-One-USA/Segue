@@ -72,13 +72,33 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         return Math.Min(pagesToReachCap, PageCountBackstop);
     }
 
-    public async Task<FhirSourceConfiguration?> ResolveAsync(
+    public Task<FhirSourceConfiguration?> ResolveAsync(
         Guid sourceConnectionId,
         string? searchParameters,
         string? targetPatientId,
         CancellationToken cancellationToken,
         string? patientSearchCriteria = null,
         string? callerId = null)
+        => ResolveCoreAsync(sourceConnectionId, searchParameters, targetPatientId, cancellationToken, patientSearchCriteria, callerId, runOverrides: null);
+
+    public Task<FhirSourceConfiguration?> ResolveWithRunOverridesAsync(
+        Guid sourceConnectionId,
+        string? searchParameters,
+        string? targetPatientId,
+        CancellationToken cancellationToken,
+        string? patientSearchCriteria,
+        string? callerId,
+        RunSourceOverrides runOverrides)
+        => ResolveCoreAsync(sourceConnectionId, searchParameters, targetPatientId, cancellationToken, patientSearchCriteria, callerId, runOverrides);
+
+    private async Task<FhirSourceConfiguration?> ResolveCoreAsync(
+        Guid sourceConnectionId,
+        string? searchParameters,
+        string? targetPatientId,
+        CancellationToken cancellationToken,
+        string? patientSearchCriteria,
+        string? callerId,
+        RunSourceOverrides? runOverrides)
     {
         var sourceConnection = await _repository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
@@ -131,6 +151,14 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         var retrieval = sourceConnection.Retrieval;
+
+        // "Execute V2" / external trigger only: this run's Group ID / Search Criteria replace the saved ones.
+        if (runOverrides is not null)
+        {
+            retrieval = retrieval?.WithRunOverrides(runOverrides.GroupId, runOverrides.SearchCriteria);
+            searchParameters = RunSearchParameters(searchParameters, runOverrides);
+        }
+
         var composedSearchParameters = ComposeSearchParameters(searchParameters, retrieval);
 
         // athenahealth's Backend System app registrations verified against the live preview sandbox are
@@ -244,6 +272,18 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
             PracticeId: sourceConnection.Authentication.PracticeId,
             AuthPlacement: sourceConnection.Authentication.AuthPlacement,
             AllowsRead: sourceConnection.Access.AllowsRead());
+
+        if (runOverrides is not null)
+        {
+            config = config with
+            {
+                LastUpdatedWatermarks = null,
+                Since = null,
+                RunOverridesActive = true,
+                // "" is how a caller clears the saved criteria, which is not a search of its own.
+                RunSearchCriteriaActive = !string.IsNullOrWhiteSpace(runOverrides.SearchCriteria),
+            };
+        }
 
         // For an interactive source whose launch resolved to a hospital/organization EhrEndpoint (rather than the
         // connection's own configured base URL), a later, separately triggered run must keep hitting that SAME
@@ -359,7 +399,30 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         return EClinicalWorksSupportedResourceTypes.Contains(resourceType);
     }
 
-    private static string? ComposeSearchParameters(string? baseSearchParameters, SourceRetrievalConfiguration? retrieval)
+    /// <summary>
+    /// The search parameters a run with caller-supplied overrides searches by: the run's own Search Criteria whenever
+    /// it supplied one (blank clears them for this run), in place of the node-level string — which would otherwise
+    /// carry the wizard's snapshot of the OLD criteria. Used directly rather than routed through the retrieval config's
+    /// SearchCriteria, which <see cref="ComposeSearchParameters"/> deliberately no longer reads (the source form's own
+    /// Search Criteria is retired), so routing it there silently dropped the run's criteria for any connection with a
+    /// saved retrieval config. With no run criteria the node-level string is kept unchanged.
+    /// </summary>
+    internal static string? RunSearchParameters(string? nodeSearchParameters, RunSourceOverrides runOverrides) =>
+        runOverrides.SearchCriteria is null
+            ? nodeSearchParameters
+            : string.IsNullOrWhiteSpace(runOverrides.SearchCriteria) ? null : runOverrides.SearchCriteria.Trim();
+
+    /// <summary>
+    /// Layers the retrieval configuration's sort and include/revinclude settings (Advanced Search Options) onto the
+    /// node-config search-parameters string. Returns the original string unchanged when there is no retrieval config.
+    /// <para>
+    /// The retrieval config's own <see cref="SourceRetrievalConfiguration.SearchCriteria"/> is deliberately NOT
+    /// applied: search criteria are now authored per resource type (ResourceTypeCriteria, the destination wizard's
+    /// Criteria button) and, on an API run, by the caller. The source form no longer shows that field, so a value
+    /// saved before it was removed is kept on the row but must not keep filtering every run invisibly.
+    /// </para>
+    /// </summary>
+    internal static string? ComposeSearchParameters(string? baseSearchParameters, SourceRetrievalConfiguration? retrieval)
     {
         if (retrieval is null)
         {
@@ -367,35 +430,10 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         var parts = new List<string>();
-        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (!string.IsNullOrWhiteSpace(baseSearchParameters))
         {
-            var trimmed = baseSearchParameters.Trim('&');
-            parts.Add(trimmed);
-            foreach (var segment in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
-            {
-                seenKeys.Add(ExtractParameterKey(segment));
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(retrieval.SearchCriteria))
-        {
-            // The node-level "Search criteria" field is frequently a wizard-authored snapshot of this same
-            // connection's SearchCriteria (see epic-audience-form.component.ts save()), not an independently
-            // chosen addition — concatenating both unconditionally then re-sends the identical parameter twice
-            // (e.g. "identifier=A,B&identifier=A,B"), which Epic rejects outright for identifier ("Don't support
-            // searching by IDENTIFIER AND IDENTIFIER"). Only carry over parameters whose key isn't already present
-            // in baseSearchParameters.
-            var additional = retrieval.SearchCriteria.Trim('&')
-                .Split('&', StringSplitOptions.RemoveEmptyEntries)
-                .Where(segment => seenKeys.Add(ExtractParameterKey(segment)))
-                .ToList();
-
-            if (additional.Count > 0)
-            {
-                parts.Add(string.Join('&', additional));
-            }
+            parts.Add(baseSearchParameters.Trim('&'));
         }
 
         // _lastUpdated is intentionally NOT added here: each resource type is fetched via its own independent
@@ -422,11 +460,5 @@ public sealed class SourceConnectionRuntimeResolver : ISourceConnectionRuntimeRe
         }
 
         return parts.Count == 0 ? null : string.Join('&', parts);
-    }
-
-    private static string ExtractParameterKey(string segment)
-    {
-        var equalsIndex = segment.IndexOf('=');
-        return equalsIndex < 0 ? segment : segment[..equalsIndex];
     }
 }

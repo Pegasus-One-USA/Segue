@@ -16,6 +16,9 @@ export interface DiscoveredEndpoints {
   /** Set when the endpoint has no /.well-known/smart-configuration at all (plain, non-SMART FHIR R4 server) —
    *  token/authorize above are then empty and must be filled in manually. */
   smartConfigurationError: string | null;
+  /** Search parameter names the CapabilityStatement declares, per resource type. A type that declares none is
+   *  absent — unknown, not "supports nothing". Optional so hand-built test doubles needn't supply it. */
+  searchParametersByResourceType?: Record<string, string[]>;
 }
 
 interface ProbeSmartConfiguration {
@@ -32,6 +35,7 @@ interface ProbeResponse {
   resourceTypes: string[];
   resourceTypesError: string | null;
   smartConfigurationError: string | null;
+  searchParametersByResourceType?: Record<string, string[]> | null;
 }
 
 export interface BackendAuthScopesRequest {
@@ -101,6 +105,7 @@ export class EpicDiscoveryService {
         tokenEndpointAuthMethods: response.smartConfiguration.tokenEndpointAuthMethodsSupported ?? [],
         resourceTypesError: response.resourceTypesError ?? null,
         smartConfigurationError: response.smartConfigurationError ?? null,
+        searchParametersByResourceType: response.searchParametersByResourceType ?? {},
       })),
     );
   }
