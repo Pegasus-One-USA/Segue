@@ -141,9 +141,16 @@ public sealed class BulkExportPollService : IBulkExportPollService
 
         try
         {
+            // Download phase: the source reported the export complete this tick, OR the job started this tick with more
+            // attempts than the ordinary cap — which only download retries can reach, since the status phase fails the
+            // job at the cap (and a fail that was not saved leaves the lower count to be reloaded). So a retry whose
+            // status read throws (an outage or a refused token, the likeliest reasons its download failed too) keeps
+            // the download budget, delay and wording instead of failing at once as "status could not be read".
+            var downloadPhase = progress.ExportCompleted || progress.AttemptCountAtStart >= maxPollAttempts;
+
             if (job.PollAttemptCount == progress.AttemptCountAtStart)
             {
-                var retryDelay = progress.ExportCompleted
+                var retryDelay = downloadPhase
                     ? DownloadRetryDelay
                     : TimeSpan.FromSeconds(Math.Max(1, defaultPollIntervalSeconds));
                 job.RecordPollAttempt(DateTime.UtcNow + retryDelay);
@@ -153,10 +160,10 @@ public sealed class BulkExportPollService : IBulkExportPollService
             // top of the cap, so an export that needed most of the cap in status polls is not failed on its first
             // download error. The count is not reset: the source reports the export complete again on every retry, so
             // the higher cap applies each time, and the budget still ends it.
-            var attemptCap = progress.ExportCompleted ? maxPollAttempts + DownloadAttemptBudget : maxPollAttempts;
+            var attemptCap = downloadPhase ? maxPollAttempts + DownloadAttemptBudget : maxPollAttempts;
             if (job.PollAttemptCount >= attemptCap)
             {
-                var failure = progress.ExportCompleted
+                var failure = downloadPhase
                     ? $"The bulk export completed, but its results could not be downloaded after {job.PollAttemptCount} attempts."
                     : $"Bulk export status could not be read after {job.PollAttemptCount} attempts.";
                 await FailJobAsync(job, $"{failure} Last error: {exception.Message}", cancellationToken);
@@ -169,30 +176,6 @@ public sealed class BulkExportPollService : IBulkExportPollService
         {
             _logger.LogError(recordException, "Could not record the failed poll attempt for bulk export job {JobId}.", job.Id);
         }
-    }
-
-    private static readonly Regex UrlPattern = new(@"https?://[^\s""'<>]+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex MarkupPattern = new(@"<[^>]*>", RegexOptions.Compiled);
-    private static readonly Regex WhitespacePattern = new(@"\s+", RegexOptions.Compiled);
-
-    /// <summary>
-    /// The form of a failure reason that may leave the poller. The text becomes the job's error, the run's error and its
-    /// Errors entry, the Bulk Data Status popup's reason, and the run-status event every connected browser receives — so
-    /// it must carry nothing a user may not see. A failed download's message names the file URL, and for a source whose
-    /// file URLs are pre-signed (manifest requiresAccessToken: false) that URL itself grants access to the bulk NDJSON;
-    /// a source's error body can echo URLs and is often a whole HTML or XML page.
-    /// <para>So every URL is cut to its scheme and host, markup is dropped, whitespace (newlines included) collapsed,
-    /// and the result capped at 300 characters, the same cap the export client puts on a source's error body. The full
-    /// text stays in the logs, where PollDueJobsAsync records the exception.</para>
-    /// </summary>
-    internal static string PublicReason(string message)
-    {
-        var withoutUrls = UrlPattern.Replace(message, match =>
-            Uri.TryCreate(match.Value, UriKind.Absolute, out var uri)
-                ? uri.GetLeftPart(UriPartial.Authority)
-                : "[link removed]");
-        var plain = WhitespacePattern.Replace(MarkupPattern.Replace(withoutUrls, " "), " ").Trim();
-        return plain.Length > 300 ? plain[..300] + "…" : plain;
     }
 
     private async Task PollOneJobAsync(
@@ -283,8 +266,10 @@ public sealed class BulkExportPollService : IBulkExportPollService
     /// completed after all by then, ResumeAfterBulkExportAsync leaves the closed run alone.</para></summary>
     private async Task FailJobAsync(BulkExportJob job, string errorMessage, CancellationToken cancellationToken)
     {
-        // The job's error and the run's error are user-facing: see PublicReason.
-        errorMessage = PublicReason(errorMessage);
+        // The job's error and the run's error are user-facing — the Errors screen, the Bulk Data Status popup and the
+        // run-status event every connected browser receives — so no URL beyond its host and no markup may reach them
+        // (see SafeErrorText.Redact). The full text stays in the logs, where PollDueJobsAsync records the exception.
+        errorMessage = SafeErrorText.Redact(errorMessage);
 
         if (job.SourcePath == BulkExportJobSourcePath.WorkflowNode && job.WorkflowRunId is { } workflowRunId)
         {
@@ -320,7 +305,7 @@ public sealed class BulkExportPollService : IBulkExportPollService
                     {
                         var closed = await _pausedRunCloser.FailAsync(
                             job.WorkflowRunId!.Value,
-                            PublicReason($"The bulk export completed, but the run could not be resumed: {exception.Message}"),
+                            SafeErrorText.Redact($"The bulk export completed, but the run could not be resumed: {exception.Message}"),
                             CancellationToken.None);
                         if (!closed)
                         {

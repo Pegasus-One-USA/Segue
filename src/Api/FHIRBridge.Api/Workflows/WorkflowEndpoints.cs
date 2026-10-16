@@ -2620,7 +2620,9 @@ public static class WorkflowEndpoints
                 BuildResourceTypeStatuses(snapshot, requestedResourceTypes),
                 BuildManifestErrors(snapshot),
                 snapshot.RetryAfter is { } retryAfter ? (int)retryAfter.TotalSeconds : null,
-                snapshot.ErrorMessage,
+                // The source's own error text (e.g. a 404 for a completed export it has since removed): the popup shows
+                // it, so no URL beyond its host and no markup (see SafeErrorText.Redact).
+                snapshot.ErrorMessage is { } liveError ? SafeErrorText.Redact(liveError) : null,
                 job.CompletedOnUtc));
         }).RequireAuthorization(AuthorizationPolicies.HasPermission(
             PermissionTaxonomy.BuildPermissionCode(PermissionGroupCode.Workflow, PermissionActionCode.View)));

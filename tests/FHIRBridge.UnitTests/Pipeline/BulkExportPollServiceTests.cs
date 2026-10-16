@@ -344,6 +344,38 @@ public sealed class BulkExportPollServiceTests
     }
 
     [Fact]
+    public async Task A_status_read_failure_during_download_retries_keeps_the_download_budget()
+    {
+        // PR #247 fourth review: each download retry reads the status again first. When that read threw (an outage or a
+        // refused token — the likeliest reasons the download failed too) the higher cap was not applied, and a count
+        // already past the ordinary cap failed the job at once as "status could not be read", although the source had
+        // finished the export. A job still polling with more attempts than the ordinary cap got there only through
+        // download retries, so it keeps the download budget, delay and wording.
+        var job = CreateJob(Guid.NewGuid());
+        var (repository, client, resolver, _, service) = CreateSut();
+        repository.Setup(r => r.GetPollableAsync(It.IsAny<DateTime>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([job]);
+        resolver.Setup(r => r.ResolveAsync(job.SourceConnectionId, null, null, It.IsAny<CancellationToken>(), null, null))
+            .ReturnsAsync(Source);
+        client.Setup(c => c.PollOnceAsync(job.StatusUrl!, Source, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("No route to host."));
+        UseAttempts(job, 125); // 120 status polls, then 5 failed download retries
+
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Polling);
+        job.PollAttemptCount.Should().Be(126);
+        job.NextPollNotBeforeUtc.Should().BeAfter(DateTime.UtcNow.AddMinutes(4)); // the download retry delay
+        _runCloser.Verify(c => c.FailAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        UseAttempts(job, 120 + BulkExportPollService.DownloadAttemptBudget - 1 - job.PollAttemptCount);
+        await service.PollDueJobsAsync(50, defaultPollIntervalSeconds: 5, maxPollAttempts: 120, CancellationToken.None);
+
+        job.Status.Should().Be(BulkExportJobStatus.Failed);
+        job.ErrorMessage.Should().StartWith("The bulk export completed, but its results could not be downloaded");
+    }
+
+    [Fact]
     public async Task A_status_read_failure_still_stops_at_the_ordinary_cap()
     {
         // The download budget applies only once the source reported the export complete.
