@@ -239,6 +239,47 @@ public sealed class EhrWriteConnectionTests(ApiFixture f)
         Assert.Equal(HttpStatusCode.NoContent, allowed.StatusCode);
     }
 
+    // PR #244 re-review: the DELETE checks usage itself; the list screen's lock is not the only guard.
+    [Fact]
+    public async Task A_write_connection_a_workflow_still_writes_through_cannot_be_deleted()
+    {
+        var connectionId = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        var workflow = new
+        {
+            Name = $"EHR write-back usage {Guid.NewGuid():N}",
+            IsEnabled = false,
+            Nodes = new object[]
+            {
+                new
+                {
+                    Id = "n-src", NodeType = "EpicSourceNode", Category = "Source", Rank = 0, SubRank = 0, DisplayName = "Source",
+                    ConfigurationJson = JsonSerializer.Serialize(new Dictionary<string, string> { ["Resources"] = "AllergyIntolerance" }),
+                    PositionX = 0, PositionY = 0, IsEnabled = true,
+                },
+                new
+                {
+                    Id = "n-ewb", NodeType = "EhrWriteBackDestinationNode", Category = "Destination", Rank = 70, SubRank = 0, DisplayName = "EHR",
+                    ConfigurationJson = JsonSerializer.Serialize(new Dictionary<string, string>
+                    {
+                        ["dest_dryRun"] = "true",
+                        ["dest_resources"] = "AllergyIntolerance",
+                        ["dest_sourceConnectionId"] = connectionId.ToString(),
+                    }),
+                    PositionX = 0, PositionY = 0, IsEnabled = true,
+                },
+            },
+            Edges = new[] { new { FromNodeId = "n-src", ToNodeId = "n-ewb" } },
+        };
+        var created = await f.AdminClient.PostAsJsonAsync("/api/v1/workflows", workflow);
+        created.EnsureSuccessStatusCode();
+        using var withWriteBack = await ClientWithAsync("sourceconnections.delete", "epic.delete", "ehrwriteback.delete");
+
+        var refused = await withWriteBack.DeleteAsync($"/api/v1/source-connections/{connectionId}");
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await f.AdminClient.GetAsync($"/api/v1/source-connections/{connectionId}")).StatusCode);
+    }
+
     [Fact]
     public async Task A_source_node_resave_over_a_read_write_connection_needs_no_ehr_write_back_right()
     {

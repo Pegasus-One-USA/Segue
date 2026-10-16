@@ -927,36 +927,15 @@ public static class WorkflowEndpoints
 
         // Destination Connections page (and Source Connections, for a Read & Write connection): which source-connection
         // ids an EHR write-back writes through right now — the dest_sourceConnectionId of any workflow Destination node,
-        // plus that of any saved EHR Write-Back destination. Used to lock Delete on a write connection still in use;
-        // the DELETE itself has no usage check, so this is a list-screen guard only.
+        // plus that of any saved EHR Write-Back destination. Used to lock Delete on a write connection still in use; the
+        // DELETE (SourceConnectionsController.Delete) checks the same thing itself, so a stale list or a direct call
+        // cannot remove one either.
         group.MapGet("/workflows/ehr-write-connection-usage", async (
             IWorkflowDefinitionStore store,
             IConfigurationRepository configurationRepository,
             CancellationToken cancellationToken) =>
-        {
-            var workflows = await store.ListAsync(cancellationToken);
-            var usedFromNodes = workflows
-                .SelectMany(workflow => workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
-                .Select(node => TryGetConfigurationGuid(node.ConfigurationJson, "dest_sourceConnectionId", out var connectionId)
-                    ? connectionId
-                    : (Guid?)null);
-
-            var destinations = await configurationRepository.GetDestinationsAsync(cancellationToken);
-            var usedFromDestinations = destinations
-                .Where(destination => destination.DestinationType == DestinationType.EhrWriteBack)
-                .Select(destination => TryGetConfigurationGuid(destination.ConnectionMetadataJson, "dest_sourceConnectionId", out var connectionId)
-                    ? connectionId
-                    : (Guid?)null);
-
-            var usedConnectionIds = usedFromNodes
-                .Concat(usedFromDestinations)
-                .Where(connectionId => connectionId is not null && connectionId != Guid.Empty)
-                .Select(connectionId => connectionId!.Value)
-                .Distinct()
-                .ToArray();
-
-            return Results.Ok(usedConnectionIds);
-        }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+            Results.Ok(await FindEhrWriteConnectionUsageAsync(store, configurationRepository, cancellationToken)))
+            .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Mapping Profiles master screen: which mapping profile ids are referenced right now, either by a workflow
         // node's config (mappingProfileId / the per-resource mappingProfileIds map — see BuildWorkflow above) or by
@@ -3904,6 +3883,35 @@ public static class WorkflowEndpoints
                 authorizationService, user, PermissionGroupCode.Workflow, PermissionActionCode.Run)
             && await ControllerAuthorizationExtensions.HasPermissionAsync(
                 authorizationService, user, DestinationType.EhrWriteBack, PermissionActionCode.Execute);
+    }
+
+    /// <summary>The source-connection ids an EHR write-back writes through: the <c>dest_sourceConnectionId</c> of any
+    /// workflow Destination node and of any saved EHR Write-Back destination.</summary>
+    internal static async Task<IReadOnlyCollection<Guid>> FindEhrWriteConnectionUsageAsync(
+        IWorkflowDefinitionStore store,
+        IConfigurationRepository configurationRepository,
+        CancellationToken cancellationToken)
+    {
+        var workflows = await store.ListAsync(cancellationToken);
+        var usedFromNodes = workflows
+            .SelectMany(workflow => workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+            .Select(node => TryGetConfigurationGuid(node.ConfigurationJson, "dest_sourceConnectionId", out var connectionId)
+                ? connectionId
+                : (Guid?)null);
+
+        var destinations = await configurationRepository.GetDestinationsAsync(cancellationToken);
+        var usedFromDestinations = destinations
+            .Where(destination => destination.DestinationType == DestinationType.EhrWriteBack)
+            .Select(destination => TryGetConfigurationGuid(destination.ConnectionMetadataJson, "dest_sourceConnectionId", out var connectionId)
+                ? connectionId
+                : (Guid?)null);
+
+        return usedFromNodes
+            .Concat(usedFromDestinations)
+            .Where(connectionId => connectionId is not null && connectionId != Guid.Empty)
+            .Select(connectionId => connectionId!.Value)
+            .Distinct()
+            .ToArray();
     }
 
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)

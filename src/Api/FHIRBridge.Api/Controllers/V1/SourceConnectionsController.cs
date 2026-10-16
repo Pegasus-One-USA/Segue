@@ -220,7 +220,12 @@ public sealed class SourceConnectionsController : ControllerBase
     [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Delete, description: "Delete a source connection.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(Guid sourceConnectionId, CancellationToken cancellationToken)
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Delete(
+        Guid sourceConnectionId,
+        [FromServices] FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore workflowStore,
+        [FromServices] FHIRBridge.Application.Abstractions.Persistence.IConfigurationRepository configurationRepository,
+        CancellationToken cancellationToken)
     {
         var sourceConnection = await _configurationService.GetSourceConnectionByIdAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
@@ -238,6 +243,19 @@ public sealed class SourceConnectionsController : ControllerBase
         {
             denied = await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, PermissionActionCode.Delete);
             if (denied is not null) return denied;
+
+            // The list screen locks Delete on a write connection in use, but a stale screen, a second admin or a
+            // direct call would otherwise remove it from under a workflow, whose next run would then fail.
+            var inUse = await FHIRBridge.Api.Workflows.WorkflowEndpoints.FindEhrWriteConnectionUsageAsync(
+                workflowStore, configurationRepository, cancellationToken);
+            if (inUse.Contains(sourceConnectionId))
+            {
+                return Conflict(new
+                {
+                    message = "This connection is still used by an EHR Write-Back destination or workflow. Point those at " +
+                              "another connection, or remove them, before deleting it.",
+                });
+            }
         }
 
         await _configurationService.DeleteSourceConnectionAsync(sourceConnectionId, cancellationToken);
