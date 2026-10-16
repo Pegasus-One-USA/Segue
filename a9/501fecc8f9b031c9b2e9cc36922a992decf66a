@@ -1,0 +1,28 @@
+tests/FHIRBridge.UnitTests/Governance/SafeErrorTextRedactTests.cs
+  s_b1e7fcc7fc9bab::t_1cabf8cb698a67 1-57
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_b1e7fcc7fc9bab::t_44781373c998cf 346-377
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_b1e7fcc7fc9bab::t_02c610586f31f2 144-150,153,163,166,269-272,308
+src/BuildingBlocks/FHIRBridge.Governance/SafeErrorText.cs
+  s_b1e7fcc7fc9bab::t_02c610586f31f2 1-2,35-38,40-59
+  s_b1e7fcc7fc9bab::t_cd302fb3f34f5b 39
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_b1e7fcc7fc9bab::t_02c610586f31f2 2623-2625
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a9501fecc8f9b031c9b2e9cc36922a992decf66a",
+  "prompts": {},
+  "sessions": {
+    "s_b1e7fcc7fc9bab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339ebaf9-b31a-49e1-b147-e7b3f8c890e8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}
