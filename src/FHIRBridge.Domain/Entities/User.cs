@@ -44,23 +44,26 @@ public sealed class User : AuditableChildEntity<Guid>, IHasAuditDisplayName
     /// <summary>Falls back to "FirstName LastName" (then Email) when no explicit DisplayName was ever set —
     /// e.g. an SSO-provisioned user gets FirstName/LastName from the IdP's claims but DisplayName is never
     /// populated by that path, unlike local invite/signup which always sets it.</summary>
-    public string EffectiveDisplayName
+    public string EffectiveDisplayName =>
+        DisplayNameFrom(DisplayName, FirstName, LastName, Email, ExternalUserId);
+
+    /// <summary>The <see cref="EffectiveDisplayName"/> rule over plain values, for callers that read only the name
+    /// columns (e.g. resolving audit-trail actors) and must not load the whole user, credentials included.</summary>
+    public static string DisplayNameFrom(
+        string? displayName, string? firstName, string? lastName, string? email, string externalUserId)
     {
-        get
+        if (!string.IsNullOrWhiteSpace(displayName))
         {
-            if (!string.IsNullOrWhiteSpace(DisplayName))
-            {
-                return DisplayName;
-            }
-
-            var composedName = $"{FirstName} {LastName}".Trim();
-            if (!string.IsNullOrWhiteSpace(composedName))
-            {
-                return composedName;
-            }
-
-            return Email ?? ExternalUserId;
+            return displayName;
         }
+
+        var composedName = $"{firstName} {lastName}".Trim();
+        if (!string.IsNullOrWhiteSpace(composedName))
+        {
+            return composedName;
+        }
+
+        return email ?? externalUserId;
     }
 
     // Audit classification: credentials whose change matters are [AuditRedact] (the trail shows that they changed,

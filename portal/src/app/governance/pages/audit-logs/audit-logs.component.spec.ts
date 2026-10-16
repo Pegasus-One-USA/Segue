@@ -168,4 +168,28 @@ describe('AuditLogsComponent filters', () => {
     expect(lastFilter()!.toUtc).toBeUndefined();
     expect(component.dirty()).toBeFalse();
   });
+
+  it('searches a correlation ID across all dates, ignoring the period', () => {
+    component.onPeriodChange('7d');
+    component.onCorrelationIdChange('corr-old');
+
+    component.search();
+
+    expect(component.correlationIgnoresPeriod()).toBeTrue();
+    expect(api.auditLogs.calls.mostRecent().args[0]).toBe('corr-old');
+    expect(lastFilter()!.fromUtc).toBeUndefined();
+    expect(lastFilter()!.toUtc).toBeUndefined();
+  });
+
+  it('will not search a custom range whose To date is before its From date', () => {
+    const callsBefore = api.auditLogs.calls.count();
+    component.onPeriodChange('custom');
+    component.onFilterChange('fromDate', '2026-10-05');
+    component.onFilterChange('toDate', '2026-10-01');
+
+    component.search();
+
+    expect(api.auditLogs.calls.count()).toBe(callsBefore);
+    expect(component.filterError()).toContain('on or after');
+  });
 });

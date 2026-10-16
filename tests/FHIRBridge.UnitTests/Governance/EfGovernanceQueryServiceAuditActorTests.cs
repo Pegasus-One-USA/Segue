@@ -227,4 +227,61 @@ public sealed class EfGovernanceQueryServiceAuditActorTests
             filtered.Items.Select(x => x.Actor).Should().AllBe("Legacy User");
         }
     }
+
+    [Fact]
+    public async Task A_legacy_email_in_a_different_case_still_resolves_and_filters_as_that_user()
+    {
+        var correlationId = Guid.NewGuid().ToString();
+        var user = new User("ext-case", "case.user@example.com", "Case User", Guid.NewGuid());
+        user.ApplyCreated("seed", DateTime.UtcNow);
+
+        await using (var context = CreateContext())
+        {
+            context.Users.Add(user);
+            context.AuditLogs.AddRange(
+                Row(user.Id.ToString(), correlationId),
+                Row("Case.User@Example.COM", correlationId));
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var filtered = await CreateSut(context).GetAuditLogsAsync(
+                correlationId, null, null, 0, 50, default, filter: new AuditLogFilter(Actor: user.Id.ToString()));
+
+            filtered.Items.Should().HaveCount(2);
+            filtered.Items.Select(x => x.Actor).Should().AllBe("Case User");
+        }
+    }
+
+    [Fact]
+    public async Task When_two_users_share_an_email_the_list_and_the_actor_sort_pick_the_same_one()
+    {
+        // E-mail is not unique (a deleted user's address can be reused). Both paths prefer the active user.
+        var correlationId = Guid.NewGuid().ToString();
+        var former = new User("ext-former", "shared@example.com", "Former Owner", Guid.NewGuid());
+        former.ApplyDeleted("admin", DateTime.UtcNow);
+        var current = new User("ext-current", "shared@example.com", "Current Owner", Guid.NewGuid());
+        foreach (var u in new[] { former, current })
+        {
+            u.ApplyCreated("seed", DateTime.UtcNow);
+        }
+
+        await using (var context = CreateContext())
+        {
+            context.Users.AddRange(former, current);
+            context.AuditLogs.Add(Row("shared@example.com", correlationId));
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext())
+        {
+            var sut = CreateSut(context);
+            var listed = await sut.GetAuditLogsAsync(correlationId, null, null, 0, 50, default);
+            var sorted = await sut.GetAuditLogsAsync(correlationId, null, null, 0, 50, default, "actor", "asc");
+
+            listed.Items.Single().Actor.Should().Be("Current Owner");
+            sorted.Items.Single().Actor.Should().Be("Current Owner");
+        }
+    }
 }

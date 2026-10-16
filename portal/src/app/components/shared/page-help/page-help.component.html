@@ -19,7 +19,8 @@
        because the Close button and Escape already cover keyboard users. -->
   <button type="button" class="help-backdrop" tabindex="-1" aria-label="Close help" [class.is-closing]="closing()"
           (click)="hide()"></button>
-  <aside class="help-drawer" [class.is-closing]="closing()" role="dialog" aria-modal="true" [attr.aria-labelledby]="titleId">
+  <aside class="help-drawer" [class.is-closing]="closing()" role="dialog" aria-modal="true" [attr.aria-labelledby]="titleId"
+         cdkTrapFocus>
     <header class="help-drawer-head">
       <h2 class="help-drawer-title" [id]="titleId">{{ heading() }}</h2>
       <button #closeButton type="button" class="help-drawer-close" aria-label="Close help" (click)="hide()">

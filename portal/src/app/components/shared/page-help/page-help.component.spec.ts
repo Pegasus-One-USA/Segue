@@ -95,4 +95,51 @@ describe('PageHelpComponent', () => {
     expect(drawer()).not.toBeNull();
     expect(drawer()!.classList).not.toContain('is-closing');
   }));
+
+  it('keeps Tab inside the open drawer', fakeAsync(() => {
+    trigger().click();
+    fixture.detectChanges();
+    tick();
+
+    expect(drawer()!.hasAttribute('cdktrapfocus')).toBeTrue();
+  }));
+
+  it('leaves an Escape that something else already handled', fakeAsync(() => {
+    trigger().click();
+    fixture.detectChanges();
+    tick();
+
+    const handledFirst = (e: Event) => e.preventDefault();
+    document.addEventListener('keydown', handledFirst, true);
+    try {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    } finally {
+      document.removeEventListener('keydown', handledFirst, true);
+    }
+    fixture.detectChanges();
+    tick(CLOSE_ANIMATION_MS);
+
+    expect(drawer()).not.toBeNull();
+  }));
+
+  it('leaves an Escape that belongs to an overlay such as a dialog or select', fakeAsync(() => {
+    trigger().click();
+    fixture.detectChanges();
+    tick();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cdk-overlay-container';
+    const inner = document.createElement('button');
+    overlay.appendChild(inner);
+    document.body.appendChild(overlay);
+    try {
+      inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    } finally {
+      overlay.remove();
+    }
+    fixture.detectChanges();
+    tick(CLOSE_ANIMATION_MS);
+
+    expect(drawer()).not.toBeNull();
+  }));
 });

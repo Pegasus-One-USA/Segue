@@ -288,6 +288,13 @@ public sealed class LocalAuthService : ILocalAuthService
         user.SetPasswordResetToken(_passwordHasher.Hash(token), expiresOnUtc);
         await _repository.UpdateUserAsync(user, cancellationToken);
 
+        // The durable record of the request. The reset-token columns are [AuditIgnore] (anyone who knows an e-mail can
+        // ask, before signing in), so the change trail no longer shows it; the authentication log, where failed
+        // sign-ins already go, does. Only real, local-login accounts reach this line, and the response to the
+        // caller is unchanged, so this adds no account-enumeration signal.
+        await _governanceLogger.LogAuthenticationAsync(
+            new AuthenticationEntry("PasswordResetRequest", Success: true, user.Email), cancellationToken);
+
         // The token is already persisted above — a delivery failure here must not change the response
         // shape (that would itself be an enumeration oracle: only real, local-login-enabled accounts ever
         // reach this line, so a distinct failure response would confirm the account exists). Swallow and

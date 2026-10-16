@@ -47,6 +47,12 @@
     min-width: 0;
   }
 
+  // Period while a correlation ID is entered (it is searched across all dates).
+  .select-box select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
   .filter-actions {
     justify-content: flex-end;
   }
@@ -119,6 +125,10 @@
 
 .dirty-note {
   color: var(--color-warning-strong);
+}
+
+.period-note {
+  color: var(--color-muted);
 }
 
 .filter-error {

@@ -92,6 +92,10 @@ export class AuditLogsComponent implements OnInit {
   /** Shown instead of searching when the filter bar cannot be applied as it stands. */
   readonly filterError = signal('');
 
+  /** A correlation ID pins one request, so it is searched across all dates: a time window (the default included)
+   *  would silently hide an older run's rows. The Period control is disabled while one is entered. */
+  readonly correlationIgnoresPeriod = computed(() => !!this.correlationId().trim());
+
   /** True when the filter bar differs from what the list is showing, i.e. Search has not been pressed yet. */
   readonly dirty = computed(() => {
     const a = this.applied();
@@ -190,10 +194,16 @@ export class AuditLogsComponent implements OnInit {
 
   /** Applies everything in the filter bar and goes back to the first page. */
   search(): void {
-    // A custom range with no start would load the trail's whole history.
-    if (this.period() === 'custom' && !this.fromDate()) {
-      this.filterError.set('Choose a From date for the custom range.');
-      return;
+    if (!this.correlationIgnoresPeriod() && this.period() === 'custom') {
+      // A custom range with no start would load the trail's whole history.
+      if (!this.fromDate()) {
+        this.filterError.set('Choose a From date for the custom range.');
+        return;
+      }
+      if (this.toDate() && this.toDate() < this.fromDate()) {
+        this.filterError.set('The To date must be on or after the From date.');
+        return;
+      }
     }
     this.filterError.set('');
     this.applied.set({ ...this.draft(), appliedAtMs: Date.now() });
@@ -242,6 +252,10 @@ export class AuditLogsComponent implements OnInit {
       actor: applied.actor || undefined,
       action: applied.action || undefined,
     };
+
+    if (applied.correlationId) {
+      return filter;
+    }
 
     if (applied.period === 'custom') {
       if (applied.fromDate) {

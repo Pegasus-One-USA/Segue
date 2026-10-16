@@ -70,8 +70,11 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
     {
         await InTransactionAsync(async () =>
         {
-            user.ApplyDeleted("system", DateTime.UtcNow);
-            _dbContext.Users.Update(user);
+            // Re-read inside the unit of work: on a retry the change tracker has been cleared, and a stale copy would
+            // carry the previous attempt's row version. Remove() lets the auditing interceptor turn this into a soft
+            // delete stamped with the real actor, the same actor its audit rows (and the revoked permissions') carry.
+            var target = await _dbContext.Users.IgnoreQueryFilters().FirstAsync(x => x.Id == user.Id, cancellationToken);
+            _dbContext.Users.Remove(target);
 
             var userRoles = await _dbContext.UserRoles
                 .Where(x => x.UserId == user.Id)
@@ -368,8 +371,8 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
     /// provider (the in-memory store used by tests has no transactions).
     /// <para>Runs through the context's execution strategy: a retrying strategy (EnableRetryOnFailure, common on Azure
     /// SQL) rejects a transaction started outside it, and may run the whole unit again after a transient failure.
-    /// Each attempt therefore starts with no permission allocations tracked, and re-reads them; the work computes
-    /// its changes from what it reads.</para></summary>
+    /// A retried attempt therefore starts from an empty change tracker; each piece of work re-reads what it changes
+    /// and computes its changes from that.</para></summary>
     private async Task InTransactionAsync(Func<Task> work, CancellationToken cancellationToken)
     {
         if (!_dbContext.Database.IsRelational() || _dbContext.Database.CurrentTransaction is not null)
@@ -379,11 +382,14 @@ public sealed class EfUserAccessRepository : IUserAccessRepository
         }
 
         var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var attempt = 0;
         await strategy.ExecuteAsync(async () =>
         {
-            foreach (var entry in _dbContext.ChangeTracker.Entries<PermissionAllocation>().ToList())
+            // A retry must not replay what the failed attempt left tracked (a user already marked deleted, removed
+            // role links, allocations): start it from an empty change tracker. The work re-reads what it changes.
+            if (attempt++ > 0)
             {
-                entry.State = EntityState.Detached;
+                _dbContext.ChangeTracker.Clear();
             }
 
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);

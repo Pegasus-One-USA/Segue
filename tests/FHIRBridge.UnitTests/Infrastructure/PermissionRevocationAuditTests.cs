@@ -226,6 +226,18 @@ public sealed class PermissionRevocationAuditTests
 
         (await AllocationAuditRowsAsync()).Count(x => x.Action == "Deleted").Should().Be(2);
 
+        // One operation, one actor: the user's own soft delete is stamped with whoever deleted them, the same actor
+        // as its audit row and the revoked permissions' rows (it used to say "system").
+        await using (var context = CreateContext())
+        {
+            var deleted = await context.Users.IgnoreQueryFilters().SingleAsync(x => x.Id == user.Id);
+            deleted.IsDeleted.Should().BeTrue();
+            deleted.DeletedBy.Should().Be("admin@example.com");
+
+            var userRow = await context.AuditLogs.SingleAsync(x => x.EntityType == nameof(User) && x.Action == "Deleted");
+            userRow.Actor.Should().Be("admin@example.com");
+        }
+
         await using (var context = CreateContext())
         {
             (await context.PermissionAllocations.IgnoreQueryFilters().AnyAsync(x => x.UserId == user.Id))

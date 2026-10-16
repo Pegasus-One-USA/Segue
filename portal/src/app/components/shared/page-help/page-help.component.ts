@@ -1,4 +1,5 @@
 import { Component, DestroyRef, ElementRef, HostListener, inject, input, signal, viewChild } from '@angular/core';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 
 let nextId = 0;
 
@@ -18,6 +19,7 @@ function prefersReducedMotion(): boolean {
 @Component({
   selector: 'app-page-help',
   standalone: true,
+  imports: [CdkTrapFocus],
   templateUrl: './page-help.component.html',
   styleUrl: './page-help.component.scss',
 })
@@ -34,17 +36,22 @@ export class PageHelpComponent {
   private readonly trigger = viewChild.required<ElementRef<HTMLButtonElement>>('trigger');
   private readonly closeButton = viewChild<ElementRef<HTMLButtonElement>>('closeButton');
   private closeTimer: ReturnType<typeof setTimeout> | undefined;
+  private focusTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => clearTimeout(this.closeTimer));
+    inject(DestroyRef).onDestroy(() => {
+      clearTimeout(this.closeTimer);
+      clearTimeout(this.focusTimer);
+    });
   }
 
   show(): void {
     clearTimeout(this.closeTimer);
     this.closing.set(false);
     this.open.set(true);
-    // Move focus into the drawer once it has rendered.
-    setTimeout(() => this.closeButton()?.nativeElement.focus());
+    // Move focus into the drawer once it has rendered; cdkTrapFocus then keeps Tab inside it (it is aria-modal).
+    clearTimeout(this.focusTimer);
+    this.focusTimer = setTimeout(() => this.closeButton()?.nativeElement.focus());
   }
 
   hide(): void {
@@ -66,8 +73,17 @@ export class PageHelpComponent {
     this.trigger().nativeElement.focus();
   }
 
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
+  /** Escape closes the drawer, unless it is shut, something already handled the key, or the key belongs to an
+   *  overlay (dialog, select, datepicker) that sits in the CDK overlay container. */
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(event: Event): void {
+    if (!this.open() || event.defaultPrevented) {
+      return;
+    }
+    if ((event.target as HTMLElement | null)?.closest?.('.cdk-overlay-container')) {
+      return;
+    }
+    event.preventDefault();
     this.hide();
   }
 }
