@@ -234,6 +234,72 @@ public sealed class VendorEhrWriteChannelTests
     }
 
     [Fact]
+    public async Task Athena_fills_a_lookup_only_where_the_value_is_its_placeholder_exactly()
+    {
+        var client = new Mock<IFhirWriteClient>();
+        var sent = new List<FhirRawWriteRequest>();
+        client.Setup(c => c.SendAsync(Capture.In(sent), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((FhirRawWriteRequest r, FhirSourceConfiguration _, CancellationToken _) => r.Url.Contains("/reference/", StringComparison.Ordinal)
+                ? Ok("""[{"medicationid":"77","medication":"metformin 500 mg tablet"}]""")
+                : Ok("""{"medicationentryid":"5"}"""));
+        var channel = new AthenaOneEhrWriteChannel(
+            Fhir(client, AthenaFhirBase, SourceSystemType.Athenahealth, Options with { TargetDepartmentId = "1" }), "195900");
+        var request = """
+            {"resourceType":"AthenaOneRequest","operation":"medication","method":"POST","path":"chart/{patientid}/medications",
+             "department":false,"idField":"medicationentryid",
+             "fields":{"medicationid":"{{medicationid}}","unstructuredsig":"take as {{medicationid}} says"},
+             "jsonFields":{"notes":[{"text":"see {{medicationid}}"},"{{medicationid}}"]},
+             "lookups":[{"kind":"medication","name":"metformin 500 mg tablet","token":"{{medicationid}}"}],
+             "patient":"a-195900.E-12"}
+            """;
+
+        var outcome = await channel.CreateAsync("MedicationRequest", request, CancellationToken.None);
+
+        outcome.Kind.Should().Be(EhrCreateKind.Created);
+        var post = sent[^1];
+        post.FormFields!["medicationid"].Should().Be("77");
+        post.FormFields["unstructuredsig"].Should().Be("take as {{medicationid}} says", because: "free text is sent as written");
+        post.FormFields["notes"].Should().Be("""[{"text":"see {{medicationid}}"},"77"]""");
+    }
+
+    [Theory]
+    [InlineData("..")]
+    [InlineData(".")]
+    [InlineData("12/../../patients")]
+    [InlineData("12%2F..")]
+    [InlineData("")]
+    public async Task Athena_refuses_an_encounter_id_that_is_not_a_plain_id(string encounterId)
+    {
+        var client = new Mock<IFhirWriteClient>();
+        var channel = new AthenaOneEhrWriteChannel(Fhir(client, AthenaFhirBase, SourceSystemType.Athenahealth), "195900");
+        var request = new JsonObject
+        {
+            ["resourceType"] = "AthenaOneRequest",
+            ["operation"] = "vitals",
+            ["method"] = "POST",
+            ["path"] = "chart/encounter/{encounterid}/vitals",
+            ["department"] = false,
+            ["fields"] = new JsonObject(),
+            ["encounter"] = encounterId,
+            ["patient"] = "a-195900.E-12",
+        };
+
+        var outcome = await channel.CreateAsync("Observation", request.ToJsonString(), CancellationToken.None);
+
+        outcome.Kind.Should().Be(EhrCreateKind.Rejected);
+        outcome.Issues.Single().VendorCode.Should().Be("athena-encounter-missing");
+        client.Verify(c => c.SendAsync(It.IsAny<FhirRawWriteRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("12345", "12345")]
+    [InlineData(" a-1.enc-9 ", "a-1.enc-9")]
+    [InlineData("..", null)]
+    [InlineData("1/2", null)]
+    public void Athena_encounter_ids_are_fhir_ids_never_dot_segments(string id, string? expected) =>
+        AthenaOneEhrWriteChannel.EncounterId(id).Should().Be(expected);
+
+    [Fact]
     public async Task Athena_refuses_before_sending_when_the_lookup_has_no_exact_match()
     {
         var client = new Mock<IFhirWriteClient>();

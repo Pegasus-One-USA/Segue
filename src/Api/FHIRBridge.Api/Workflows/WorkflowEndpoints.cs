@@ -321,12 +321,22 @@ public static class WorkflowEndpoints
                 if (spec.ExistingId is { } savedSourceId
                     && await configurationService.GetSourceConnectionByIdAsync(savedSourceId, cancellationToken) is { } savedSource)
                 {
-                    // As in ConfigurationsController.UpdateSourceConnection: the saved vendor's right too. The EHR
-                    // Write-Back edit right is never needed here: the access, activation and department a write
-                    // connection's write side is made of were dropped above, so this save cannot change them.
+                    // As in ConfigurationsController.UpdateSourceConnection: the saved vendor's right too.
                     if (savedSource.SourceSystemType != spec.Source.SourceSystemType
                         && !await ControllerAuthorizationExtensions.HasPermissionAsync(
                             authorizationService, httpContext.User, savedSource.SourceSystemType, PermissionActionCode.Edit))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+
+                    // The access, activation and department were dropped above, but a source node can still repoint a
+                    // Read & Write connection (vendor, base URL, token endpoint, credentials), which decides where its
+                    // live writes and their PHI go: as in ConfigurationsController, that needs the EHR Write-Back edit
+                    // right as well.
+                    if (savedSource.Access.AllowsRead()
+                        && SourceConnectionWriteSide.UpdateChangesWriteSide(savedSource, sourceRequest)
+                        && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, DestinationType.EhrWriteBack, PermissionActionCode.Edit))
                     {
                         return Results.StatusCode(StatusCodes.Status403Forbidden);
                     }

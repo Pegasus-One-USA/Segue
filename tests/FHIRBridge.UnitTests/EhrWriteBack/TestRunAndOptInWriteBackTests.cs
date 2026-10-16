@@ -173,6 +173,23 @@ public sealed class TestRunAndOptInWriteBackTests
         Summary(result, "QuestionnaireResponse").Reasons.Should().ContainKey("live-write-not-supported");
     }
 
+    // PR #244 round 5: whether a record is sent is decided by the variant it was shaped for, not by its type, so a
+    // dry-run-only variant is never sent because a sibling variant of the same type is live.
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, false, true)]
+    [InlineData(true, true, false, false)]
+    [InlineData(false, false, true, true)]
+    public void Only_a_live_variant_is_sent(bool liveWriteSupported, bool dryRun, bool testRun, bool expected)
+    {
+        var variant = new EhrWriteCapability(
+            "DocumentReference", new HashSet<EhrWriteOperation> { EhrWriteOperation.Create }, "x", EhrWriteVariants.DocumentInformation,
+            requiresEncounter: false, optInOnly: true, new HashSet<FHIRBridge.SharedKernel.Enums.ApplicationType> { FHIRBridge.SharedKernel.Enums.ApplicationType.Backend },
+            liveWriteSupported);
+
+        MappedEhrWriteBackDestinationWriter.SendsLive(variant, dryRun, testRun, vendorWriteApisActivated: true).Should().Be(expected);
+    }
+
     // ---- Variants a destination enables ----
 
     [Fact]

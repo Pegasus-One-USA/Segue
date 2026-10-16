@@ -22,7 +22,8 @@ public static class SourceConnectionWriteSide
     /// writes and the PHI in them, so changing its vendor, base URL, token endpoint, client id, key id, JWKS URL,
     /// practice, secret references or the secret itself is a write-side change too. A value the request leaves out
     /// (null or blank: a form that keeps the saved secret, for instance) keeps the saved one and is no change; scopes
-    /// and the token request's auth placement are not where the writes go.</para>
+    /// and the token request's auth placement are not where the writes go. A JWKS URL filled in where none was saved is
+    /// no change either: the source forms back-fill the derived default on connections saved before it was kept.</para>
     /// </summary>
     public static bool UpdateChangesWriteSide(SourceConnectionDto saved, CreateSourceConnectionRequest request)
     {
@@ -47,7 +48,7 @@ public static class SourceConnectionWriteSide
                    && (Changed(sent.TokenEndpoint, kept.TokenEndpoint, SameUrl)
                        || Changed(sent.ClientId, kept.ClientId, SameText)
                        || Changed(sent.KeyId, kept.KeyId, SameText)
-                       || Changed(sent.JwksUrl, kept.JwksUrl, SameUrl)
+                       || (!string.IsNullOrWhiteSpace(kept.JwksUrl) && Changed(sent.JwksUrl, kept.JwksUrl, SameUrl))
                        || Changed(sent.PracticeId, kept.PracticeId, SameText)
                        || Changed(sent.ClientSecretKeyVaultName, kept.ClientSecretKeyVaultName, SameText)
                        || Changed(sent.ClientSecretName, kept.ClientSecretName, SameText)

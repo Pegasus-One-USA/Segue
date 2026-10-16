@@ -186,7 +186,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
             var prepare = decision.Capability?.CreatesHolderEncounter == true
                 ? ct => BindHolderEncounterAsync(run, decision.Profile!, decision.Resource, decision.TargetPatientId!, ct)
                 : (Func<CancellationToken, Task<string?>>?)null;
-            var sent = await PlanAndSendAsync(run, record.ResourceType, record.SourceId!, record.Index, decision.Resource, tally, cancellationToken, prepare);
+            var sent = await PlanAndSendAsync(run, record.ResourceType, record.SourceId!, record.Index, decision.Resource, tally, cancellationToken, prepare, decision.Capability);
             if (record.ResourceType == "Patient")
             {
                 RecordPatientOutcome(run, record.SourceId!, sent);
@@ -613,7 +613,9 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
     }
 
     /// <summary>Ledger check, write cap and live-capability check for one shaped record, then the send itself when all
-    /// allow it. <paramref name="recordIndex"/> is null for a patient created on behalf of another record.</summary>
+    /// allow it. <paramref name="recordIndex"/> is null for a patient created on behalf of another record.
+    /// <paramref name="capability"/> is the variant the record was shaped for, when it was picked from several: it is
+    /// that variant, not its type, that must be live (null: the type has one way in, as a Patient does).</summary>
     private async Task<SendResult> PlanAndSendAsync(
         RunState run,
         string resourceType,
@@ -622,7 +624,8 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         JsonObject shaped,
         Tally tally,
         CancellationToken cancellationToken,
-        Func<CancellationToken, Task<string?>>? prepare = null)
+        Func<CancellationToken, Task<string?>>? prepare = null,
+        EhrWriteCapability? capability = null)
     {
         var sourceKey = EhrWriteKeys.SourceKey(run.Context.SourceBaseUrl, resourceType, sourceId, run.CloneMode);
         var contentHash = EhrWriteKeys.ContentHash(shaped);
@@ -642,12 +645,12 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         }
 
         run.PlannedWrites++;
-        if (!run.Live.Contains(resourceType))
+        if (!IsLive(run, resourceType, capability))
         {
             tally.WouldWrite++;
             if (!run.Channel.Options.DryRun)
             {
-                tally.Reason(NotLiveReason(run, resourceType));
+                tally.Reason(NotLiveReason(run, resourceType, capability));
             }
 
             return new SendResult(SendKind.WouldWrite, null);
@@ -657,13 +660,23 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         return new SendResult(createdId is null ? SendKind.NotWritten : SendKind.Written, createdId);
     }
 
-    /// <summary>Why a live run counts a type as "would write" instead of sending it: the vendor API is not activated on
-    /// the connection, or the code does not send the type live at all.</summary>
-    private static string NotLiveReason(RunState run, string resourceType) =>
-        run.Vendor.Capabilities.Any(c => c.ResourceType == resourceType
-                                         && c.LiveWriteSupported
-                                         && c.RequiresVendorActivation
-                                         && !ActivatedFor(run.Channel))
+    /// <summary>Whether this record is really sent: the variant it was shaped for is live, not merely some variant of
+    /// its type (a type is in <see cref="RunState.Live"/> when any of its variants is). Without a variant, the type.</summary>
+    private static bool IsLive(RunState run, string resourceType, EhrWriteCapability? capability) =>
+        capability is null
+            ? run.Live.Contains(resourceType)
+            : SendsLive(capability, run.Channel.Options.DryRun, run.Channel.Options.IsTestRun, ActivatedFor(run.Channel));
+
+    /// <summary>One variant is really sent: the destination is not a dry run, and a test run (which sends every type to
+    /// its test server) or the variant itself is live over this connection.</summary>
+    internal static bool SendsLive(EhrWriteCapability capability, bool dryRun, bool testRun, bool vendorWriteApisActivated) =>
+        !dryRun && (testRun || capability.IsLive(vendorWriteApisActivated));
+
+    /// <summary>Why a live run counts a record as "would write" instead of sending it: the vendor API is not activated
+    /// on the connection, or the code does not send its variant (without one, its type) live at all.</summary>
+    private static string NotLiveReason(RunState run, string resourceType, EhrWriteCapability? capability) =>
+        (capability is null ? run.Vendor.Capabilities.Where(c => c.ResourceType == resourceType) : [capability])
+            .Any(c => c.LiveWriteSupported && c.RequiresVendorActivation && !ActivatedFor(run.Channel))
             ? "vendor-activation-required"
             : "live-write-not-supported";
 

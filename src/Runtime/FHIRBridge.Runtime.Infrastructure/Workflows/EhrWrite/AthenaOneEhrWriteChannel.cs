@@ -118,48 +118,35 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
 
         if (path.Contains(R.EncounterIdToken, StringComparison.Ordinal))
         {
-            if (Text(request, R.Encounter) is not { Length: > 0 } encounterId)
+            // A path segment, so an id only: '..' or a '/' would send the call to another athena endpoint.
+            if (EncounterId(Text(request, R.Encounter)) is not { } encounterId)
             {
                 return Refused("athena-encounter-missing");
             }
 
-            path = path.Replace(R.EncounterIdToken, Uri.EscapeDataString(encounterId), StringComparison.Ordinal);
+            path = path.Replace(R.EncounterIdToken, encounterId, StringComparison.Ordinal);
         }
 
-        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (name, value) in request[R.Fields] as JsonObject ?? new JsonObject())
-        {
-            if (value is JsonValue scalar)
-            {
-                fields[name] = scalar.TryGetValue<string>(out var text) ? text : scalar.ToJsonString();
-            }
-        }
-
-        foreach (var (name, value) in request[R.JsonFields] as JsonObject ?? new JsonObject())
-        {
-            if (value is not null)
-            {
-                fields[name] = value.ToJsonString();
-            }
-        }
-
+        string? department = null;
         if (request[R.Department] is JsonValue flag && flag.TryGetValue<bool>(out var needsDepartment) && needsDepartment)
         {
-            var department = patientId is null ? Options.TargetDepartmentId : await DepartmentAsync(patientId, cancellationToken);
+            department = patientId is null ? Options.TargetDepartmentId : await DepartmentAsync(patientId, cancellationToken);
             if (department is null)
             {
                 return RefusedUnlessCancelled("athena-department-unknown", cancellationToken);
             }
-
-            fields["departmentid"] = department;
         }
 
+        // Each lookup's id replaces a value that is its placeholder exactly, never text inside another value: a field
+        // carrying clinical free text or a name that happens to contain the placeholder is sent as written.
+        var fieldsSource = (request[R.Fields] as JsonObject ?? new JsonObject()).DeepClone().AsObject();
+        var jsonFieldsSource = (request[R.JsonFields] as JsonObject ?? new JsonObject()).DeepClone().AsObject();
         foreach (var lookup in (request[R.Lookups] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
         {
             var kind = Text(lookup, R.LookupKind) ?? string.Empty;
             var name = Text(lookup, R.LookupName) ?? string.Empty;
             var token = Text(lookup, R.LookupToken) ?? string.Empty;
-            if (token.Length == 0)
+            if (token.Length == 0 || !HasPlaceholder(fieldsSource, token) && !HasPlaceholder(jsonFieldsSource, token))
             {
                 // Nowhere to put the id: the request was built without a placeholder for it.
                 return Refused($"athena-{kind}-no-placeholder");
@@ -171,10 +158,30 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
                 return RefusedUnlessCancelled($"athena-{kind}-not-found", cancellationToken);
             }
 
-            foreach (var key in fields.Keys.ToList())
+            ReplacePlaceholder(fieldsSource, token, id);
+            ReplacePlaceholder(jsonFieldsSource, token, id);
+        }
+
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (name, value) in fieldsSource)
+        {
+            if (value is JsonValue scalar)
             {
-                fields[key] = fields[key].Replace(token, id, StringComparison.Ordinal);
+                fields[name] = scalar.TryGetValue<string>(out var text) ? text : scalar.ToJsonString();
             }
+        }
+
+        foreach (var (name, value) in jsonFieldsSource)
+        {
+            if (value is not null)
+            {
+                fields[name] = value.ToJsonString();
+            }
+        }
+
+        if (department is not null)
+        {
+            fields["departmentid"] = department;
         }
 
         var multipart = request[R.Multipart] is JsonValue m && m.TryGetValue<bool>(out var isMultipart) && isMultipart;
@@ -265,6 +272,61 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
             && id.Any(c => c != '.')
             ? id
             : null;
+    }
+
+    /// <summary>The encounter id a request's path carries: a FHIR id (letters, digits, '-' and '.', at most 64, not dots
+    /// alone, so never a dot segment), athena's own numeric id included; null for anything else.</summary>
+    internal static string? EncounterId(string? encounterId)
+    {
+        var id = encounterId?.Trim() ?? string.Empty;
+        return id.Length is > 0 and <= 64
+            && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.')
+            && id.Any(c => c != '.')
+            ? id
+            : null;
+    }
+
+    /// <summary>A string value anywhere under <paramref name="node"/> that is <paramref name="token"/> exactly.</summary>
+    private static bool HasPlaceholder(JsonNode? node, string token) => node switch
+    {
+        JsonObject obj => obj.Any(p => HasPlaceholder(p.Value, token)),
+        JsonArray array => array.Any(item => HasPlaceholder(item, token)),
+        JsonValue value => value.TryGetValue<string>(out var text) && text == token,
+        _ => false,
+    };
+
+    /// <summary>Replaces every string value under <paramref name="node"/> that is <paramref name="token"/> exactly with
+    /// <paramref name="id"/>; text that only contains the token is left alone.</summary>
+    internal static void ReplacePlaceholder(JsonNode? node, string token, string id)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var key in obj.Select(p => p.Key).ToList())
+            {
+                if (obj[key] is JsonValue value && value.TryGetValue<string>(out var text) && text == token)
+                {
+                    obj[key] = id;
+                }
+                else
+                {
+                    ReplacePlaceholder(obj[key], token, id);
+                }
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            for (var i = 0; i < array.Count; i++)
+            {
+                if (array[i] is JsonValue value && value.TryGetValue<string>(out var text) && text == token)
+                {
+                    array[i] = id;
+                }
+                else
+                {
+                    ReplacePlaceholder(array[i], token, id);
+                }
+            }
+        }
     }
 
     /// <summary>athenaOne's patient id from a target patient id: athena's FHIR id <c>a-{practice}.E-{enterpriseid}</c>

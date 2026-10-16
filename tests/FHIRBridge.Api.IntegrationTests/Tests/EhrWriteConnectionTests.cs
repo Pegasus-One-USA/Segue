@@ -302,6 +302,23 @@ public sealed class EhrWriteConnectionTests(ApiFixture f)
     }
 
     [Fact]
+    public async Task A_source_node_that_repoints_a_read_write_connection_needs_the_ehr_write_back_edit_right()
+    {
+        var name = NewName("rw");
+        var id = (await CreateAsAdminAsync(AthenaBody(name, "ReadWrite", departmentId: "150", activated: true))).GetProperty("id").GetGuid();
+        using var designer = await ClientWithAsync("workflow.view", "workflow.create", "workflow.edit", "athenahealth.edit");
+        using var writeBackEditor = await ClientWithAsync(
+            "workflow.view", "workflow.create", "workflow.edit", "athenahealth.edit", "ehrwriteback.edit");
+
+        var refused = await BuildAsync(AthenaBody(name, null), id, designer, baseUrl: "https://elsewhere.test/fhir");
+        var allowed = await BuildAsync(AthenaBody(name, null), id, writeBackEditor, baseUrl: "https://elsewhere.test/fhir");
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        await ApiFixture.EnsureOkAsync(allowed);
+        Assert.Equal("https://elsewhere.test/fhir", (await GetConnectionAsync(id)).GetProperty("baseUrl").GetString());
+    }
+
+    [Fact]
     public async Task An_edit_needs_the_saved_vendors_right_not_just_the_one_the_request_names()
     {
         var name = NewName("epic");

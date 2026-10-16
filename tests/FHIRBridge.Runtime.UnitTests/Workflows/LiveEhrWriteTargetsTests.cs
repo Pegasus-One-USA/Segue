@@ -45,6 +45,9 @@ public sealed class LiveEhrWriteTargetsTests
     [InlineData("""{"dest_ehrVendor":"Healow"}""")]
     [InlineData("""{"dest_ehrVendor":"GenericFhir","dest_dryRun":"false","dest_testAsVendor":"Healow"}""")]
     [InlineData("""{"dest_dryRun":"false"}""")]
+    // A JSON boolean is not the saved string: the executor reads dest_dryRun as a string too (ReadStringConfiguration),
+    // so such a node really runs dry, and the list must not call it live.
+    [InlineData("""{"dest_ehrVendor":"Epic","dest_dryRun":false}""")]
     [InlineData("{not json")]
     public void A_test_run_a_dry_run_or_an_unreadable_node_is_not_live(string configurationJson)
     {
