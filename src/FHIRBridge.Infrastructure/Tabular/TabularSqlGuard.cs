@@ -15,7 +15,10 @@ namespace FHIRBridge.Infrastructure.Tabular;
 /// (a <c>--</c> inside <c>'%--%'</c> is text, not a comment), producing a copy with comments removed and literals
 /// emptied. The checks run on that copy; the text the user wrote is what executes, so stripping can never change the
 /// query that runs. MySQL's backslash escapes and PostgreSQL's dollar quotes are read as the engine reads them, so a
-/// literal cannot be made to look closed to this check while the engine sees it open.</para>
+/// literal cannot be made to look closed to this check while the engine sees it open. That reading assumes the
+/// server's default lexing: PostgreSQL with standard_conforming_strings on, MySQL without NO_BACKSLASH_ESCAPES or
+/// ANSI_QUOTES. TabularRowReader sets those for the session before every query, so the assumption holds whatever the
+/// server or the login is configured with.</para>
 /// </summary>
 public static partial class TabularSqlGuard
 {

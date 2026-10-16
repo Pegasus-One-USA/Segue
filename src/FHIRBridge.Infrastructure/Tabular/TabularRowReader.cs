@@ -104,7 +104,9 @@ public sealed class TabularRowReader : ITabularRowReader
             // undefined table / column / function, syntax error, unknown schema.
             ExplainedError: ex => ex is PostgresException { SqlState: "42P01" or "42703" or "42883" or "42601" or "3F000" } pg
                 ? pg.MessageText
-                : null),
+                : null,
+            PinLexingAsync: PinPostgreSqlLexingAsync,
+            RemembersReadOnlyCheck: true),
         ["mysql"] = new(
             async (connectionString, ct) =>
             {
@@ -130,7 +132,9 @@ public sealed class TabularRowReader : ITabularRowReader
                 THEN 1 ELSE 0 END
                 """
                 .Replace("@grantee", MySqlCurrentGrantee, StringComparison.Ordinal)
-                .Replace("@writes", MySqlWritePrivileges, StringComparison.Ordinal)),
+                .Replace("@writes", MySqlWritePrivileges, StringComparison.Ordinal),
+            PinLexingAsync: PinMySqlLexingAsync,
+            RemembersReadOnlyCheck: true),
     };
 
     public TabularRowReader(
@@ -197,8 +201,13 @@ public sealed class TabularRowReader : ITabularRowReader
         TabularSqlGuard.RequireTabularConnectionSecret(query.ConnectionSecret, query.Engine, _vaults);
         var connectionString = await _secrets.GetSecretAsync(query.ConnectionSecret, cancellationToken);
         await using var connection = await engine.OpenAsync(connectionString, cancellationToken);
+        if (engine.PinLexingAsync is { } pinLexing)
+        {
+            await pinLexing(connection, cancellationToken);
+        }
+
         var verifiedKey = VerifiedLoginKey(query.Engine, connectionString);
-        if (engine.VerifyReadOnlySql is { } verify && !IsRecentlyVerified(verifiedKey))
+        if (engine.VerifyReadOnlySql is { } verify && !(engine.RemembersReadOnlyCheck && IsRecentlyVerified(verifiedKey)))
         {
             await using var check = connection.CreateCommand();
             check.CommandText = verify;
@@ -211,7 +220,10 @@ public sealed class TabularRowReader : ITabularRowReader
                     "only; for PostgreSQL and MySQL, a login granted SELECT only).");
             }
 
-            VerifiedLogins[verifiedKey] = DateTimeOffset.UtcNow + VerifiedLoginLifetime;
+            if (engine.RemembersReadOnlyCheck)
+            {
+                VerifiedLogins[verifiedKey] = DateTimeOffset.UtcNow + VerifiedLoginLifetime;
+            }
         }
 
         DbTransaction? transaction = null;
@@ -264,7 +276,9 @@ public sealed class TabularRowReader : ITabularRowReader
     // The read-only login check depends only on the login, and on PostgreSQL it walks the catalog, so a node with
     // several entries (or a run, then its preview) need not repeat it on every call. A pass is remembered briefly,
     // keyed by a hash of the connection string itself: a changed login or password is checked again at once. A
-    // refusal is never remembered.
+    // refusal is never remembered. Only engines whose READ ONLY transaction still holds back a login that gained
+    // write rights inside that window remember it (RemembersReadOnlyCheck); on SQL Server the check is the only
+    // backstop, and it is cheap there, so it runs on every connection.
     private static readonly TimeSpan VerifiedLoginLifetime = TimeSpan.FromMinutes(5);
 
     private static readonly ConcurrentDictionary<string, DateTimeOffset> VerifiedLogins = new(StringComparer.Ordinal);
@@ -428,5 +442,46 @@ public sealed class TabularRowReader : ITabularRowReader
         Func<DbConnection, DbTransaction?, string, CancellationToken, Task<IReadOnlyList<string>>> DescribeAsync,
         Func<DbException, string?> ExplainedError,
         string? StartTransactionSql = null,
-        string? VerifyReadOnlySql = null);
+        string? VerifyReadOnlySql = null,
+        Func<DbConnection, CancellationToken, Task>? PinLexingAsync = null,
+        bool RemembersReadOnlyCheck = false);
+
+    /// <summary>PostgreSQL: '...' is a standard string, a backslash in it is text, as TabularSqlGuard reads it. With
+    /// standard_conforming_strings off a backslash would escape the quote, and a literal the check sees closed would
+    /// run on as code. Set for the session before the query; the query itself is one statement, lexed as a whole
+    /// before anything in it runs, so it cannot change this for itself.</summary>
+    private static Task PinPostgreSqlLexingAsync(DbConnection connection, CancellationToken cancellationToken) =>
+        ExecuteAsync(connection, null, "SET standard_conforming_strings = on", cancellationToken);
+
+    /// <summary>MySQL: a backslash escapes and "..." is a string, as TabularSqlGuard reads them. NO_BACKSLASH_ESCAPES
+    /// makes a backslash text, and ANSI_QUOTES (also implied by ANSI) makes "..." an identifier, without backslash
+    /// escapes: either lets a literal the check sees closed run on as code. Those modes are removed from the session's
+    /// sql_mode; every other mode is kept, so the query means what it means on that server.</summary>
+    private static async Task PinMySqlLexingAsync(DbConnection connection, CancellationToken cancellationToken)
+    {
+        string current;
+        await using (var read = connection.CreateCommand())
+        {
+            read.CommandText = "SELECT @@SESSION.sql_mode";
+            read.CommandTimeout = CommandTimeoutSeconds;
+            current = Convert.ToString(await read.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+
+        var pinned = string.Join(",", current
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(mode => !MySqlLexingModes.Contains(mode)));
+        await using var set = connection.CreateCommand();
+        set.CommandText = "SET SESSION sql_mode = @mode";
+        set.CommandTimeout = CommandTimeoutSeconds;
+        var parameter = set.CreateParameter();
+        parameter.ParameterName = "@mode";
+        parameter.Value = pinned;
+        set.Parameters.Add(parameter);
+        await set.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static readonly HashSet<string> MySqlLexingModes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "NO_BACKSLASH_ESCAPES", "ANSI_QUOTES", "ANSI",
+    };
 }
