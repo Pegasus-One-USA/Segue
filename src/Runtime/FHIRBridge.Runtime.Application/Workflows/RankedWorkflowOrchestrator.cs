@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using FHIRBridge.Governance;
+using FHIRBridge.Runtime.Application.Abstractions.Sources;
 using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -24,6 +25,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IBulkExportPauseRecorder? _bulkExportPauseRecorder;
     private readonly EhrDataDumpWriter? _ehrDataDumpWriter;
     private readonly IActiveWorkflowRuns? _activeRuns;
+    private readonly IEhrEndpointOverrideProvider? _ehrEndpointOverrideProvider;
     private readonly ILogger<RankedWorkflowOrchestrator> _logger;
 
     public RankedWorkflowOrchestrator(
@@ -39,7 +41,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IBulkExportPauseRecorder? bulkExportPauseRecorder = null,
         ILogger<RankedWorkflowOrchestrator>? logger = null,
         EhrDataDumpWriter? ehrDataDumpWriter = null,
-        IActiveWorkflowRuns? activeRuns = null)
+        IActiveWorkflowRuns? activeRuns = null,
+        IEhrEndpointOverrideProvider? ehrEndpointOverrideProvider = null)
     {
         _graphValidator = graphValidator;
         _executorRegistry = executorRegistry;
@@ -54,6 +57,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _logger = logger ?? NullLogger<RankedWorkflowOrchestrator>.Instance;
         _ehrDataDumpWriter = ehrDataDumpWriter;
         _activeRuns = activeRuns;
+        _ehrEndpointOverrideProvider = ehrEndpointOverrideProvider;
     }
 
     public Task<WorkflowRunResult> ExecuteAsync(
@@ -89,6 +93,10 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             throw new WorkflowGraphValidationException(validationResult.Errors);
         }
 
+        // Separate, opt-in path: only a run that explicitly names an EHR Endpoint resolves one. Every other run skips
+        // this entirely (no lookup, nothing recorded) and behaves exactly as it always has.
+        var ehrEndpointOverride = await ResolveEhrEndpointOverrideAsync(context, cancellationToken);
+
         var workflowRun = new WorkflowRun(
             context.WorkflowRunId,
             workflowDefinition.Id,
@@ -97,7 +105,21 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             context.TriggerType,
             targetNodeId,
             workflowDefinitionVersion: workflowDefinition.Version,
-            correlationId: context.CorrelationId);
+            correlationId: context.CorrelationId,
+            ehrEndpointId: ehrEndpointOverride?.Id,
+            ehrEndpointName: ehrEndpointOverride?.Name,
+            runGroupId: context.SourceOverrides?.GroupId,
+            runSearchCriteria: context.SourceOverrides?.SearchCriteria);
+
+        if (ehrEndpointOverride is not null || context.SourceOverrides is not null)
+        {
+            // Criteria values can be patient identifiers, so only their presence is written to the text log; the full
+            // values are on the run record itself.
+            _logger.LogInformation(
+                "Run {WorkflowRunId} uses Execute V2 overrides: ehrEndpoint={EhrEndpoint} groupIdOverridden={GroupIdOverridden} searchCriteriaOverridden={SearchCriteriaOverridden}",
+                context.WorkflowRunId, ehrEndpointOverride?.Name ?? "Default",
+                context.SourceOverrides?.GroupId is not null, context.SourceOverrides?.SearchCriteria is not null);
+        }
         var orderedNodes = TopologicalSort(effectiveDefinition);
         var outputsByNodeId = new Dictionary<Guid, WorkflowNodeOutput>();
         var skippedResourceTypesAcrossRun = new List<string>();
@@ -1231,6 +1253,25 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         return outputsByNodeId;
     }
 
+    private async Task<EhrEndpointOverride?> ResolveEhrEndpointOverrideAsync(
+        WorkflowExecutionContext context, CancellationToken cancellationToken)
+    {
+        // A code that is not an EHR Endpoint id (older callers passed arbitrary strings, which were always ignored)
+        // keeps being ignored. Only a well-formed id that matches no endpoint fails, rather than silently running
+        // against the default hospital when a specific one was asked for.
+        if (_ehrEndpointOverrideProvider is null
+            || !Guid.TryParse(context.EhrEndpointCode, out var requestedEndpointId)
+            || requestedEndpointId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var resolved = await _ehrEndpointOverrideProvider.ResolveAsync(context.EhrEndpointCode, cancellationToken)
+            ?? throw new InvalidOperationException($"EHR Endpoint '{context.EhrEndpointCode}' was not found.");
+        context.SetEhrEndpointOverride(resolved);
+        return resolved;
+    }
+
     private sealed record SerializedExecutionContext(
         Guid WorkflowRunId,
         string CorrelationId,
@@ -1238,7 +1279,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         string? TriggerType,
         string? TargetPatientId,
         string? PatientSearchCriteria,
-        string? CallerId);
+        string? CallerId,
+        string? EhrEndpointCode = null);
 
     private static WorkflowExecutionContext DeserializeExecutionContext(string? contextJson, Guid fallbackWorkflowRunId)
     {
@@ -1258,6 +1300,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             dto.TriggerType,
             dto.TargetPatientId,
             dto.PatientSearchCriteria,
-            dto.CallerId);
+            dto.CallerId,
+            ehrEndpointCode: dto.EhrEndpointCode);
     }
 }

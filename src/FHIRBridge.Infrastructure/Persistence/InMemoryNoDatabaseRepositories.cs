@@ -25,6 +25,16 @@ public sealed class InMemoryDeIdentificationProfileRepository : IDeIdentificatio
         _profiles[profile.Id] = profile;
         return Task.CompletedTask;
     }
+
+    /// <summary>The no-database profile keeps no destination connections or workflow definitions alongside its
+    /// profiles to consult, so nothing outside the workflow is known to use one.</summary>
+    public Task<DeIdentificationProfileUsage> FindUsageAsync(
+        Guid profileId, Guid workflowId, IReadOnlyCollection<Guid> previousDestinationIds, CancellationToken cancellationToken) =>
+        Task.FromResult(new DeIdentificationProfileUsage([], []));
+
+    public Task ClearFromDestinationsAsync(
+        Guid profileId, IReadOnlyCollection<Guid> destinationIds, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }
 
 public sealed class InMemoryResourceTypeCriteriaRepository : IResourceTypeCriteriaRepository

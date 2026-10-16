@@ -58,6 +58,9 @@ export interface AddTransformEvent {
    *  actually opened — the destination node is still what gets updated (it owns the configuration), but
    *  any confirmation shown should name the step the user clicked, not that destination. */
   chainLabel?: string;
+  /** Set alongside chainLabel: the canvas id of the chain node the user opened and saved — so the builder knows
+   *  the user has now configured that step (see WorkflowBuilderV2Component.removeChainStep's __autoAdded rule). */
+  chainNodeId?: string;
 }
 
 export interface MergeEvent {
@@ -386,6 +389,11 @@ export class NodeLibraryDialogComponent {
       .flatMap(n => (n.fields?.['Discovered resource types'] ?? '').split(',').map(s => s.trim()).filter(Boolean));
     return Array.from(new Set(fromNodes));
   });
+
+  // The launch source node's own retrieval method key ('search-rest', 'bulk-export', ...) — the same node field the
+  // run reads first (SourceNodeExecutor's "Retrieval method key" override). Null when the node doesn't set one.
+  readonly sourceRetrievalMethod = computed(() =>
+    this.store.nodes().find(isSourceNode)?.fields?.['Retrieval method key'] || null);
 
   // Mirrors the open destination wizard's own step/progress so the sidebar can
   // lock the other destination type out mid-wizard and warn before discarding.
@@ -943,7 +951,14 @@ export class NodeLibraryDialogComponent {
 
     const editNode = this.sourceFormEditNode();
     if (editNode) {
-      this.store.updateNode(editNode.id, { fields } as Partial<CanvasNode>);
+      // The form returns a fresh field bag, so carry the backend's identity stamps across: ResourceTypeCriteria
+      // rows are keyed by canvasNodeId, and losing it would make the next save stamp a different key (the
+      // persisted node Guid) and orphan every criteria row already stored for this source.
+      const identity: Record<string, string> = {};
+      for (const key of ['canvasNodeId', 'workflowId']) {
+        if (editNode.fields[key]) identity[key] = editNode.fields[key];
+      }
+      this.store.updateNode(editNode.id, { fields: { ...identity, ...fields } } as Partial<CanvasNode>);
     } else {
       const meta = SOURCES.find(s => s.id === this.openSourceFormType());
       const node: SourceNode = {
@@ -1093,6 +1108,7 @@ export class NodeLibraryDialogComponent {
             ...e,
             editNodeId: editNode.id,
             chainLabel: this.chainLabelForTab(this.destWizardTab()),
+            chainNodeId: this.editNodeId() ?? undefined,
           });
         }
       }

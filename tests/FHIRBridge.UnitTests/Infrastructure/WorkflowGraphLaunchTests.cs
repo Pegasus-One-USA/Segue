@@ -264,6 +264,11 @@ public sealed class WorkflowGraphLaunchTests
             LastProfileId = request.ProfileId;
             return Task.FromResult(new DeIdentificationResult("SCRUBBED", []));
         }
+
+        public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop) => value;
+
+        // Stands in for a policy that has rules: these tests are about which profile is resolved, not its contents.
+        public Task<bool> HasRulesAsync(Guid profileId, CancellationToken cancellationToken) => Task.FromResult(true);
     }
 
     private sealed class FakeConfigurationRepository : IConfigurationRepository

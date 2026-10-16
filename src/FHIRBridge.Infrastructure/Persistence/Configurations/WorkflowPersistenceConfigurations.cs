@@ -155,6 +155,10 @@ public sealed class WorkflowRunEntityTypeConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.LeaseOwner).HasMaxLength(200);
         builder.Property(x => x.LeaseExpiresAt);
         builder.Property(x => x.CancellationRequestedAt);
+        builder.Property(x => x.EhrEndpointId);
+        builder.Property(x => x.EhrEndpointName).HasMaxLength(300);
+        builder.Property(x => x.RunGroupId).HasMaxLength(200);
+        builder.Property(x => x.RunSearchCriteria).HasMaxLength(4000);
 
         builder.HasMany(x => x.NodeRuns)
             .WithOne()

@@ -54,8 +54,9 @@ public static class WorkflowNodeResourceTypes
     /// for one unregistered scope) and reject re-saving an unchanged legacy workflow.
     /// </para>
     /// <para>
-    /// Only the save-time check and the scope sync read this. The run time (SourceNodeExecutors) still fetches a
-    /// node's "Resources" whether or not it is marked, narrowed to what its destinations select, exactly as before.
+    /// The save-time check and the scope sync read this, and so does the run time (SourceNodeExecutors): a declared
+    /// list is narrowed to what the destinations select, while an unmarked node's "Resources" (possibly a stale
+    /// snapshot) gives way to a reachable destination's own selection.
     /// </para>
     /// </summary>
     public static IReadOnlyList<string>? ReadSourceDeclared(string nodeType, string? configurationJson)

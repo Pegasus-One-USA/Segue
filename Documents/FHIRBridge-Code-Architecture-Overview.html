@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FHIRBridge – Code Architecture Overview</title>
+<style>
+  :root{color-scheme:light;--bg:#fefefe;--fg:#1b2a3a;--muted:#5a6f85;--line:#cfdcec;--accent:#0b5cad;--accent-dark:#084580;--soft:#eef5fc;--warn:#fff6e0;--warnline:#e8b64a;--ok:#eaf7ee;--okline:#4aa36a;--code:#e8f1fb}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px 80px;background:#e2edff}
+  header.top{background:var(--accent);color:#fff;border-radius:10px;padding:18px 22px;margin-bottom:22px}
+  h1{margin:0 0 4px;font-size:28px;color:#fff}
+  .sub{color:#d6e8fb;margin:0}
+  h2{margin-top:44px;padding-bottom:6px;border-bottom:1px solid var(--line);font-size:22px;color:var(--accent)}
+  h3{margin-top:26px;font-size:17px}
+  h4{margin:18px 0 6px;font-size:15px}
+  nav.toc{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:12px 18px;margin:18px 0}
+  nav.toc ol{columns:2;margin:6px 0;padding-left:20px}
+  nav.toc a{color:var(--accent);text-decoration:none}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;background:#eef5fc}
+  th,td{border:1px solid #000;padding:7px 10px;vertical-align:top;text-align:left}
+  th{background:var(--accent);color:#fff}
+  .tbl-scroll{overflow-x:auto;margin:12px 0}
+  table.patterns{table-layout:fixed;min-width:980px;margin:0}
+  table.patterns th,table.patterns td{word-wrap:break-word;overflow-wrap:anywhere;font-size:13px;line-height:1.5}
+  table.patterns th:nth-child(1){width:13%}
+  table.patterns th:nth-child(2){width:21%}
+  table.patterns th:nth-child(3){width:14%}
+  table.patterns th:nth-child(4){width:25%}
+  table.patterns th:nth-child(5){width:27%}
+  table.patterns td:first-child{font-weight:600}
+  code,pre{font-family:Consolas,"Cascadia Mono",Menlo,monospace;font-size:13px}
+  code{background:var(--code);padding:1px 5px;border-radius:4px}
+  pre{background:var(--code);padding:12px 14px;border-radius:8px;overflow:auto;border:1px solid var(--line)}
+  .note,.risk,.good{border-left:4px solid;padding:10px 14px;border-radius:6px;margin:14px 0}
+  .note{background:var(--soft);border-color:var(--accent)}
+  .risk{background:var(--warn);border-color:var(--warnline)}
+  .good{background:var(--ok);border-color:var(--okline)}
+  .flow{list-style:none;counter-reset:s;padding:0;margin:14px 0}
+  .flow li{counter-increment:s;position:relative;margin:0 0 10px;padding:10px 14px 10px 52px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
+  .flow li::before{content:counter(s);position:absolute;left:12px;top:10px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;text-align:center;line-height:28px;font-weight:700;font-size:13px}
+  .flow li b{display:block}
+  .flow li span.where{display:block;color:var(--muted);font-size:12.5px;font-family:Consolas,monospace;margin-top:2px}
+  details{border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:0 14px;background:var(--bg)}
+  details[open]{background:var(--soft)}
+  summary{cursor:pointer;font-weight:600;padding:10px 0}
+  details p,details ul{margin:6px 0 12px}
+  .layers{display:grid;gap:6px;margin:14px 0}
+  .layers div{border:1px solid var(--line);border-radius:8px;padding:8px 14px;background:var(--soft)}
+  .layers div b{color:var(--accent)}
+  .tag{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:10px;border:1px solid var(--line);color:var(--muted);margin-left:6px}
+  footer{margin-top:50px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:12px}
+  @media print{details{break-inside:avoid}details>*{display:block}nav.toc ol{columns:1}}
+  @media (max-width:640px){nav.toc ol{columns:1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>FHIRBridge (“Segue”) – Code Architecture Overview</h1>
+  <p class="sub">Project structure, coding patterns, request flow and security design</p>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#overview">System overview</a></li>
+    <li><a href="#projects">Projects and their roles</a></li>
+    <li><a href="#patterns">Coding patterns</a></li>
+    <li><a href="#flow">Request flow — from entry to destination</a></li>
+    <li><a href="#deepdive">Execution engine in detail</a></li>
+    <li><a href="#security">Security design</a></li>
+    <li><a href="#data">Data, persistence &amp; tenancy</a></li>
+    <li><a href="#ops">Background processing &amp; observability</a></li>
+    <li><a href="#testing">Testing &amp; architecture enforcement</a></li>
+    <li><a href="#packages">Third-party packages &amp; licences</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. System overview</h2>
+<p>FHIRBridge (product name in the UI/Swagger: <b>Segue</b>) is a healthcare data-integration platform. It pulls clinical data from EHR/FHIR sources (currently enabled in code: Epic, athenahealth, eClinicalWorks/Healow, generic FHIR, sample; HL7 v2 via MLLP; Cerner, Allscripts and MEDITECH are modelled but their clients are gated off), runs it through a configurable <b>workflow graph</b> (extraction → governance / de-identification → transform / mapping → output), and writes it to one of 20+ destinations (SQL Server, Postgres, MySQL, Snowflake, Mongo, Blob/S3/SFTP, CSV/Parquet/Avro/PDF, FHIR repositories, REST APIs, etc.). An Angular admin portal configures tenants, connections, workflows, RBAC and licensing.</p>
+
+<table>
+<tr><th>Concern</th><th>Technology</th></tr>
+<tr><td>Backend</td><td>.NET 9, ASP.NET Core (controllers + minimal APIs), EF Core (SQL Server; PostgreSQL migrations project), SignalR (+Redis backplane)</td></tr>
+<tr><td>Frontend</td><td>Angular 20 portal (<code>portal/</code>), served from the API’s <code>wwwroot</code> in production</td></tr>
+<tr><td>Cache / state</td><td>Redis in production, in-memory in dev (token cache, OAuth code stores, SignalR)</td></tr>
+<tr><td>Secrets</td><td>Azure Key Vault, DB-encrypted app secrets (ASP.NET Data Protection), configuration provider chain</td></tr>
+<tr><td>Observability</td><td>Serilog (+ PHI masking), OpenTelemetry, Seq (local); in-app error dashboard (being added) over the <code>ErrorLogs</code> / <code>ErrorReferenceId</code> records</td></tr>
+<tr><td>Hosting targets</td><td>Local (Docker Compose), Windows VM (IIS/Windows Service, no Docker), client Azure tenant (Bicep), future AWS/GCP</td></tr>
+</table>
+
+<h3>Logical architecture</h3>
+<div class="layers">
+  <div><b>Hosts</b> – <code>FHIRBridge.Api</code> (REST + SignalR + portal), <code>FHIRBridge.Worker</code> (background services), <code>FHIRBridge.Gateway</code> (YARP front door: serves the portal, proxies the API), <code>FHIRBridge.LicenseServer</code> (vendor-side licensing)</div>
+  <div><b>Infrastructure</b> – EF Core, 20+ destination writers, secret providers, source connectors/token providers, terminology sync, e-mail, licensing</div>
+  <div><b>Application</b> – use-case services, DTOs, abstractions (ports), RBAC/security policies, mapping engine</div>
+  <div><b>Domain</b> – entities (for example <code>Tenant</code>, <code>User</code>, <code>SourceConnection</code>), enums, value objects</div>
+  <div><b>Runtime plane</b> (own Domain / Application / Infrastructure) – workflow definitions, graph validation, ranked orchestrator, node executors, source clients</div>
+  <div><b>Building blocks</b> – SharedKernel, Integration (FHIR/HL7), Observability, Governance (exception management)</div>
+</div>
+<p>Dependency direction is always inward: <code>Domain ← Application ← Infrastructure ← Api/Worker</code>, and the same inside the Runtime plane. This is enforced by automated architecture tests (section 9).</p>
+
+<!-- ============================================================ -->
+<h2 id="projects">2. Projects and their roles</h2>
+
+<h3>2.1 Hosts (executables)</h3>
+<table>
+<tr><th>Project</th><th>Role</th><th>Key contents</th></tr>
+<tr><td><code>src/Api/FHIRBridge.Api</code></td><td>The only inbound HTTP surface. Composition root: wires DI, auth, middleware, rate limits, CORS, SignalR. Contains thin controllers and the workflow minimal-API endpoints.</td><td><code>Program.cs</code>, <code>Controllers/V1/*</code> (~55 controllers), <code>Workflows/WorkflowEndpoints.cs</code>, <code>Security/*</code> (auth handlers, token issuers, CSRF exemption), <code>Rbac/*</code>, <code>Hubs/*</code>, <code>Cors/*</code></td></tr>
+<tr><td><code>src/Worker/FHIRBridge.Worker</code></td><td>Out-of-process background work: schedule dispatch, queue consumers, bulk-export polling, terminology syncs, audit-chain verification, retention purge, license heartbeat, HL7 MLLP listener.</td><td><code>ScheduleDispatcherWorker</code>, <code>PipelineRunCommandProcessor</code>, <code>WebhookIngestionCommandProcessor</code>, <code>BulkExportPollWorker</code>, <code>AuditChainVerificationWorker</code>, <code>RetentionPurgeWorker</code>, <code>Hl7MllpListenerService</code>, many <code>*TerminologySyncWorker</code></td></tr>
+<tr><td><code>src/Gateway/FHIRBridge.Gateway</code></td><td>Public front door for Kestrel-native (no IIS/Docker) deployments. A YARP reverse proxy that serves the Angular portal build and forwards everything else to the one API it fronts. Four fixed in-memory routes (<code>/api/**</code>, <code>/swagger/**</code>, <code>/legal/**</code>, <code>/hubs/**</code>) go to a single <code>api-cluster</code> whose address comes from the <code>ApiBaseUrl</code> setting; each route preserves the browser’s original Host header so absolute URLs the API builds (SAML ACS, SMART authorize, checkpoint URLs) carry the public host, and <code>/hubs/**</code> carries SignalR WebSockets. Any other path is served from <code>StaticFiles:RootPath</code> (the portal) with an SPA fallback to <code>index.html</code>; ACME challenge files are served too. Non-dev startup refuses to run without explicit <code>ASPNETCORE_URLS</code> and <code>ApiBaseUrl</code>. Not yet done: no authentication, rate limiting, load balancing or multi-destination clusters at this layer.</td><td><code>Program.cs</code>, <code>appsettings.json</code> (<code>ApiBaseUrl</code>, <code>StaticFiles</code>)</td></tr></tr>
+<tr><td><code>src/LicenseServer</code></td><td>Vendor-side license issuing/validation service with its own Domain/Data/Security/Pages. Customers’ API calls it via the license heartbeat worker.</td><td><code>Api</code>, <code>Licensing</code>, <code>Security</code></td></tr>
+</table>
+
+<h3>2.2 Core layers (control plane: configuration &amp; administration)</h3>
+<table>
+<tr><th>Project</th><th>Role</th><th>Notes</th></tr>
+<tr><td><code>FHIRBridge.Domain</code></td><td>Pure business model. Entities such as <code>Tenant</code>, <code>User</code>, <code>Role</code>, <code>SourceConnection</code>, <code>DestinationConfiguration</code>, <code>MappingProfile</code> and <code>ResourcePipelineRoute</code>. Enums such as <code>ApplicationType</code>, destination/source types, permission codes.</td><td>No dependencies on any other layer (tested).</td></tr>
+<tr><td><code>FHIRBridge.Application</code></td><td>Use-case services (<code>LocalAuthService</code>, <code>MfaService</code>, <code>ConfigurationService</code>, <code>RoleManagementService</code>, <code>ClientCredentialsTokenService</code>, <code>ExternalWorkflowTriggerService</code>, mapping engine, anomaly detection…), ports (<code>Abstractions/*</code>), security policy constants (<code>AuthorizationPolicies</code>, <code>UnifiedRoles</code>), DI extension <code>AddFHIRBridgeApplication()</code>.</td><td>Defines interfaces; never references Infrastructure.</td></tr>
+<tr><td><code>FHIRBridge.Infrastructure</code></td><td>Implements the ports: <code>FHIRBridgeDbContext</code> + EF repositories, <code>AuditingSaveChangesInterceptor</code>, secret stores/providers, password hasher, PHI encryptor, TOTP, SSO validators (Entra/Google/SAML), destination writers (<code>Destinations/Mapped*Writer</code>), source discovery/probing, governance services, terminology, licensing, e-mail.</td><td>In-memory repository twins exist for tests/dev.</td></tr>
+<tr><td><code>FHIRBridge.Infrastructure.Migrations.PostgreSql</code></td><td>Separate migrations assembly so SQL Server and PostgreSQL schemas evolve independently.</td><td></td></tr>
+</table>
+
+<h3>2.3 Runtime plane (workflow execution engine)</h3>
+<table>
+<tr><th>Project</th><th>Role</th></tr>
+<tr><td><code>FHIRBridge.Runtime.Domain</code></td><td><code>WorkflowDefinition</code>, <code>WorkflowNode</code>, <code>WorkflowRun</code>, run status, node categories (Source / Transform / Compliance / Destination…), runtime source types.</td></tr>
+<tr><td><code>FHIRBridge.Runtime.Application</code></td><td><code>RankedWorkflowOrchestrator</code> (topological execution of the graph), <code>WorkflowGraphValidator</code>, <code>WorkflowNodeExecutorRegistry</code>, <code>IWorkflowNodeExecutor</code> contract, run tracker/notifier, audit recorder, MediatR pipeline behaviours (<code>LoggingBehavior</code>, <code>ValidationBehavior</code>, <code>PerformanceBehavior</code>), <code>PipelineOrchestrator</code> (bounded-parallel extraction).</td></tr>
+<tr><td><code>FHIRBridge.Runtime.Infrastructure</code></td><td>The concrete node executors (<code>Workflows/Executors/*</code>: Source, Transform, Compliance, Destination, Analytics), FHIR source connectors (<code>FhirSourceConnectorBase</code> + Epic/Athena/eCW/Generic/Sample), ApplicationType strategies (<code>Applications/*</code>), token providers (<code>Auth/*</code>: SMART Backend Services RS384, PKCE, client credentials, Redis token cache), SQL Server run store.</td></tr>
+</table>
+
+<h3>2.4 Building blocks (shared libraries)</h3>
+<table>
+<tr><th>Project</th><th>Role</th></tr>
+<tr><td><code>FHIRBridge.SharedKernel</code></td><td>Entity/AggregateRoot base types, <code>Result</code>/<code>Error</code>, domain exceptions, metric interfaces.</td></tr>
+<tr><td><code>FHIRBridge.Integration</code></td><td>FHIR JSON handling, HL7 v2 parser, MLLP framing, ADT/ORU/MDM → FHIR mapping, SQL helpers.</td></tr>
+<tr><td><code>FHIRBridge.Observability</code></td><td>OpenTelemetry setup, Serilog configuration, <code>IPhiRedactor</code> / PHI-masking enricher, <code>LogEvents</code> catalogue, API/FHIR metrics.</td></tr>
+<tr><td><code>FHIRBridge.Governance</code></td><td>Enterprise exception management: <code>GlobalExceptionManager</code>, exception/diagnosis classifiers, <code>ErrorReference</code> ids, <code>SafeErrorText</code> (client-safe messages).</td></tr>
+</table>
+
+<h3>2.5 Tests, portal and tooling</h3>
+<table>
+<tr><th>Project</th><th>Role</th></tr>
+<tr><td><code>tests/FHIRBridge.UnitTests</code>, <code>Runtime.UnitTests</code></td><td>Service/domain/executor unit tests.</td></tr>
+<tr><td><code>tests/FHIRBridge.Api.IntegrationTests</code></td><td>End-to-end HTTP tests with an in-memory database.</td></tr>
+<tr><td><code>tests/FHIRBridge.ArchitectureTests</code></td><td>NetArchTest guardrails (layering, no <code>switch</code> on <code>ApplicationType</code>, CSRF-exemption declaration, no DDL in destination writers).</td></tr>
+<tr><td><code>tests/FHIRBridge.LoadTests</code></td><td>Manual load tests; excluded from <code>dotnet test</code>.</td></tr>
+<tr><td><code>portal/</code></td><td>Angular 20 admin UI (workflow builder, connections, RBAC, execution history).</td></tr>
+<tr><td><code>Demo_TestApp</code>, <code>deploy/</code>, <code>containerization/</code>, <code>docs/</code>, <code>Documents/</code></td><td>Third-party-app demo, deployment scripts (Windows service, Bicep, Docker), documentation.</td></tr>
+</table>
+
+<div class="note"><b>ControlPlane</b> (<code>src/ControlPlane</code>) is an empty scaffold for a future configuration/authoring split and is not in the solution.</div>
+
+<h3>2.6 Folder structure</h3>
+<p>Top-level layout of the repository. Folders under <code>src/</code> follow the layering rule: Domain &larr; Application &larr; Infrastructure &larr; hosts (Api, Worker, Gateway); the Runtime plane repeats the same three layers.</p>
+<pre>FHIRBridge/
+|-- src/
+|   |-- Api/FHIRBridge.Api/              REST host (composition root)
+|   |   |-- Controllers/V1/              ~57 thin MVC controllers (admin CRUD, auth, webhooks)
+|   |   |-- Workflows/                   WorkflowEndpoints.cs (minimal API: /run, validate-run, external/*)
+|   |   |-- Security/  Rbac/  Cors/      auth handlers + token issuers, permission catalog, dynamic CORS
+|   |   |-- Hubs/                        SignalR: RunStatusHub, TerminologyStatusHub
+|   |   `-- Content/                     static legal documents (served under /legal)
+|   |-- Worker/FHIRBridge.Worker/        background services (scheduler, queue consumers, MLLP, sync workers)
+|   |-- Gateway/FHIRBridge.Gateway/      YARP front door: serves portal, proxies /api /hubs /swagger /legal
+|   |-- LicenseServer/                   vendor-side licence issuing / validation
+|   |-- FHIRBridge.Domain/               Entities/  Enums/  ValueObjects/  Fhir/
+|   |-- FHIRBridge.Application/          Abstractions/ (ports)  Services/  DTOs/  Mapping/  Governance/
+|   |                                    Rbac/  Security/  Scheduling/  Validation/  Exceptions/
+|   |-- FHIRBridge.Infrastructure/       Persistence/ (DbContext, repositories, Migrations/)
+|   |                                    Destinations/  Sources/  Security/  Governance/  Terminology/
+|   |                                    Licensing/  Messaging/  Scheduling/  Pipeline/  Hl7v2/  Email/ ...
+|   |-- FHIRBridge.Infrastructure.Migrations.PostgreSql/   PostgreSQL migrations
+|   |-- Runtime/                         workflow execution engine (own three layers)
+|   |   |-- FHIRBridge.Runtime.Domain/           Workflows/ (definition, node, run, status)  Entities/  Enums/
+|   |   |-- FHIRBridge.Runtime.Application/      Workflows/ (orchestrator, validator, registry)  Pipeline/
+|   |   |                                        Behaviors/ (MediatR)  Services/  Transformations/
+|   |   `-- FHIRBridge.Runtime.Infrastructure/   Workflows/Executors/  Connectors/ (FHIR clients)
+|   |                                            Applications/ (ApplicationType strategies)  Auth/  Persistence/
+|   |-- BuildingBlocks/                  SharedKernel/  Integration/ (FHIR, HL7 v2)  Observability/  Governance/
+|   `-- ControlPlane/                    empty scaffold, not in the solution
+|-- tests/                               UnitTests/  Runtime.UnitTests/  Api.IntegrationTests/
+|                                        ArchitectureTests/  LoadTests/ (manual)
+|-- portal/                              Angular 20 admin UI
+|   `-- src/app/                         core/  auth/  layout/  services/  models/  components/ + feature folders
+|                                        (source-connections, destination-connections, mapping-profiles,
+|                                        execution-history, user-management, system-settings, governance ...)
+|-- deploy/windows/                      Windows service deployment scripts
+|-- containerization/                    Docker, compose, Azure deploy, Terraform
+|-- docs/  Documents/                    architecture notes, how-to guides, runbooks
+|-- tools/                               code generators and helpers (licence minter, mapping metadata, ...)
+|-- scripts/                             database reset scripts for local setup
+|-- Demo_TestApp/                        third-party demo app that calls the workflow API
+|-- docker-compose.yml                   local stack (SQL Server, HAPI FHIR, Redis, Seq, ...)
+|-- FHIRBridge.sln  Directory.Build.props  VERSION  CLAUDE.md</pre>
+<table>
+<tr><th>Where do I put...</th><th>Folder</th></tr>
+<tr><td>A new admin API endpoint</td><td><code>src/Api/FHIRBridge.Api/Controllers/V1/</code> (thin) &rarr; service in <code>FHIRBridge.Application/Services/</code></td></tr>
+<tr><td>A new port (interface) and its implementation</td><td>Interface in <code>FHIRBridge.Application/Abstractions/</code>, implementation in the matching <code>FHIRBridge.Infrastructure/</code> folder</td></tr>
+<tr><td>A new EHR vendor</td><td><code>Runtime.Infrastructure/Connectors/</code> (client) and <code>Workflows/Executors/SourceNodeExecutors.cs</code> (node executor)</td></tr>
+<tr><td>A new destination</td><td><code>Infrastructure/Destinations/</code> (writer) and <code>Runtime.Infrastructure/Workflows/Executors/DestinationNodeExecutors.cs</code></td></tr>
+<tr><td>A new auth flow</td><td><code>Runtime.Infrastructure/Applications/</code> (ApplicationType strategy) and <code>Auth/</code> (token provider)</td></tr>
+<tr><td>A database change</td><td>Entity in <code>Domain/Entities/</code>, mapping in <code>Infrastructure/Persistence/Configurations/</code>, migration in <code>Persistence/Migrations/</code></td></tr>
+<tr><td>A background job</td><td><code>src/Worker/FHIRBridge.Worker/</code></td></tr>
+<tr><td>A portal screen</td><td><code>portal/src/app/&lt;feature&gt;/</code></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="patterns">3. Coding patterns</h2>
+
+<div class="tbl-scroll">
+<table class="patterns">
+<tr><th>Pattern</th><th>Where it is used</th><th>Why</th><th>In plain words, and why we chose it</th><th>How it works — an example from this code</th></tr>
+<tr><td><b>Clean Architecture / ports &amp; adapters</b></td><td>Interfaces in <code>Application/Abstractions/*</code>; implementations in <code>Infrastructure</code>. Same shape inside <code>Runtime.*</code>.</td><td>Keeps business rules independent of EF, HTTP and vendors; enables in-memory test doubles.</td><td>Think of a building with floors: the business rules sit on the ground floor and know nothing about databases, web pages or specific vendors; everything else plugs in from above. <b>Chosen</b> so we can change a database, EHR vendor or cloud without rewriting business rules, and test the rules on their own.</td><td><code>SourceConnectionsController</code> calls <code>IConfigurationService</code> (Application layer), which calls the <code>IConfigurationRepository</code> interface. In production that is <code>EfConfigurationRepository</code> (SQL Server); in unit tests it is <code>InMemoryConfigurationRepository</code>. The Application layer only ever sees the interface, so swapping the store changes nothing above it.</td></tr>
+<tr><td><b>Registry / Strategy over <code>switch</code></b> <span class="tag">enforced by test</span></td><td><code>IWorkflowNodeExecutor</code> + <code>WorkflowNodeExecutorRegistry</code> (dictionary keyed by <code>NodeType</code>); <code>SourceApplicationStrategyRegistry</code> (<code>BackendServices</code>, <code>EhrLaunch</code>, <code>Standalone</code>, <code>Patient</code> strategies); <code>DestinationWriterFactory</code>/<code>ConfiguredDestinationWriterFactory</code>; <code>FhirSourceClientFactory</code>; failure-diagnosis rules (<code>IFailureDiagnosisRule</code>).</td><td>Open/closed: a new EHR vendor, destination or auth flow is a new class registered in DI, not an edit to a central switch.</td><td>Instead of a long “if this vendor do A, else if that vendor do B” list, each vendor or destination is its own small class, listed in a directory the system looks up. <b>Chosen</b> so adding a new EHR or destination means adding a class, not editing (and risking) working code. A build test enforces it.</td><td>A run reaches a node of type <code>EpicSource</code>. <code>WorkflowNodeExecutorRegistry.GetRequired("EpicSource")</code> looks it up in a dictionary built from every <code>IWorkflowNodeExecutor</code> registered in DI and returns <code>EpicSourceNodeExecutor</code>. Adding a vendor means one new executor class and one DI registration; no <code>switch</code> is edited.</td></tr>
+<tr><td><b>Two independent auth axes</b></td><td>Vendor axis = inheritance (a shared template-method base class, <code>FhirSourceConnectorBase</code>, with thin vendor subclasses); ApplicationType axis = composition via strategy registry.</td><td>Avoids a vendor × auth-flow class explosion.</td><td>Two separate dials: <i>which</i> hospital system we talk to, and <i>how</i> we sign in to it. They are combined rather than hard-wired together. <b>Chosen</b> to avoid writing a separate class for every vendor × login-method combination.</td><td>Epic gets its client from the vendor side (<code>EpicFhirSourceClient</code>) and its login from the application-type side: <code>SourceApplicationStrategyRegistry.Resolve(ApplicationType.Backend)</code> returns <code>BackendServicesApplicationStrategy</code>, which signs a <code>private_key_jwt</code> when a private key is configured and otherwise sends a client id and secret (the athenahealth case). Same strategy, different vendors.</td></tr>
+</table>
+</div>
+<div class="note"><b>Other patterns.</b> Smaller patterns are described where they apply: hash-chained audit, soft delete and optimistic concurrency (sections 6 and 7), policy-based authorization (section 6), and queue-based background workers (section 8).</div>
+
+<h3>Coding conventions (from <code>.editorconfig</code>)</h3>
+<ul>
+<li>File-scoped namespaces; no primary constructors (constructor injection with private readonly fields).</li>
+<li><code>var</code> only when the type is obvious; <code>Async</code> suffix on async methods; <code>CancellationToken</code> flows through call chains.</li>
+<li>Nullable reference types enabled project-wide; CRLF endings, UTF-8.</li>
+<li>Comments explain <i>why</i> (security reasoning, trade-offs) — heavily so in <code>Program.cs</code> and <code>WorkflowEndpoints.cs</code>.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="flow">4. Request flow — from entry to destination</h2>
+
+<h3>4.1 Middleware pipeline (every HTTP request, in order)</h3>
+<p>Defined in <code>src/Api/FHIRBridge.Api/Program.cs</code> after <code>builder.Build()</code>.</p>
+<ol class="flow">
+<li><b>Forwarded headers</b><span class="where">app.UseForwardedHeaders() – X-Forwarded-For/Proto/Host, ForwardLimit default 2</span></li>
+<li><b>Correlation id</b><span class="where">inline middleware + WorkflowCorrelationResolver – sets TraceIdentifier / X-Correlation-Id; pushed into the Serilog LogContext</span></li>
+<li><b>Global exception handler</b><span class="where">app.UseExceptionHandler – MapException → &lt;500: safe message + “expected” governance record; ≥500: IGlobalExceptionManager.CaptureAsync → ErrorLogs row + ErrorReferenceId</span></li>
+<li><b>Security response headers</b><span class="where">nosniff, X-Frame-Options DENY, Referrer-Policy no-referrer, CSP (default-src 'none' for /api) outside Development</span></li>
+<li><b>HSTS + HTTPS redirect</b><span class="where">non-Development only</span></li>
+<li><b>Swagger</b><span class="where">only if Development or Swagger:Enabled=true</span></li>
+<li><b>Startup bootstrap</b><span class="where">BootstrapDatabase, ProvisionAppSecrets, LoadLicense, SyncDiscoveredPermissions (run once, not per request)</span></li>
+<li><b>Inbound API request logging</b><span class="where">InboundApiRequestLoggingMiddleware – durable SQL record of workflow/launch API calls, including refused ones</span></li>
+<li><b>Serilog request logging</b><span class="where">one event per request; no query strings (may carry PHI); adds ClientIp, CorrelationId, UserId</span></li>
+<li><b>Static files / health</b><span class="where">portal build in wwwroot; /health</span></li>
+<li><b>CORS</b><span class="where">UseCors("Portal") → DynamicPortalCorsPolicyProvider (origins managed in DB, no restart)</span></li>
+<li><b>CSRF double-submit check</b><span class="where">POST/PUT/PATCH/DELETE under /api/v1 with the access-token cookie must echo X-CSRF-Token = CSRF cookie; skipped for [AllowAnonymous] and [CsrfExempt] endpoints</span></li>
+<li><b>Authentication</b><span class="where">app.UseAuthentication() – policy scheme chooses Local HS256 JWT or Entra ID</span></li>
+<li><b>License gate</b><span class="where">non-Active license ⇒ 403 license_not_active for all /api/v1 except an allow-list (login, setup, license screens)</span></li>
+<li><b>Session gates</b><span class="where">claims pwd_change_required / mfa_setup_required confine the session to the change-password / MFA endpoints</span></li>
+<li><b>Authorization</b><span class="where">app.UseAuthorization() – policies &amp; handlers; denials logged by GovernanceAuditingAuthorizationMiddlewareResultHandler</span></li>
+<li><b>Rate limiter</b><span class="where">UseRateLimiter, only when RateLimiting:Enabled is true (default true); policies auth / oauth / webhook, per client IP, configurable</span></li>
+<li><b>Endpoint execution</b><span class="where">MapControllers, MapWorkflowEndpoints, MapHub (RunStatusHub, TerminologyStatusHub); SPA fallback to index.html</span></li>
+</ol>
+
+<h3>4.2 Example A — a portal user clicks “Run” on a workflow</h3>
+<p><code>POST /api/v1/workflows/{workflowId}/run</code> — handler in <code>Workflows/WorkflowEndpoints.cs</code> (route is anonymous at route level; authorization is done inside the handler because the endpoint serves three caller types).</p>
+<ol class="flow">
+<li><b>Authenticate</b><span class="where">FhirBridgeAuthenticationExtensions → cookie fhirbridge_access_token read in JwtBearer OnMessageReceived → JWT validated (Local HS256 or Entra)</span></li>
+<li><b>Classify caller</b><span class="where">WorkflowEndpoints (/run): portal user (has uid, not token_use=client_credentials) / machine client (client-credentials token) / anonymous SMART standalone launch</span></li>
+<li><b>Portal user: RBAC check</b><span class="where">IAuthorizationService.AuthorizeAsync(HasPermission("workflow.run")) → PermissionAuthorizationHandler → IUserPermissionsProvider (DB, short cache)</span></li>
+<li><b>Anonymous caller</b><span class="where">allowed only if workflow.IsPubliclyLaunchable, otherwise 404 (so ids cannot be probed)</span></li>
+<li><b>Override guard</b><span class="where">Execute V2 overrides (other EHR endpoint, group id, search criteria) only for signed-in portal users; length limits; ValidateEhrEndpointForRunAsync</span></li>
+<li><b>License quota</b><span class="where">ILicenseQuotaGuard.EnsureCanStartNewRunAsync (expired license or monthly record cap ⇒ 403)</span></li>
+<li><b>Per-node permission + license allow-list</b><span class="where">for each Source/Destination node: HasPermissionAsync(source/destination type, Execute) and EnsureSourceConnectionStillAllowed / EnsureDestinationTypeAllowed</span></li>
+<li><b>Build execution context</b><span class="where">WorkflowExecutionContext(runId, correlationId, triggeredBy, triggerType, patient/criteria, overrides); continues a “Validated” run if validate-run created one</span></li>
+<li><b>Dispatch</b><span class="where">sync: orchestrator.ExecuteAsync inline; async: Task.Run in a fresh DI scope with IAmbientActorContext, returns 202 + status URL; run tracked by IWorkflowRunTracker so it can be cancelled</span></li>
+<li><b>Orchestrate</b><span class="where">RankedWorkflowOrchestrator.ExecuteAsync → WorkflowGraphValidator.Validate → create WorkflowRun → persist “Running” → SignalR notify → audit WorkflowRunStarted → RunNodesAsync</span></li>
+<li><b>Node loop</b><span class="where">TopologicalSort; per node: IWorkflowNodeExecutorRegistry.GetRequired(nodeType).ExecuteAsync(context, node, inputs). Outputs are passed to downstream nodes via WorkflowNodeOutput</span></li>
+<li><b>Executors</b><span class="where">Source (e.g. EpicSourceNodeExecutor → FhirSourceClientFactory → connector + ApplicationType strategy + token provider) → Transform / Mapping (MappingNodeExecutor, JsonMappingEngine) → Compliance (Consent, DeIdentification, AuditLineage) → Destination (DestinationNodeExecutor → ConfiguredDestinationWriterFactory → Mapped*Writer)</span></li>
+<li><b>Persist &amp; notify</b><span class="where">run succeeded/failed → IWorkflowRunStore (SqlWorkflowRunStore); history recorder (PHI columns encrypted); RunStatusHub pushes status to the portal</span></li>
+<li><b>Failure path</b><span class="where">exception → IGlobalExceptionManager (same CorrelationId) → run marked failed; HTTP layer returns safe message</span></li>
+</ol>
+
+<h3>4.3 Example B — a typical admin CRUD request (e.g. create a source connection)</h3>
+<ol class="flow">
+<li><b>Controller</b><span class="where">Controllers/V1/SourceConnectionsController — [Authorize(Policy…)] / [StandardPermission(group, action)]; thin: binds DTO, calls service</span></li>
+<li><b>Application service</b><span class="where">ConfigurationService (Application/Services) — validation, business rules, secret handling (stores a reference, not the secret value)</span></li>
+<li><b>Port → adapter</b><span class="where">IConfigurationRepository → EfConfigurationRepository → FHIRBridgeDbContext</span></li>
+<li><b>SaveChanges interceptors</b><span class="where">AuditingSaveChangesInterceptor (writes AuditLog rows with hash chain, blocks edits to append-only tables); LicenseEnforcementSaveChangesInterceptor (rejects rows violating the license at creation)</span></li>
+<li><b>Response</b><span class="where">DTO returned; on expected failure the global handler maps it to 4xx with a safe message</span></li>
+</ol>
+
+<h3>4.4 Example C — third-party app triggers a workflow (client credentials)</h3>
+<ol class="flow">
+<li><b>Token</b><span class="where">POST ClientCredentialsTokenController → ClientCredentialsTokenService verifies the client secret via IPasswordHasher (dummy-hash comparison for timing parity) → ClientCredentialsAccessTokenIssuer issues an HS256 JWT with token_use=client_credentials and no uid</span></li>
+<li><b>Run</b><span class="where">POST /workflows/{id}/run (or /workflows/external/run) with the bearer token; because it has no uid it cannot satisfy any HasPermission:* policy and is accepted only where the handler recognises token_use</span></li>
+<li><b>Public-launch endpoints</b><span class="where">/workflows/external/* are [AllowAnonymous] + [CsrfExempt] + RequireRateLimiting("oauth"), guarded by a short-lived launch ticket (ExternalRunTicketService) and unguessable callerId</span></li>
+</ol>
+
+<h3>4.5 Example D — scheduled and webhook-triggered runs (no HTTP user)</h3>
+<ol class="flow">
+<li><b>ScheduleDispatcherWorker</b><span class="where">Worker: every ~30 s (configurable, min 15 s) → dispatcher.DispatchDueRunsAsync → finds due ResourcePipelineRoute rows (ScheduleExpressionMatcher) → publishes PipelineRunCommand</span></li>
+<li><b>PipelineRunCommandProcessor</b><span class="where">IMessageConsumer&lt;PipelineRunCommand&gt; → scoped IPipelineRunCommandHandler → pipeline execution</span></li>
+<li><b>Webhook ingestion</b><span class="where">WebhookIngestionController: reads raw body, verifies HMAC-SHA256 signature (X-FHIRBridge-Signature, required by default), rate limit “webhook”, enqueues; WebhookIngestionCommandProcessor consumes</span></li>
+<li><b>Bulk export</b><span class="where">source node may pause run (AwaitingBulkExport); BulkExportPollWorker polls and calls RankedWorkflowOrchestrator.ResumeAfterBulkExportAsync, rebuilding context from the persisted BulkExportJob</span></li>
+<li><b>HL7 v2</b><span class="where">Hl7MllpListenerService (TCP MLLP) → Integration parser → FHIR mapper → pipeline</span></li>
+</ol>
+
+<div class="note"><b>Two pipeline paths.</b> (1) The <i>Configured Pipeline</i> (<code>IConfiguredPipelineService</code>): configuration-driven, used by the trigger endpoints and the scheduler. (2) The <i>Runtime plane</i> workflow engine (graph + node executors), used by <code>/api/v1/workflows/*</code>; its orchestrator is <code>RankedWorkflowOrchestrator</code>, with <code>PipelineOrchestrator</code> providing bounded-parallel extraction.</div>
+
+<!-- ============================================================ -->
+<h2 id="deepdive">5. Execution engine in detail</h2>
+<p>This section goes one level below section 4: how the pieces are wired at startup, what the workflow engine does internally, and what happens inside the source, transform and destination stages.</p>
+
+<h3>5.1 Composition root: how layers are wired together</h3>
+<p><code>FHIRBridge.Api/Program.cs</code> is the only place that knows about every layer. It calls four extension methods, one per layer, so each layer registers its own services:</p>
+<table>
+<tr><th>Call</th><th>Registers</th></tr>
+<tr><td><code>AddFHIRBridgeApplication()</code><br><span class="where">Application/DependencyInjection.cs</span></td><td>FluentValidation validators; <code>IJsonMappingEngine</code>; the 20 field-level transform nodes as <code>ITransformNode</code> (resolved by type through <code>ITransformNodeRegistry</code>); application services (<code>IConfigurationService</code>, <code>IMappingImportService</code>…); keyed <code>IFhirElementCatalog</code> singletons (Generic, Epic). Several governance services are registered here as pass-through defaults.</td></tr>
+<tr><td><code>AddFHIRBridgeInfrastructure(configuration)</code><br><span class="where">Infrastructure/DependencyInjection.cs</span></td><td>Chooses the persistence mode (below); EF repositories; <code>AuditingSaveChangesInterceptor</code> + <code>LicenseEnforcementSaveChangesInterceptor</code>; <code>IPhiFieldEncryptor</code> (AES-GCM); secret providers; license service; permission provider; destination-writer registrations; blob/health providers; Redis connection when configured.</td></tr>
+<tr><td><code>AddWorkflowCore()</code></td><td>Runtime.Application: graph validator, <code>RankedWorkflowOrchestrator</code>, executor registry, run tracker, MediatR behaviours.</td></tr>
+<tr><td><code>AddWorkflowInfrastructure()</code></td><td>Runtime.Infrastructure: every <code>IWorkflowNodeExecutor</code> (Source, Transform, Compliance, Destination, Analytics), source clients, ApplicationType strategies, token providers and caches.</td></tr>
+</table>
+<ul>
+<li><b>Two persistence modes.</b> When a database connection is configured, Infrastructure registers the EF repositories and <code>EfGovernanceLogger</code> etc. When it is not (tests, Worker “in-memory” mode), it registers <code>InMemory*</code> repositories and <code>Null*</code> governance services instead. Same interfaces, so no calling code changes.</li>
+<li><b>Lifetimes.</b> Request-scoped: application services, repositories, DbContext, authorization handlers, the orchestrator. Singletons: caches (<code>ISystemSettingsCache</code>, <code>IAllowedCorsOriginsCache</code>), <code>ILicenseService</code>, <code>IPhiFieldEncryptor</code>, <code>IUserPermissionsProvider</code> (<code>CachedUserPermissionsProvider</code>), secret accessor. A comment in <code>AddFHIRBridgeApplication</code> explains why one transform node and its registry are Scoped: a Singleton would capture a Scoped terminology service (a “captive dependency”).</li>
+<li><b>Registries are built from <code>IEnumerable&lt;T&gt;</code>.</b> <code>WorkflowNodeExecutorRegistry</code>, <code>SourceApplicationStrategyRegistry</code>, <code>FhirSourceClientFactory</code> and <code>ConfiguredDestinationWriterFactory</code> each take the registrations from DI and build a dictionary once. Duplicate keys throw at construction (for example, two strategies for the same <code>ApplicationType</code>), so mis-registration fails fast at first use.</li>
+<li><b>Startup side-effects</b> (after build, before serving): <code>BootstrapDatabase</code> (migrate), <code>ProvisionAppSecrets</code> (generate JWT/PHI keys on first boot), <code>LoadLicense</code>, <code>SyncDiscoveredPermissions</code>.</li>
+</ul>
+
+<h3>5.2 Anatomy of an admin (CRUD) endpoint</h3>
+<p>Example: <code>Controllers/V1/SourceConnectionsController.cs</code>.</p>
+<ol class="flow">
+<li><b>Attributes do the policy work</b><span class="where">[ApiController] [Authorize] [Route("api/v1/source-connections")]; each action adds [StandardPermission(group, action)] which becomes policy HasPermission:&lt;group.action&gt;</span></li>
+<li><b>Constructor injection of ports</b><span class="where">IConfigurationService, ISigningKeyGenerationService, IGovernanceLogger, ICurrentUserService, IAuthorizationService — interfaces only, never Infrastructure classes</span></li>
+<li><b>Two-level permission check</b><span class="where">the flat permission (SourceConnections/View, /Delete) is enforced by the attribute; the vendor-specific permission is resolved from the fetched row’s SourceSystemType via ControllerAuthorizationExtensions.HasPermissionAsync, because the id alone does not reveal the vendor</span></li>
+<li><b>Thin action body</b><span class="where">validate input (e.g. sourceSystemType nullable on purpose, so an omitted value does not silently bind to Sample = 0), call the service, map result to IActionResult</span></li>
+<li><b>Service → repository → DbContext</b><span class="where">ConfigurationService → IConfigurationRepository → EfConfigurationRepository → FHIRBridgeDbContext; SaveChanges passes through the two interceptors</span></li>
+<li><b>Secrets are never returned</b><span class="where">key generation stores the private key in the secret store and returns only references (Key Vault name, secret name, key id)</span></li>
+</ol>
+
+<h3>5.3 The workflow engine’s data model</h3>
+<table>
+<tr><th>Concept</th><th>Meaning</th></tr>
+<tr><td><code>WorkflowDefinition</code></td><td>A versioned graph: <code>Nodes</code> and <code>Edges</code> (<code>FromNodeId → ToNodeId</code>). Persisted through <code>IWorkflowDefinitionStore</code>.</td></tr>
+<tr><td><code>WorkflowNode</code></td><td><code>NodeType</code> (string key, e.g. <code>EpicSource</code>), <code>Category</code> (Source / Transform / Compliance / Destination …), <code>Rank</code> and <code>SubRank</code> (ordering within the graph), <code>ConfigurationJson</code> (settings, optionally inside a configuration envelope).</td></tr>
+<tr><td><code>WorkflowDataContract</code></td><td>The typed hand-off between nodes: for example <code>ResourceBatch</code> (source output), <code>MappedRecordBatch</code> (mapping output), <code>DestinationWriteResult</code> (destination output). <code>WorkflowGraphValidator</code> rejects graphs whose connections are incompatible (for example a destination that needs mapped records but has no upstream Mapping node, except whole-resource FHIR destinations).</td></tr>
+<tr><td><code>WorkflowNodeOutput</code></td><td><code>Payload</code> + <code>Contract</code> + <code>Metadata</code> dictionary (executor name, skipped resource types, bulk-export job id…).</td></tr>
+<tr><td><code>WorkflowExecutionContext</code></td><td>Per-run values: run id, correlation id, triggered-by, trigger type, target patient / search criteria, caller id, EHR endpoint override, source overrides, user identity.</td></tr>
+<tr><td><code>WorkflowRun</code> / <code>WorkflowNodeRun</code></td><td>The persisted record of a run and each node’s result, with status transitions (<code>Succeed</code>, <code>PartialSucceed</code>, <code>Fail</code>, <code>Cancel</code>, <code>AwaitBulkExport</code>) and lineage JSON per node.</td></tr>
+<tr><td>Config reading</td><td><code>WorkflowNodeExecutorBase.ReadConfiguration&lt;T&gt;()</code> tolerates two shapes: native JSON and the portal wizard’s “everything is a string” shape (it unwraps the extra layer and retries). A string-enum converter is mandatory there; the code comments describe the silent-failure bug it prevents.</td></tr>
+</table>
+
+<h3>5.4 Orchestrator internals (<code>RankedWorkflowOrchestrator</code>)</h3>
+<ol class="flow">
+<li><b>Restrict (optional)</b><span class="where">ExecuteAsync(definition, context, targetNodeId): a checkpoint run restricts the graph to the target node’s ancestors (RestrictToAncestorClosure)</span></li>
+<li><b>Validate the graph</b><span class="where">IWorkflowGraphValidator.Validate → throws WorkflowGraphValidationException (mapped to a 4xx by the API)</span></li>
+<li><b>Resolve overrides</b><span class="where">ResolveEhrEndpointOverrideAsync — only when the run explicitly named an EHR endpoint; otherwise skipped entirely</span></li>
+<li><b>Create the run, persist “Running” immediately</b><span class="where">PersistRunStartedAsync (best-effort) so the portal shows the run as Running for its whole duration; then NotifyRunStatusAsync (SignalR) and audit WorkflowRunStarted</span></li>
+<li><b>Order the nodes</b><span class="where">TopologicalSort(definition) using edges, then Rank/SubRank for ties (CompareNodes)</span></li>
+<li><b>For each node, in order</b><span class="where">check cancellation → collect incoming outputs along the edges (GetIncomingOutputs) → create WorkflowNodeRun → audit NodeExecutionStarted → open a log scope carrying WorkflowRunId, WorkflowId, NodeId, NodeType, NodeRank, CorrelationId</span></li>
+<li><b>Execute</b><span class="where">_executorRegistry.GetRequired(node.NodeType).ExecuteAsync(context, node, incomingOutputs, ct)</span></li>
+<li><b>Bulk-export pause check</b><span class="where">if output metadata carries BulkExportDeferredJobId: store prior node outputs on the BulkExportJob, set run status AwaitingBulkExport, persist, notify, and return — BulkExportPollWorker resumes later via ResumeAfterBulkExportAsync</span></li>
+<li><b>Record success</b><span class="where">outputsByNodeId[node.Id] = output; nodeRun.Succeed(lineageJson); record resource history (PHI columns encrypted by IPhiFieldEncryptor); audit NodeExecutionCompleted; log duration and record count</span></li>
+<li><b>Failure handling per node</b><span class="where">three catches: WorkflowRunCancelledException and OperationCanceledException → node marked Cancelled (not Failed), audit NodeExecutionCancelled, rethrow; any other Exception → node marked Failed, audit NodeExecutionFailed, rethrow</span></li>
+<li><b>Finish the run</b><span class="where">if any node reported skippedResourceTypes → PartialSuccess (and an “expected failure” governance record with a reference id); else Succeed; audit WorkflowRunCompleted; PersistRunAsync; SignalR notify</span></li>
+<li><b>Outer catch</b><span class="where">cancellation → run Cancelled; any other exception → run Failed, IGlobalExceptionManager.CaptureAsync with the same CorrelationId, then rethrow</span></li>
+</ol>
+<div class="note"><b>Run statuses</b> (<code>WorkflowRunStatus</code>): <code>Pending</code>, <code>Running</code>, <code>Succeeded</code>, <code>Failed</code>, <code>Cancelled</code>, <code>PartialSuccess</code>, <code>AwaitingBulkExport</code>, <code>Validated</code> (validate-run passed, waiting for /run; non-terminal) and <code>ValidationFailed</code> (validate-run rejected the request; terminal, nothing executed). <code>PartialSuccess</code> is a normal completion path (no exception), so the code logs a warning and writes an informational governance record to keep it visible.</div>
+
+<h3>5.5 Source stage in detail (<code>SourceNodeExecutor.ExecuteAsync</code>)</h3>
+<p>Vendor classes such as <code>EpicSourceNodeExecutor</code> are thin: they pass a node-type string and a <code>RuntimeSourceType</code> to this shared base. The base class does the work:</p>
+<ol class="flow">
+<li><b>Read node config</b><span class="where">resourceType, searchParameters (or the wizard’s “Search criteria” field), the wizard’s “Resources” list</span></li>
+<li><b>Resolve the live source connection</b><span class="where">ISourceConnectionRuntimeResolver.ResolveAsync (or ResolveWithRunOverridesAsync for Execute V2): loads the SourceConnection, fetches secrets through ISecretProvider (private key PEM, client secret), validates the PEM shape, builds a FhirSourceConfiguration</span></li>
+<li><b>Apply per-run EHR endpoint override</b><span class="where">EhrEndpointSourceOverride.Apply (only if the run named a hospital endpoint)</span></li>
+<li><b>Apply per-resource-type criteria</b><span class="where">ApplyResourceTypeCriteriaAsync (criteria authored in the destination wizard)</span></li>
+<li><b>Apply node-scoped retrieval settings</b><span class="where">retrieval method (search-rest, bulk-export, single-patient), export scope, group id, patient ids, output format. A single-patient run with no patient id throws instead of silently becoming a tenant-wide search</span></li>
+<li><b>Pick the client</b><span class="where">IFhirSourceClientFactory.Create(sourceType) → dictionary lookup → Epic / Athena / eCW (Healow) / Generic / Sample client resolved from DI</span></li>
+<li><b>Decide which resource types to fetch</b><span class="where">priority: node “Resources” → connection ResourceTypes → types derived from granted SMART scopes → node resourceType → destination’s selected types; otherwise fail loudly with an explanatory message. Then narrow to what downstream destinations actually selected</span></li>
+<li><b>Order and fetch</b><span class="where">Patient first (its ids become the cohort that scopes every other patient-compartment type); reference-scoped types (Practitioner, Organization, Medication, PractitionerRole) last, built from references collected in already-fetched data; bulk export uses $export instead of paged search</span></li>
+<li><b>Output</b><span class="where">WorkflowNodeOutput with contract ResourceBatch (resource envelopes); types the connection is not authorised for are reported through skippedResourceTypes → PartialSuccess</span></li>
+</ol>
+
+<h4>How the connector talks to the EHR</h4>
+<ul>
+<li><b>Connector base class</b> (<code>FhirSourceConnectorBase</code>): paged search following <code>next</code> links (stops if a server hands out a link that does not advance), a maximum page cap, retry on transient status codes with jitter and <code>Retry-After</code>, and a per-source request throttle shared across calls (<code>SourceThrottles</code>).</li>
+<li><b>Vendor axis</b>: subclasses override only what differs (display name, vendor headers such as athenahealth practice id).</li>
+<li><b>Auth axis</b>: <code>ISourceApplicationStrategy</code> (one per <code>ApplicationType</code>: Backend, EHR launch, Standalone, Patient) describes the OAuth flow, validates configuration and gets the access token. <code>BackendServicesApplicationStrategy</code> chooses between <code>SmartBackendServicesTokenProvider</code> (RS384 <code>private_key_jwt</code>, used when a private key is present — Epic) and <code>OAuth2ClientCredentialsTokenProvider</code> (client secret — athenahealth) by which credential exists, not by vendor name.</li>
+<li><b>Token caching</b>: <code>DistributedFhirAccessTokenCache</code> (Redis in production). Interactive flows keep authorization codes and OAuth state in Redis-backed stores with PKCE.</li>
+</ul>
+<div class="note"><b>Source clients currently registered:</b> Epic, Sample, Generic FHIR, athenahealth and eClinicalWorks (Healow). Cerner, Allscripts and MEDITECH Greenfield are modelled (node executors, enum values) with their client registrations not yet enabled.</div>
+
+<h3>5.6 Transform and compliance stages</h3>
+<ul>
+<li><b>MappingNodeExecutor</b> turns <code>ResourceBatch</code> into <code>MappedRecordBatch</code> (<code>MappedDestinationRecord</code>: resource type, target table/object, key, field values, original JSON). It resolves mapping profiles per resource type from the node’s own saved profile ids (never by a shared search, so one workflow cannot pick up another’s profile) or from an inline self-contained mapping, and applies the field-level transform nodes through <code>ITransformNodeRegistry</code>.</li>
+<li><b>DeIdentificationNodeExecutor</b>, <b>ConsentNodeExecutor</b>, <b>AuditLineageNodeExecutor</b> implement the compliance stage; services behind them include Safe Harbor and k-anonymity de-identification and the consent / resource-type-access governance rules.</li>
+<li><b>Pass-through stages</b> (US Core validation, data-quality scoring, normalization, extension flattening, patient matching, several terminology nodes) are registered extension points that currently forward their input unchanged.</li>
+</ul>
+
+<h3>5.7 Destination stage in detail (<code>DestinationNodeExecutor.ExecuteAsync</code>)</h3>
+<ol class="flow">
+<li><b>Read mapped records from the inputs</b><span class="where">whole-resource FHIR destinations (FHIR Repository, Medplum, Azure FHIR Service) may receive a raw ResourceBatch and are converted to pass-through records</span></li>
+<li><b>Filter to selected resource types</b><span class="where">drops types the user did not select for this destination (guarded so it never filters the whole batch to nothing); reported in metadata as filteredOutResourceTypes</span></li>
+<li><b>Make FHIR-conformant</b><span class="where">FhirConformanceSanitizer.Sanitize on each record’s JSON before any writer sees it</span></li>
+<li><b>Load destination configuration</b><span class="where">node config or CreateDestinationConfiguration; secrets stay references until the writer resolves them</span></li>
+<li><b>Create the writer</b><span class="where">IConfiguredDestinationWriterFactory.Create(destinationType) → registry lookup → writer from DI, wrapped in LoggingConfiguredDestinationWriter (decorator adding uniform write telemetry and governance rows)</span></li>
+<li><b>Build the write context</b><span class="where">PipelineWriteContext: AllowInlineDelivery=false (a background node has no HTTP response), workflow name, correlation id, run id, optional FetchMissingReferenceAsync delegate (resolved by walking graph edges back to exactly one upstream source node), user identity</span></li>
+<li><b>Write</b><span class="where">relational / Mongo / Blob / Fabric / webhook / API destinations: group records by resource type, order groups so referenced tables are written first (OrderGroupsByReferenceDependency), write each group with its own resolved profile; other destinations: one WriteAsync call</span></li>
+<li><b>Per-record failure isolation</b><span class="where">writers return DestinationWriteResult.RecordErrors instead of throwing, so one bad row does not discard the batch. The executor collects them into skippedResourceTypes so the run becomes PartialSuccess instead of a misleading Succeeded. A later group that fails because an earlier group lost its rows gets an exception that names the earlier causes</span></li>
+<li><b>Output</b><span class="where">WorkflowNodeOutput with contract DestinationWriteResult: destination id, records written, timestamp, optional download URL and email-delivery details</span></li>
+</ol>
+
+<h3>5.8 End-to-end sequence for one run (condensed)</h3>
+<pre>Portal/Client      API (Program.cs middleware)     WorkflowEndpoints /run        Orchestrator            Executors / Infra
+    |  POST /run  -----------&gt; |                              |                         |                          |
+    |                         | forwarded hdrs, correlation,  |                         |                          |
+    |                         | exception handler, headers,   |                         |                          |
+    |                         | CORS, CSRF, authN, license,   |                         |                          |
+    |                         | session gates, authZ, rate lim|                         |                          |
+    |                         |-----------------------------&gt; | classify caller         |                          |
+    |                         |                               | workflow.run + per-node |                          |
+    |                         |                               | Execute permissions     |                          |
+    |                         |                               | license quota/allow-list|                          |
+    |                         |                               | build ExecutionContext  |                          |
+    |                         |                               |------------------------&gt;| validate graph           |
+    |                         |                               |                         | persist Running, notify  |
+    |                         |                               |                         | for node in topo order:  |
+    |                         |                               |                         |--- registry.Get(type) -&gt;| Source: resolve conn,    |
+    |                         |                               |                         |                          |   secrets, token, fetch  |
+    |                         |                               |                         |&lt;-- ResourceBatch --------|                          |
+    |                         |                               |                         |--- Mapping / Compliance -&gt;| map, de-identify, audit  |
+    |                         |                               |                         |&lt;-- MappedRecordBatch ----|                          |
+    |                         |                               |                         |--- Destination ---------&gt;| writer.WriteAsync        |
+    |                         |                               |                         |&lt;-- WriteResult ----------|                          |
+    |                         |                               |                         | Succeed / PartialSuccess |                          |
+    |                         |                               |                         | persist, audit, SignalR  |                          |
+    |  200 + result  &lt;--------|&lt;------------------------------| (or 202 + status URL)   |                          |</pre>
+
+<h3>5.9 What gets recorded during a run (cross-cutting)</h3>
+<table>
+<tr><th>Concern</th><th>Where it happens</th><th>Where it lands</th></tr>
+<tr><td>HTTP request log</td><td><code>InboundApiRequestLoggingMiddleware</code>, <code>UseSerilogRequestLogging</code></td><td>SQL request-log table; Serilog/Seq</td></tr>
+<tr><td>Workflow audit events</td><td>Orchestrator via <code>IWorkflowAuditRecorder</code> (started, node started/completed/failed/cancelled, awaiting bulk export, completed, cancelled)</td><td>Workflow audit table</td></tr>
+<tr><td>Per-node lineage + history</td><td><code>CreateLineageJson</code>, <code>IWorkflowNodeResourceHistoryRecorder</code></td><td>Run history tables (PHI columns AES-GCM encrypted)</td></tr>
+<tr><td>Destination write telemetry</td><td><code>LoggingConfiguredDestinationWriter</code> decorator</td><td>Serilog + governance logger rows</td></tr>
+<tr><td>Config changes</td><td><code>AuditingSaveChangesInterceptor</code></td><td><code>AuditLog</code> (hash-chained)</td></tr>
+<tr><td>Authorization denials</td><td><code>GovernanceAuditingAuthorizationMiddlewareResultHandler</code></td><td><code>AuthorizationLog</code></td></tr>
+<tr><td>Errors</td><td><code>IGlobalExceptionManager</code> (5xx and run failures); lightweight “expected” capture for 4xx and partial success</td><td><code>ErrorLogs</code> with <code>ErrorReferenceId</code></td></tr>
+<tr><td>Live status</td><td><code>IRunStatusNotifier</code> → <code>SignalRRunStatusNotifier</code> → <code>RunStatusHub</code> (Redis backplane when configured)</td><td>Portal Execution History updates live</td></tr>
+<tr><td>Metrics / traces</td><td>OpenTelemetry via <code>FHIRBridge.Observability</code></td><td>OTEL collector / Azure Monitor</td></tr>
+</table>
+
+<h3>5.10 Who can call <code>/run</code>, and what each caller must pass</h3>
+<table>
+<tr><th>Caller</th><th>Credential</th><th>Checks applied in the handler</th><th>Can use overrides?</th></tr>
+<tr><td>Portal user</td><td>Session cookie (JWT with <code>uid</code>)</td><td><code>workflow.run</code> + per-source and per-destination <code>Execute</code> + license allow-list + quota; CSRF double-submit applies to the cookie request</td><td>Yes (Execute V2)</td></tr>
+<tr><td>Machine client</td><td>Client-credentials JWT (<code>token_use=client_credentials</code>, no <code>uid</code>)</td><td>Deployment-wide grant: no RBAC; license allow-list + quota still apply</td><td>No (403)</td></tr>
+<tr><td>Public SMART standalone launch</td><td>None; unguessable <code>callerId</code></td><td>Workflow must be <code>IsPubliclyLaunchable</code>, otherwise 404; license checks; rate limit</td><td>No (403)</td></tr>
+</table>
+
+<h3>5.11 “Where do I look?” — quick class index</h3>
+<table>
+<tr><th>I want to understand…</th><th>Start at</th></tr>
+<tr><td>Startup and middleware order</td><td><code>src/Api/FHIRBridge.Api/Program.cs</code></td></tr>
+<tr><td>Login, tokens, cookies</td><td><code>Security/FhirBridgeAuthenticationExtensions.cs</code>, <code>Application/Services/LocalAuthService.cs</code>, <code>Security/JwtAccessTokenIssuer.cs</code></td></tr>
+<tr><td>Permission checks</td><td><code>Security/PermissionAuthorizationHandler.cs</code>, <code>Rbac/PermissionCatalog.cs</code>, <code>Infrastructure/Security/CachedUserPermissionsProvider.cs</code></td></tr>
+<tr><td>Run trigger and caller rules</td><td><code>Workflows/WorkflowEndpoints.cs</code> (<code>/workflows/{id}/run</code>)</td></tr>
+<tr><td>Graph execution</td><td><code>Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs</code>, <code>WorkflowGraphValidator.cs</code></td></tr>
+<tr><td>Source fetching</td><td><code>Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs</code>, <code>Connectors/FhirSourceConnectorBase.cs</code>, <code>Infrastructure/Sources/SourceConnectionRuntimeResolver.cs</code></td></tr>
+<tr><td>EHR authentication flows</td><td><code>Runtime.Infrastructure/Applications/*</code>, <code>Auth/*</code></td></tr>
+<tr><td>Mapping and transforms</td><td><code>Executors/TransformNodeExecutors.cs</code> (<code>MappingNodeExecutor</code>), <code>Application/Services/JsonMappingEngine.cs</code>, <code>Services/Transforms/*</code></td></tr>
+<tr><td>Writing to destinations</td><td><code>Executors/DestinationNodeExecutors.cs</code>, <code>Infrastructure/Destinations/ConfiguredDestinationWriterFactory.cs</code>, <code>Mapped*DestinationWriter.cs</code></td></tr>
+<tr><td>Error handling</td><td>exception handler in <code>Program.cs</code>, <code>BuildingBlocks/FHIRBridge.Governance/GlobalExceptionManager.cs</code></td></tr>
+<tr><td>Audit and tamper evidence</td><td><code>Infrastructure/Persistence/AuditingSaveChangesInterceptor.cs</code>, <code>Governance/EfAuditChainVerificationService.cs</code></td></tr>
+<tr><td>Background work</td><td><code>src/Worker/FHIRBridge.Worker/*</code></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="security">6. Security design</h2>
+
+<h3>6.1 Authentication</h3>
+<table>
+<tr><th>Control</th><th>Implementation</th><th>Where</th></tr>
+<tr><td>Dual bearer scheme</td><td>Policy scheme <code>FhirBridgeSelector</code> inspects the token issuer: Entra tokens (login.microsoftonline.com / sts.windows.net / tenant id) → Entra via Microsoft.Identity.Web; everything else → local HS256 JWT. Entra groups are projected onto built-in roles after validation; <code>uid</code> claim is resolved from the Entra object id.</td><td><code>Security/FhirBridgeAuthenticationExtensions.cs</code></td></tr>
+<tr><td>Token delivery</td><td>Portal uses an <b>HttpOnly cookie</b> (<code>fhirbridge_access_token</code>) — no token in JS-accessible storage. SignalR hubs accept <code>?access_token=</code> only under <code>/hubs</code>.</td><td>same</td></tr>
+<tr><td>Token lifetime</td><td>60-min access tokens, 30-day refresh tokens (refresh token stored as SHA-256 hash; “remember me” carried forward); reset-password invalidates refresh tokens.</td><td><code>JwtAccessTokenIssuer</code>, <code>LocalAuthService</code></td></tr>
+<tr><td>Signing key</td><td>Auto-generated at first boot by <code>AppSecretProvisioner</code>, persisted encrypted, read through <code>IAppSecretAccessor</code>; not hard-coded.</td><td><code>Infrastructure/Security/AppSecret*</code></td></tr>
+<tr><td>Password storage</td><td>PBKDF2-SHA256, 350,000 iterations, 32-byte salt, versioned format <code>v1:iter:salt:hash</code>, constant-time compare.</td><td><code>Pbkdf2PasswordHasher</code></td></tr>
+<tr><td>Brute-force defence</td><td>Account lockout (<code>MaxFailedAttempts</code>, <code>LockoutMinutes</code>, DB-overridable); lockout checked <i>before</i> password verify; per-IP rate limits on auth endpoints.</td><td><code>LocalAuthService</code>, rate limiter</td></tr>
+<tr><td>MFA</td><td>TOTP + backup codes; <code>mfa_setup_required</code> session gate forces enrollment; MFA challenge token is single-use with a 5-minute expiry.</td><td><code>MfaService</code>, <code>TotpService</code>, <code>MfaController</code></td></tr>
+<tr><td>SSO</td><td>Entra ID, Google, SAML, magic-link; external tokens validated by <code>CompositeExternalTokenValidator</code>.</td><td><code>SsoAuthService</code>, <code>*TokenValidator</code></td></tr>
+<tr><td>Machine access</td><td>OAuth2 Client Credentials; secrets hashed (same PBKDF2), timing-parity dummy verify; tokens carry <code>token_use</code> and no <code>uid</code>.</td><td><code>ClientCredentialsTokenService</code></td></tr>
+<tr><td>Password policy gate</td><td><code>pwd_change_required</code> claim confines the session until changed.</td><td><code>Program.cs</code> session gates</td></tr>
+</table>
+
+<h3>6.2 Authorization (RBAC)</h3>
+<ul>
+<li><b>Roles → permissions in the database.</b> JWTs do <i>not</i> carry permission codes; <code>PermissionAuthorizationHandler</code> resolves them per request via <code>IUserPermissionsProvider</code> (<code>CachedUserPermissionsProvider</code>, short cache) keyed by the <code>uid</code> claim. Revoking a permission takes effect without waiting for token expiry.</li>
+<li><b>Named policies:</b> <code>UnifiedAdmin</code> (GlobalAdmin or TenantAdmin), <code>SuperAdminOnly</code>, <code>WorkflowModuleAccess</code>, <code>MappingCatalogAccess</code>, <code>SourceDiscoveryAccess</code>, <code>PermissionCatalogAccess</code>, and generated <code>HasPermission:&lt;group.action&gt;</code> policies for every permission code.</li>
+<li><b>Per-vendor / per-destination Execute permissions</b> are checked at run time for every node in the graph, in addition to <code>workflow.run</code>.</li>
+<li><b>Denials are audited</b> centrally (<code>GovernanceAuditingAuthorizationMiddlewareResultHandler</code> → AuthorizationLog) so no controller must remember to log.</li>
+<li><b>Permission drift detection:</b> startup <code>FindUndeclaredCodes</code> warns when a <code>[StandardPermission]</code> has no seed row; <code>DiscoveredPermissionSynchronizer</code> syncs discovered permissions.</li>
+</ul>
+
+<h3>6.3 Web &amp; transport protections</h3>
+<table>
+<tr><th>Threat</th><th>Control</th></tr>
+<tr><td>CSRF</td><td>Double-submit cookie (<code>X-CSRF-Token</code>) for cookie-authenticated state-changing calls. Endpoints that don’t use the session cookie must be declared <code>[AllowAnonymous]</code> or <code>[CsrfExempt]</code>; an architecture test fails the build if a non-cookie state-changing endpoint forgets to declare it.</td></tr>
+<tr><td>XSS / clickjacking / sniffing</td><td>HttpOnly cookie; CSP (<code>default-src 'none'</code> on /api, <code>'self'</code> for the SPA); X-Frame-Options DENY; nosniff; Referrer-Policy no-referrer.</td></tr>
+<tr><td>Transport</td><td>HTTPS redirect + HSTS outside Development; <code>RequireHttpsMetadata</code> for JWT outside Development; app refuses to start in non-dev without explicit <code>ASPNETCORE_URLS</code>.</td></tr>
+<tr><td>CORS</td><td><code>DynamicPortalCorsPolicyProvider</code>: allow-list stored in DB (managed through <code>AllowedCorsOriginsController</code>), takes effect immediately.</td></tr>
+<tr><td>Abuse / brute force</td><td>Rate-limit policies <code>auth</code> (10 / 5 min), <code>oauth</code> (30 / 5 min), <code>webhook</code> (120 / min) per client IP — defaults, DB/config overridable; 429 on rejection.</td></tr>
+<tr><td>Webhook forgery</td><td>HMAC-SHA256 over the raw request body, signature required by default.</td></tr>
+<tr><td>Resource-id probing</td><td>Un-opted-in public workflows return 404 rather than 403.</td></tr>
+<tr><td>Information leakage</td><td>Global handler returns only safe messages; 5xx replaced by category message + reference id; stack traces never in responses.</td></tr>
+<tr><td>Licence abuse</td><td>License gate middleware; quota guard before each run; license allow-list re-validated at run time (not only at creation).</td></tr>
+</table>
+
+<h3>6.4 Data protection (secrets, PHI, encryption)</h3>
+<table>
+<tr><th>Asset</th><th>Protection</th></tr>
+<tr><td>Connector / destination secrets</td><td>Stored as <b>references</b> (Key Vault name or DB-provisioned secret); values resolved at use through <code>ISecretProvider</code> composite (Key Vault → DB → configuration). DB-stored secrets encrypted with ASP.NET Data Protection (<code>DbSecretStore</code>, <code>ProvisionedSecretDecryptor</code>).</td></tr>
+<tr><td>Data Protection key ring</td><td>Persisted to a stable path (shared path required for multi-instance); optionally wrapped with an X.509 certificate or an Azure Key Vault key.</td></tr>
+<tr><td>PHI at rest (execution history)</td><td>AES-256-GCM field encryption (<code>AesGcmPhiFieldEncryptor</code>, random 12-byte nonce, 16-byte tag) for raw/normalized/mapped JSON columns; key auto-provisioned.</td></tr>
+<tr><td>PHI in logs</td><td>Serilog PHI-masking enricher (matches by property name); request logging deliberately excludes query strings; run-override criteria logged as booleans only.</td></tr>
+<tr><td>De-identification</td><td><code>SafeHarborDeIdentificationService</code>, <code>KAnonymityDeIdentificationService</code>, profiles; consent (<code>ConsentGovernanceRule</code>) and resource-type access policy rules; destination sensitivity rule.</td></tr>
+<tr><td>OAuth/SMART launch state</td><td>Launch context and state tokens encrypted/tamper-protected by Data Protection (<code>DataProtectionLaunchTokenProtector</code>); PKCE for Standalone/EHR launch; auth codes and tokens in Redis stores; SMART Backend Services signs <code>private_key_jwt</code> with RS384.</td></tr>
+<tr><td>Token caching</td><td><code>DistributedFhirAccessTokenCache</code> (Redis in prod).</td></tr>
+</table>
+
+<h3>6.5 Audit, accountability and tamper evidence</h3>
+<ul>
+<li><b>AuditLog</b> row per audited entity change, written by <code>AuditingSaveChangesInterceptor</code>; each row has <code>EntryHash</code> and <code>PreviousHash</code> (hash chain). <code>AuditChainVerificationWorker</code> / <code>EfAuditChainVerificationService</code> re-verify the chain.</li>
+<li><b>Append-only tables</b> (<code>IAppendOnlyEntity</code>): attempting update/delete throws.</li>
+<li>Separate trails: <code>AuthenticationLog</code>, <code>AuthorizationLog</code>, <code>SecurityEvent</code>, <code>ErrorLogs</code>, inbound API request log, workflow audit events, data lineage.</li>
+<li>Correlation id links API call, run, errors, audit and outbound requests; background runs set an ambient actor scope so audit rows are never anonymous.</li>
+<li><b>Retention:</b> <code>RetentionPurgeWorker</code> / <code>RetentionPurgeService</code>, governance log archive writer.</li>
+</ul>
+
+<h3>6.6 Multi-tenancy</h3>
+<p><code>Tenant</code> is the isolation entity for identity: each <code>User</code> and <code>BrandConfiguration</code> belongs to exactly one tenant, resolved per request by <code>ICurrentTenantResolver</code> (cached). Source connections, destinations, mapping profiles and routes are flat configuration records without a tenant id (the older Tenant aggregate that owned them was removed), and workflow definitions are not tenant-scoped. The soft-delete query filter is global.</p>
+
+<!-- ============================================================ -->
+<h2 id="data">7. Data, persistence &amp; tenancy</h2>
+<ul>
+<li>Single <code>FHIRBridgeDbContext</code> (roughly 100 <code>DbSet</code> declarations) with configurations under <code>Persistence/Configurations</code>; workflow persistence under <code>Persistence/Workflows</code>.</li>
+<li>Global soft-delete filter (<code>ISoftDeletable</code>); optimistic concurrency via <code>RowVersion</code>; UTC date-time converter.</li>
+<li>Interceptors: <code>AuditingSaveChangesInterceptor</code>, <code>LicenseEnforcementSaveChangesInterceptor</code>.</li>
+<li>Migrations in <code>Infrastructure/Persistence/Migrations</code> (SQL Server) and the PostgreSQL migrations project. Design-time factory reads <code>FHIRBRIDGE_DB</code>. <code>DatabaseBootstrapLock</code> serialises startup migration across instances.</li>
+<li>Destination writers must <b>not</b> run DDL unsuppressed (architecture test); schema changes go through the mapping-schema providers (<code>SqlServer/MySql/PostgreSqlMappingSchemaProvider</code>) with type validators.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="ops">8. Background processing &amp; observability</h2>
+<table>
+<tr><th>Worker</th><th>Purpose</th></tr>
+<tr><td>ScheduleDispatcherWorker</td><td>Finds due routes, enqueues run commands.</td></tr>
+<tr><td>PipelineRunCommandProcessor / WebhookIngestionCommandProcessor</td><td>Consume queue messages (InMemory / RabbitMQ / Azure Service Bus).</td></tr>
+<tr><td>BulkExportPollWorker</td><td>Polls FHIR bulk-export jobs, resumes paused runs.</td></tr>
+<tr><td>Hl7MllpListenerService</td><td>TCP MLLP receiver for HL7 v2.</td></tr>
+<tr><td>AuditChainVerificationWorker, RetentionPurgeWorker, ExpiredGeneratedFilePurgeJob, ValidatedRunExpiryWorker</td><td>Integrity and housekeeping.</td></tr>
+<tr><td>AlertEvaluationWorker, EndpointHealthCheckWorker</td><td>Alerting and endpoint monitoring.</td></tr>
+<tr><td>LicenseHeartbeatWorker, LicenseUsageSnapshotWorker</td><td>Report usage to the License Server.</td></tr>
+<tr><td>*TerminologySyncWorker (LOINC, SNOMED, RxNorm, NDC, ICD-10/11, CVX, UCUM, MeSH, HCPCS…)</td><td>Synchronise code systems (the <code>*HapiTerminologySyncWorker</code> classes target HAPI FHIR; the plain <code>*SynchronizationWorker</code> classes are separate implementations).</td></tr>
+</table>
+<p><b>Observability:</b> Serilog structured logs (Seq locally), OpenTelemetry traces/metrics via an OTEL collector (Azure Monitor in cloud), catalogue of <code>LogEvents</code>, SignalR run-status push to the portal, <code>/health</code> endpoint, health providers for FHIR repositories and endpoints.</p>
+
+<!-- ============================================================ -->
+<h2 id="testing">9. Testing &amp; architecture enforcement</h2>
+<table>
+<tr><th>Suite</th><th>What it protects</th></tr>
+<tr><td>Architecture tests</td><td>Domain / Runtime.Domain independent of outer layers; Application / Runtime.Application independent of Infrastructure and Api; <b>no <code>switch</code> on <code>ApplicationType</code></b>; non-cookie state-changing endpoints declare CSRF exemption; <code>/run</code> keeps no route-level auth gate (it authorizes in-handler); destination writers contain no unsuppressed DDL.</td></tr>
+<tr><td>Unit tests</td><td>Services, domain rules, executors, mapping engine.</td></tr>
+<tr><td>Integration tests</td><td>HTTP-level behaviour with in-memory DB.</td></tr>
+<tr><td>Load tests</td><td>Manual, not part of CI.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="packages">10. Third-party packages and licences</h2>
+<p>Direct package references per project, read from each <code>.csproj</code> (NuGet) and <code>portal/package.json</code> (npm), with the licence declared by the package itself: the <code>&lt;license&gt;</code> element of the <code>.nuspec</code> in the local NuGet cache, or <code>license</code> in the installed <code>node_modules</code> package.json. For five packages the nuspec only points to a licence file, so those files were read directly (see the attention table). Versions are those pinned in the project files on 2026-10-06.</p>
+
+<div class="note"><b>Scope and limits.</b> Direct references only. Transitive dependencies (for example StackExchange.Redis, Newtonsoft.Json, Azure.Core) are not listed; a full inventory needs <code>dotnet list package --include-transitive</code> plus a licence scanner or an SBOM tool. Licence identifiers are SPDX names. This is an engineering inventory, not legal advice: have legal review the items below before distributing the product.</div>
+
+<h3>10.1 Packages that need attention</h3>
+<table>
+<tr><th>Package (version)</th><th>Used in</th><th>Declared licence</th><th>What it means for FHIRBridge</th></tr>
+<tr><td><b>MediatR</b> 14.1.0</td><td>Application, Runtime.Application, ControlPlane.Application (runtime pipeline behaviours)</td><td>Lucky Penny Software: <b>RPL-1.5</b> <i>or</i> a paid commercial licence (LICENSE.md in the package)</td><td>Reciprocal Public License 1.5 requires releasing the source of software built with it. The package text says that if you do not want to do that, you must use Lucky Penny’s paid licence agreement. A closed-source product shipped to customers will normally need the commercial licence. No licence-key setting was found in the source (searched <code>.cs</code> and <code>appsettings.json</code>).<br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td><b>AutoMapper</b> 16.1.1</td><td>Runtime.Application, ControlPlane.Application</td><td>Same Lucky Penny terms (RPL-1.5 or paid)</td><td>Same as MediatR. Alternatively replace with hand-written mapping.<br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td><b>QuestPDF</b> 2024.12.3</td><td>Infrastructure (compliance PDF report, PDF destination)</td><td>“Community MIT” for companies under US$1M annual gross revenue and for non-profits/education; paid Professional (up to 10 developers) or Enterprise licence above that</td><td>Code sets <code>QuestPDF.Settings.License = LicenseType.Community</code> in three files (<code>MappedPdfDestinationWriter</code>, <code>QuestPdfComplianceReportService</code>, <code>NullComplianceReportService</code>). That is only valid if the company qualifies for the free tier; otherwise buy a licence and change the setting.<br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td><b>FluentAssertions</b> 8.10.0</td><td>Test projects only (Architecture, Runtime.Unit, Unit)</td><td>Xceed Community License, <b>non-commercial use only</b>; commercial use needs a paid licence</td><td>Not shipped to customers, but using it to test a commercial product is commercial use under that text. Options: buy a licence, pin to the last 7.x release (Apache-2.0), or switch to xUnit assertions / Shouldly.<br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td><b>NBomber</b> 6.4.1 (and NBomber.Http 6.2.0, Apache-2.0)</td><td>LoadTests only</td><td>NBomber License Agreement v3.0: free for personal use; <b>organisational use requires a paid Commercial Subscription</b></td><td>Manual load-test tool, not shipped. Needs a subscription if used inside the company; otherwise replace (k6, Bombardier) or keep out of the repo.<br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td>Npgsql 9.0.3, Npgsql.EntityFrameworkCore.PostgreSQL 9.0.4</td><td>Infrastructure, PostgreSQL migrations, LicenseServer</td><td>PostgreSQL License</td><td>Permissive (MIT-style). Listed only because the name is unfamiliar to scanners.</td></tr>
+<tr><td>RabbitMQ.Client 7.0.0</td><td>Infrastructure</td><td>Apache-2.0 <i>or</i> MPL-2.0 (dual)</td><td>Choose Apache-2.0; no obligation beyond notices.</td></tr>
+<tr><td>UnitsNet 5.68.0</td><td>Application</td><td>MIT-0</td><td>Permissive, no attribution required.</td></tr>
+<tr><td>NetArchTest.Rules 1.3.2</td><td>ArchitectureTests</td><td>The nuspec carries no licence metadata; the upstream project (BenMorris/NetArchTest) is MIT</td><td>Confirm against the upstream repository for the audit trail.</td></tr>
+</table>
+
+<h3>10.2 Licence summary (NuGet, direct references)</h3>
+<table>
+<tr><th>Licence</th><th>Packages</th></tr>
+<tr><td>MIT / MIT-0</td><td>Microsoft.* (ASP.NET Core, EF Core, Extensions, Data.SqlClient, Identity.Web, IdentityModel), Azure.* SDKs, Microsoft.Azure.Cosmos, System.IdentityModel.Tokens.Jwt, System.Threading.AccessControl, Asp.Versioning.Mvc, Swashbuckle.AspNetCore, Yarp.ReverseProxy, MySqlConnector, Parquet.Net, SSH.NET, YamlDotNet, UnitsNet (MIT-0), Serilog.Enrichers.Span, AutoFixture(.AutoMoq), coverlet.collector, Microsoft.NET.Test.Sdk</td></tr>
+<tr><td>Apache-2.0</td><td>FluentValidation, Serilog and its sinks / hosting packages, OpenTelemetry packages, MongoDB.Driver, libphonenumber-csharp, xunit, xunit.runner.visualstudio, NBomber.Http, RabbitMQ.Client (dual)</td></tr>
+<tr><td>BSD-3-Clause</td><td>Hl7.Fhir.R4, Hl7.Fhir.Serialization (Firely SDK), ITfoxtec.Identity.Saml2 (+ MvcCore), Moq</td></tr>
+<tr><td>PostgreSQL</td><td>Npgsql, Npgsql.EntityFrameworkCore.PostgreSQL</td></tr>
+<tr><td>Reciprocal / paid</td><td>MediatR, AutoMapper (Lucky Penny) &mdash; <b>paid: we will look for alternatives</b></td></tr>
+<tr><td>Tiered / non-commercial / paid</td><td>QuestPDF (revenue-tiered), FluentAssertions (non-commercial), NBomber (organisational use paid) &mdash; <b>paid: we will look for alternatives</b></td></tr>
+</table>
+
+<h3>10.3 Packages per backend project</h3>
+
+<h4>FHIRBridge.Api (host)</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>Asp.Versioning.Mvc</td><td>8.1.0</td><td>MIT</td><td>API versioning</td></tr>
+<tr><td>ITfoxtec.Identity.Saml2 / .MvcCore</td><td>4.20.1</td><td>BSD-3-Clause</td><td>SAML SSO</td></tr>
+<tr><td>Microsoft.AspNetCore.Authentication.JwtBearer</td><td>9.0.10</td><td>MIT</td><td>JWT bearer authentication</td></tr>
+<tr><td>Microsoft.AspNetCore.SignalR.StackExchangeRedis</td><td>9.0.10</td><td>MIT</td><td>SignalR Redis backplane</td></tr>
+<tr><td>Microsoft.Identity.Web</td><td>4.9.0</td><td>MIT</td><td>Microsoft Entra ID token validation</td></tr>
+<tr><td>Microsoft.EntityFrameworkCore.Design</td><td>9.0.10</td><td>MIT</td><td>EF migrations tooling</td></tr>
+<tr><td>Serilog.AspNetCore / Serilog.Sinks.Console</td><td>10.0.0 / 6.1.1</td><td>Apache-2.0</td><td>Structured logging</td></tr>
+<tr><td>Swashbuckle.AspNetCore</td><td>10.2.1</td><td>MIT</td><td>Swagger / OpenAPI</td></tr>
+<tr><td>Microsoft.Extensions.Hosting.WindowsServices / .Systemd</td><td>10.0.8</td><td>MIT</td><td>Run as Windows service / systemd unit</td></tr>
+<tr><td>System.Threading.AccessControl</td><td>10.0.0</td><td>MIT</td><td>ACL support (referenced by the host project)</td></tr>
+</table>
+
+<h4>FHIRBridge.Worker (host)</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>Microsoft.Extensions.Hosting</td><td>10.0.8</td><td>MIT</td><td>Generic host / background services</td></tr>
+<tr><td>Microsoft.Extensions.Hosting.WindowsServices / .Systemd</td><td>10.0.8</td><td>MIT</td><td>Service hosting</td></tr>
+<tr><td>Serilog.Extensions.Hosting</td><td>10.0.0</td><td>Apache-2.0</td><td>Serilog on the generic host</td></tr>
+<tr><td>System.Threading.AccessControl</td><td>10.0.0</td><td>MIT</td><td>Service hosting support</td></tr>
+</table>
+
+<h4>FHIRBridge.Gateway (host)</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>Yarp.ReverseProxy</td><td>2.3.0</td><td>MIT</td><td>Reverse proxy</td></tr>
+<tr><td>Serilog.AspNetCore</td><td>10.0.0</td><td>Apache-2.0</td><td>Logging</td></tr>
+<tr><td>Microsoft.Extensions.Hosting.WindowsServices / .Systemd</td><td>10.0.8</td><td>MIT</td><td>Service hosting</td></tr>
+<tr><td>System.Threading.AccessControl</td><td>10.0.0</td><td>MIT</td><td>Service hosting support</td></tr>
+</table>
+
+<h4>FHIRBridge.LicenseServer (host)</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>Npgsql.EntityFrameworkCore.PostgreSQL</td><td>9.0.4</td><td>PostgreSQL</td><td>EF Core provider (PostgreSQL)</td></tr>
+<tr><td>Microsoft.EntityFrameworkCore.Design</td><td>9.0.10</td><td>MIT</td><td>Migrations tooling</td></tr>
+<tr><td>Microsoft.IdentityModel.Tokens / .JsonWebTokens</td><td>8.2.1</td><td>MIT</td><td>Signing / validating licence tokens</td></tr>
+<tr><td>Serilog.AspNetCore</td><td>9.0.0</td><td>Apache-2.0</td><td>Logging</td></tr>
+<tr><td>Serilog.Sinks.File</td><td>6.0.0</td><td>Apache-2.0</td><td>File log sink</td></tr>
+<tr><td>Microsoft.Extensions.Hosting.WindowsServices</td><td>10.0.8</td><td>MIT</td><td>Windows service hosting</td></tr>
+<tr><td>System.Threading.AccessControl</td><td>10.0.0</td><td>MIT</td><td>Service hosting support</td></tr>
+</table>
+
+<h4>FHIRBridge.Application</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>FluentValidation (+ DependencyInjectionExtensions)</td><td>12.1.1</td><td>Apache-2.0</td><td>Request/DTO validation</td></tr>
+<tr><td><b>MediatR</b></td><td>14.1.0</td><td><b>RPL-1.5 or paid</b></td><td>Mediator / pipeline behaviours<br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td>Microsoft.Extensions.Caching.Memory</td><td>10.0.7</td><td>MIT</td><td>In-process cache</td></tr>
+<tr><td>Microsoft.Extensions.Logging.Abstractions / Options</td><td>10.0.7</td><td>MIT</td><td>Logging and options abstractions</td></tr>
+<tr><td>libphonenumber-csharp</td><td>9.0.37</td><td>Apache-2.0</td><td>Phone-number normalisation</td></tr>
+<tr><td>UnitsNet</td><td>5.68.0</td><td>MIT-0</td><td>Unit conversion transform node</td></tr>
+<tr><td>YamlDotNet</td><td>18.0.0</td><td>MIT</td><td>YAML parsing</td></tr>
+</table>
+
+<h4>FHIRBridge.Infrastructure</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>Microsoft.EntityFrameworkCore / .SqlServer / .InMemory / .Tools</td><td>9.0.10</td><td>MIT</td><td>Persistence (SQL Server; in-memory for tests)</td></tr>
+<tr><td>Npgsql.EntityFrameworkCore.PostgreSQL / Npgsql</td><td>9.0.4 / 9.0.3</td><td>PostgreSQL</td><td>PostgreSQL provider and destination</td></tr>
+<tr><td>Microsoft.Data.SqlClient</td><td>5.2.2</td><td>MIT</td><td>SQL Server access (destination writer)</td></tr>
+<tr><td>MySqlConnector</td><td>2.4.0</td><td>MIT</td><td>MySQL destination</td></tr>
+<tr><td>MongoDB.Driver</td><td>3.1.0</td><td>Apache-2.0</td><td>Mongo destination</td></tr>
+<tr><td>Microsoft.Azure.Cosmos</td><td>3.63.1</td><td>MIT</td><td>Cosmos DB (Fabric) destination</td></tr>
+<tr><td>Azure.Storage.Blobs</td><td>12.24.0</td><td>MIT</td><td>Blob storage destination</td></tr>
+<tr><td>Azure.Identity</td><td>1.21.0</td><td>MIT</td><td>Azure credential (managed identity)</td></tr>
+<tr><td>Azure.Security.KeyVault.Secrets</td><td>4.11.0</td><td>MIT</td><td>Secrets from Key Vault</td></tr>
+<tr><td>Azure.Extensions.AspNetCore.Configuration.Secrets</td><td>1.5.2</td><td>MIT</td><td>Key Vault configuration provider</td></tr>
+<tr><td>Azure.Extensions.AspNetCore.DataProtection.Keys</td><td>1.6.4</td><td>MIT</td><td>Wrap Data Protection keys with Key Vault</td></tr>
+<tr><td>Azure.Messaging.ServiceBus</td><td>7.18.2</td><td>MIT</td><td>Azure Service Bus queue transport</td></tr>
+<tr><td>RabbitMQ.Client</td><td>7.0.0</td><td>Apache-2.0 or MPL-2.0</td><td>RabbitMQ queue transport</td></tr>
+<tr><td>Microsoft.AspNetCore.DataProtection.Abstractions</td><td>9.0.10</td><td>MIT</td><td>Encrypt secrets / launch tokens</td></tr>
+<tr><td>ITfoxtec.Identity.Saml2</td><td>4.20.1</td><td>BSD-3-Clause</td><td>SAML configuration and validation</td></tr>
+<tr><td>Microsoft.IdentityModel.Protocols.OpenIdConnect, System.IdentityModel.Tokens.Jwt</td><td>8.14.0</td><td>MIT</td><td>Validate Entra / Google tokens</td></tr>
+<tr><td>Microsoft.Extensions.Caching.Memory / StackExchangeRedis</td><td>10.0.7</td><td>MIT</td><td>Memory and Redis (distributed) caches</td></tr>
+<tr><td>Microsoft.Extensions.Http.Resilience</td><td>10.7.0</td><td>MIT</td><td>HTTP retry / circuit-breaker policies</td></tr>
+<tr><td>Microsoft.Extensions.Diagnostics.HealthChecks (+ Abstractions)</td><td>10.0.7</td><td>MIT</td><td>Health checks</td></tr>
+<tr><td>Microsoft.Extensions.Configuration.Abstractions / DependencyInjection.Abstractions / Logging.Abstractions / Options</td><td>10.0.10</td><td>MIT</td><td>Framework abstractions</td></tr>
+<tr><td>Parquet.Net</td><td>5.0.2</td><td>MIT</td><td>Parquet destination files</td></tr>
+<tr><td><b>QuestPDF</b></td><td>2024.12.3</td><td><b>Community MIT (&lt;US$1M revenue) / paid</b></td><td>PDF reports and PDF destination<br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td>SSH.NET</td><td>2026.0.0</td><td>MIT</td><td>SFTP destination</td></tr>
+<tr><td>Serilog</td><td>4.3.1</td><td>Apache-2.0</td><td>Logging API</td></tr>
+</table>
+
+<h4>FHIRBridge.Infrastructure.Migrations.PostgreSql</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>Npgsql.EntityFrameworkCore.PostgreSQL</td><td>9.0.4</td><td>PostgreSQL</td><td>PostgreSQL EF provider</td></tr>
+<tr><td>Microsoft.EntityFrameworkCore.Design</td><td>9.0.10</td><td>MIT</td><td>Migrations tooling</td></tr>
+</table>
+
+<h4>FHIRBridge.Runtime.Application</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td><b>MediatR</b></td><td>14.1.0</td><td><b>RPL-1.5 or paid</b></td><td>Logging / validation / performance behaviours<br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td><b>AutoMapper</b></td><td>16.1.1</td><td><b>RPL-1.5 or paid</b></td><td>Object mapping<br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td>FluentValidation (+ DependencyInjectionExtensions)</td><td>12.1.1</td><td>Apache-2.0</td><td>Validation</td></tr>
+<tr><td>Microsoft.Extensions.DependencyInjection.Abstractions / Logging.Abstractions</td><td>10.0.7</td><td>MIT</td><td>Framework abstractions</td></tr>
+</table>
+
+<h4>FHIRBridge.Runtime.Infrastructure</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>Hl7.Fhir.R4</td><td>6.2.0</td><td>BSD-3-Clause</td><td>FHIR R4 model and parsing (Firely SDK)</td></tr>
+<tr><td>Hl7.Fhir.Serialization</td><td>4.3.0</td><td>BSD-3-Clause</td><td>FHIR serialisation</td></tr>
+<tr><td>Azure.Identity, Azure.Security.KeyVault.Secrets</td><td>1.21.0 / 4.11.0</td><td>MIT</td><td>Key Vault access for source secrets</td></tr>
+<tr><td>Microsoft.AspNetCore.DataProtection.Abstractions</td><td>9.0.10</td><td>MIT</td><td>Protect launch tokens</td></tr>
+<tr><td>Microsoft.Data.SqlClient</td><td>5.2.2</td><td>MIT</td><td>SQL Server run store / destination</td></tr>
+<tr><td>Microsoft.EntityFrameworkCore.Tools</td><td>9.0.10</td><td>MIT</td><td>EF tooling</td></tr>
+<tr><td>Microsoft.IdentityModel.Protocols.OpenIdConnect, System.IdentityModel.Tokens.Jwt</td><td>8.14.0</td><td>MIT</td><td>Sign SMART private_key_jwt, read tokens</td></tr>
+<tr><td>Microsoft.Extensions.Caching.Abstractions / Memory, Configuration.Abstractions, DependencyInjection.Abstractions, Http, Logging.Abstractions</td><td>10.0.7</td><td>MIT</td><td>Framework abstractions, HttpClient factory, token cache</td></tr>
+</table>
+
+<h4>FHIRBridge.Integration (building block)</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>Microsoft.Data.SqlClient</td><td>5.2.2</td><td>MIT</td><td>SQL helpers</td></tr>
+</table>
+
+<h4>FHIRBridge.Observability (building block)</h4>
+<table>
+<tr><th>Package</th><th>Version</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>OpenTelemetry.Extensions.Hosting</td><td>1.15.3</td><td>Apache-2.0</td><td>OpenTelemetry on the host</td></tr>
+<tr><td>OpenTelemetry.Exporter.OpenTelemetryProtocol</td><td>1.15.3</td><td>Apache-2.0</td><td>OTLP export to the collector</td></tr>
+<tr><td>OpenTelemetry.Instrumentation.AspNetCore / Http / Runtime</td><td>1.15.2 / 1.15.1 / 1.15.1</td><td>Apache-2.0</td><td>Automatic traces and metrics</td></tr>
+<tr><td>Azure.Monitor.OpenTelemetry.Exporter</td><td>1.8.0</td><td>MIT</td><td>Export to Azure Monitor</td></tr>
+<tr><td>Serilog.Settings.Configuration, Sinks.Console / File / Seq / ApplicationInsights</td><td>10.0.1 / 6.1.1 / 7.0.0 / 9.1.0 / 5.0.1</td><td>Apache-2.0</td><td>Log configuration and sinks</td></tr>
+<tr><td>Serilog.Enrichers.Span</td><td>3.1.0</td><td>MIT</td><td>Trace/span ids on log lines</td></tr>
+<tr><td>Microsoft.Extensions.Configuration.Binder, Logging.Abstractions, Options.ConfigurationExtensions</td><td>10.0.7</td><td>MIT</td><td>Framework abstractions</td></tr>
+</table>
+
+<h4>No external packages</h4>
+<p><code>FHIRBridge.Domain</code>, <code>FHIRBridge.Runtime.Domain</code>, <code>FHIRBridge.SharedKernel</code> and <code>FHIRBridge.Governance</code> reference only other solution projects. This is deliberate for the Domain layers (they must stay dependency-free).</p>
+
+<h4>FHIRBridge.ControlPlane.Application (scaffold, not in the solution)</h4>
+<p>AutoMapper 16.1.1 and MediatR 14.1.0 (both Lucky Penny, RPL-1.5 or paid), FluentValidation 12.1.1 (+ DependencyInjectionExtensions, Apache-2.0), Microsoft.Extensions.Logging.Abstractions 10.0.3 (MIT).</p>
+
+<h3>10.4 Packages per test project</h3>
+<table>
+<tr><th>Project</th><th>Package (version)</th><th>Licence</th></tr>
+<tr><td rowspan="5">FHIRBridge.UnitTests</td><td>xunit 2.9.2, xunit.runner.visualstudio 2.8.2</td><td>Apache-2.0</td></tr>
+<tr><td>Microsoft.NET.Test.Sdk 17.12.0, coverlet.collector 6.0.2</td><td>MIT</td></tr>
+<tr><td>Moq 4.20.72</td><td>BSD-3-Clause</td></tr>
+<tr><td><b>FluentAssertions 8.10.0</b></td><td><b>Xceed Community (non-commercial) / paid</b><br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td>Microsoft.AspNetCore.DataProtection 9.0.10, Microsoft.EntityFrameworkCore.InMemory 9.0.10, Microsoft.Extensions.Configuration 10.0.10</td><td>MIT</td></tr>
+<tr><td rowspan="4">FHIRBridge.Runtime.UnitTests</td><td>xunit 2.9.2, xunit.runner.visualstudio 2.8.2</td><td>Apache-2.0</td></tr>
+<tr><td>Microsoft.NET.Test.Sdk 17.12.0, coverlet.collector 6.0.2, AutoFixture 4.18.1, AutoFixture.AutoMoq 4.18.1</td><td>MIT</td></tr>
+<tr><td>Moq 4.20.72</td><td>BSD-3-Clause</td></tr>
+<tr><td><b>FluentAssertions 8.10.0</b></td><td><b>Xceed Community (non-commercial) / paid</b><br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td rowspan="4">FHIRBridge.ArchitectureTests</td><td>xunit 2.9.2, xunit.runner.visualstudio 2.8.2</td><td>Apache-2.0</td></tr>
+<tr><td>Microsoft.NET.Test.Sdk 17.12.0, coverlet.collector 6.0.2, NetArchTest.Rules 1.3.2</td><td>MIT (NetArchTest per upstream repository)</td></tr>
+<tr><td><b>FluentAssertions 8.10.0</b></td><td><b>Xceed Community (non-commercial) / paid</b><br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td colspan="2">Layering and convention rules (see section 9)</td></tr>
+<tr><td rowspan="3">FHIRBridge.Api.IntegrationTests</td><td>xunit 2.9.3, xunit.runner.visualstudio 2.8.2</td><td>Apache-2.0</td></tr>
+<tr><td>Microsoft.AspNetCore.Mvc.Testing 9.0.10, Microsoft.NET.Test.Sdk 17.13.0, coverlet.collector 6.0.4</td><td>MIT</td></tr>
+<tr><td colspan="2">In-process API tests with an in-memory database</td></tr>
+<tr><td rowspan="2">FHIRBridge.LoadTests</td><td><b>NBomber 6.4.1</b></td><td><b>NBomber licence v3.0 (organisational use: paid)</b><br><b>Paid &mdash; we will look for an alternative.</b></td></tr>
+<tr><td>NBomber.Http 6.2.0</td><td>Apache-2.0</td></tr>
+</table>
+
+<h3>10.5 Frontend packages (<code>portal/</code>, npm)</h3>
+<table>
+<tr><th>Package</th><th>Range</th><th>Licence</th><th>Purpose</th></tr>
+<tr><td>@angular/core, common, compiler, forms, router, animations, platform-browser(-dynamic)</td><td>~20.0.0</td><td>MIT</td><td>Angular framework</td></tr>
+<tr><td>@angular/material, @angular/cdk</td><td>^20.2.14</td><td>MIT</td><td>UI components</td></tr>
+<tr><td>@azure/msal-angular, @azure/msal-browser</td><td>^5.3.1 / ^5.16.0</td><td>MIT</td><td>Entra ID sign-in</td></tr>
+<tr><td>@microsoft/signalr</td><td>^10.0.0</td><td>MIT</td><td>Live run-status connection</td></tr>
+<tr><td>qrcode</td><td>^1.5.4</td><td>MIT</td><td>MFA enrolment QR code</td></tr>
+<tr><td>rxjs</td><td>~7.8.0</td><td>Apache-2.0</td><td>Reactive streams</td></tr>
+<tr><td>sweetalert2</td><td>^11.26.25</td><td>MIT</td><td>Dialogs</td></tr>
+<tr><td>tslib, zone.js</td><td>^2.8.0 / ~0.15.0</td><td>0BSD / MIT</td><td>TypeScript helpers, change detection</td></tr>
+<tr><td>Dev tooling: @angular/cli, @angular-devkit/build-angular, @angular/compiler-cli, eslint, angular-eslint, typescript-eslint, stylelint (+ scss config), postcss-scss, ajv, @types/*, jasmine-core, karma (+ launcher, coverage, jasmine, html reporter)</td><td>various</td><td>MIT</td><td>Build, lint, unit tests</td></tr>
+<tr><td>typescript</td><td>~5.8.0</td><td>Apache-2.0</td><td>Compiler</td></tr>
+</table>
+<p>The portal has 628 installed npm packages including transitive ones; the table above lists the 18 runtime and 20 dev dependencies declared in <code>package.json</code>, all MIT, Apache-2.0 or 0BSD.</p>
+
+<h3>10.6 Recommended actions</h3>
+<ol>
+<li><b>MediatR and AutoMapper: we will look for alternatives</b> (or take the commercial licence). They sit in the core Application and Runtime layers, so decide before the next customer release.</li>
+<li><b>Confirm QuestPDF eligibility</b> (company revenue under US$1M) or purchase a licence; the three <code>LicenseType.Community</code> assignments assert eligibility.</li>
+<li><b>Resolve test-only licences</b>: FluentAssertions 8 (buy, or pin to the last 7.x release) and NBomber (subscription or replace).</li>
+<li><b>Automate the inventory</b>: add a CI step that fails on unapproved licences (for example a NuGet licence-checking tool, and <code>license-checker</code> for npm) and publish an SBOM per release; include transitive packages.</li>
+<li><b>Ship third-party notices</b> with the product for the MIT, BSD and Apache-2.0 components.</li>
+</ol>
+
+
+</div>
+</body>
+</html>

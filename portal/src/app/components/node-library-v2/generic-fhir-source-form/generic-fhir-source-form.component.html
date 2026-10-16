@@ -183,11 +183,9 @@
 
         } @else {
 
-          <div class="eaf-field eaf-field--full">
-            <label class="eaf-label" for="gff-searchCriteria">Search Criteria</label>
-            <input id="gff-searchCriteria" class="eaf-input" formControlName="searchCriteria" placeholder="e.g. _id=1004, or subject=Patient/1004" />
-            <p class="eaf-hint">Optional FHIR search parameters appended to every request.</p>
-          </div>
+          <!-- No Search Criteria field: search criteria are authored per resource type (the destination wizard's
+               Map-fields Criteria button), and workflow runs no longer read a source-level value. The form control
+               stays so a value saved earlier round-trips untouched. -->
 
           <div class="eaf-field eaf-field--full">
             <label class="eaf-label" for="gff-runMode">Run Mode <span class="eaf-req">*</span></label>

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using FHIRBridge.Application.Abstractions.Governance;
 using FHIRBridge.Application.Abstractions.Persistence;
+using FHIRBridge.Domain.Entities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -93,7 +94,120 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
         // self-reference sees the final value.
         hops.AddRange(await RewriteReferencesAsync(resource, profileId, string.Empty, cancellationToken));
 
-        return new DeIdentificationResult(resource.ToJsonString(), hops);
+        return new DeIdentificationResult(
+            resource.ToJsonString(),
+            hops,
+            await BuildDeferrableOriginalAsync(
+                resource, request.RawJson, hops, rules, request.ResourceType, profileId, cancellationToken));
+    }
+
+    /// <summary>
+    /// The redacted resource with ONLY the elements <see cref="DeIdentificationDeferral.CanRestore"/> allows put
+    /// back to their original values — the least unredacted data a Mapping node needs to run a column's
+    /// Transformations first and apply that rule afterwards. Null when nothing is restorable.
+    ///
+    /// Two guards keep a restored subtree from bringing back anything a rule redacted:
+    /// <list type="number">
+    /// <item>An element any other APPLIED redaction touched — at it, above it or beneath it (a Hash, a Generalize, a
+    /// rewritten reference, a Remove of an ancestor) — is never restored (CanRestore).</item>
+    /// <item>A rule can also be configured beneath a restored element yet never have fired, because an earlier
+    /// rule had already removed that element's ancestor (Redact "address" before GeneralizeZip3
+    /// "address.postalCode"). It left no hop to see, but the original subtree still holds what it covers — so every
+    /// rule configured beneath a restored element is applied to it again, in configured order, and every reference
+    /// inside it is rewritten, exactly as the redacted resource would have had them.</item>
+    /// </list>
+    /// </summary>
+    private async Task<string?> BuildDeferrableOriginalAsync(
+        JsonObject redacted,
+        string rawJson,
+        IReadOnlyCollection<DeIdentificationFieldHop> hops,
+        IReadOnlyCollection<TransformationRule> rules,
+        string resourceType,
+        Guid profileId,
+        CancellationToken cancellationToken)
+    {
+        var restorable = hops
+            .Where(hop => DeIdentificationDeferral.CanRestore(hop.SourceField, hops, resourceType))
+            .Select(hop => ParseSourceFieldPath(hop.SourceField, resourceType))
+            .DistinctBy(segments => string.Join('.', segments), StringComparer.Ordinal)
+            .ToArray();
+        if (restorable.Length == 0 || JsonNode.Parse(rawJson) is not JsonObject original)
+        {
+            return null;
+        }
+
+        var copy = (JsonObject)redacted.DeepClone();
+        var restoredNodes = new List<JsonNode>();
+        foreach (var segments in restorable)
+        {
+            RestorePath(copy, original, segments, 0, restoredNodes);
+        }
+
+        foreach (var rule in rules)
+        {
+            if (string.IsNullOrWhiteSpace(rule.SourceField) || !TryReadStrategy(rule.ConfigJson, out var strategy))
+            {
+                continue;
+            }
+
+            var ruleSegments = ParseSourceFieldPath(rule.SourceField, resourceType);
+            if (restorable.Any(segments => IsStrictlyBeneath(ruleSegments, segments)))
+            {
+                ApplyPath(copy, ruleSegments, 0, strategy, rule.ConfigJson);
+            }
+        }
+
+        foreach (var node in restoredNodes)
+        {
+            await RewriteReferencesAsync(node, profileId, string.Empty, cancellationToken);
+        }
+
+        return copy.ToJsonString();
+    }
+
+    /// <summary>True when <paramref name="path"/> lies strictly beneath <paramref name="ancestor"/>.</summary>
+    private static bool IsStrictlyBeneath(IReadOnlyList<string> path, IReadOnlyList<string> ancestor) =>
+        path.Count > ancestor.Count
+        && ancestor.Select((segment, i) => string.Equals(segment, path[i], StringComparison.Ordinal)).All(same => same);
+
+    /// <summary>Copies the value at <paramref name="path"/> from <paramref name="original"/> into
+    /// <paramref name="target"/>, walking arrays element by element exactly as ApplyPath does, and collects each
+    /// value it put back in <paramref name="restoredNodes"/>.</summary>
+    private static void RestorePath(
+        JsonNode? target, JsonNode? original, IReadOnlyList<string> path, int index, List<JsonNode> restoredNodes)
+    {
+        switch (target, original)
+        {
+            case (JsonArray targetArray, JsonArray originalArray):
+                for (var i = 0; i < Math.Min(targetArray.Count, originalArray.Count); i++)
+                {
+                    RestorePath(targetArray[i], originalArray[i], path, index, restoredNodes);
+                }
+
+                break;
+
+            case (JsonObject targetObject, JsonObject originalObject) when index == path.Count - 1:
+                if (originalObject.TryGetPropertyValue(path[index], out var value))
+                {
+                    var restored = value?.DeepClone();
+                    targetObject[path[index]] = restored;
+                    if (restored is not null)
+                    {
+                        restoredNodes.Add(restored);
+                    }
+                }
+
+                break;
+
+            case (JsonObject targetObject, JsonObject originalObject):
+                if (targetObject.TryGetPropertyValue(path[index], out var targetChild)
+                    && originalObject.TryGetPropertyValue(path[index], out var originalChild))
+                {
+                    RestorePath(targetChild, originalChild, path, index + 1, restoredNodes);
+                }
+
+                break;
+        }
     }
 
     /// <summary>
@@ -192,7 +306,7 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
 
         return new DeIdentificationFieldHop(
             path,
-            rule.Strategy + ":Reference",
+            rule.Strategy + DeIdentificationStrategyNames.ReferenceSuffix,
             rule.ConfigJson,
             JsonSerializer.Serialize(reference),
             JsonSerializer.Serialize(rewritten),
@@ -301,38 +415,8 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
     /// property name, which is what the traversal already does anyway: it fans out across every element of an
     /// array it meets, so redaction applies to all of them rather than one.
     /// </summary>
-    internal static string[] ParseSourceFieldPath(string sourceField, string resourceType)
-    {
-        var path = sourceField.Trim();
-
-        if (path.StartsWith("$.", StringComparison.Ordinal))
-        {
-            path = path[2..];
-        }
-        else if (path.StartsWith("$", StringComparison.Ordinal))
-        {
-            path = path[1..];
-        }
-
-        var resourcePrefix = resourceType + ".";
-        if (path.StartsWith(resourcePrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            path = path[resourcePrefix.Length..];
-        }
-
-        return path
-            .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(StripIndexer)
-            .Where(segment => segment.Length > 0)
-            .ToArray();
-    }
-
-    /// <summary>Reduces "address[0]" / "address[*]" to "address" — see <see cref="ParseSourceFieldPath"/>.</summary>
-    private static string StripIndexer(string segment)
-    {
-        var bracket = segment.IndexOf('[', StringComparison.Ordinal);
-        return bracket < 0 ? segment : segment[..bracket].TrimEnd();
-    }
+    internal static string[] ParseSourceFieldPath(string sourceField, string resourceType) =>
+        DeIdentificationSourcePath.Segments(sourceField, resourceType);
 
     /// <summary>Best-effort read of the same path <see cref="ApplyPath"/> would mutate — used only to capture a
     /// lineage hop's before/after value, so it deliberately mirrors ApplyPath's array-fan-out/object-descent
@@ -362,6 +446,48 @@ public sealed class SafeHarborDeIdentificationService : IDeIdentificationService
                 return obj.TryGetPropertyValue(path[index], out var child)
                     ? TryReadValueAt(child, path, index + 1)
                     : null;
+
+            default:
+                return null;
+        }
+    }
+
+    public Task<bool> HasRulesAsync(Guid profileId, CancellationToken cancellationToken) =>
+        _ruleRepository.HasPreMappingRulesAsync(profileId, cancellationToken);
+
+    public object? DeIdentifyValue(object? value, DeIdentificationFieldHop hop)
+    {
+        // Fails CLOSED: the value reaching here is a deferred column's chain output, built from UNREDACTED source
+        // data, so anything this cannot redact with certainty is dropped (null), never passed through. The hop
+        // carries the rule's own config, so the strategy is read exactly as DeIdentifyAsync read it.
+        if (value is null || !TryReadStrategy(hop.ConfigJson, out var strategy))
+        {
+            return null;
+        }
+
+        // Remove deletes the whole value, whatever its shape — exactly as ApplyStrategy removes the whole property —
+        // rather than a list of nulls ("[null,null]") a destination would still receive.
+        if (strategy == DeIdentificationStrategy.Remove)
+        {
+            return null;
+        }
+
+        switch (value)
+        {
+            case string text:
+                return TransformScalar(text, strategy, hop.ConfigJson);
+
+            // A transform chain can hand back a list of strings (split, a PerItem step): each one is one value. Only a
+            // plain list of strings qualifies — not a dictionary, a JSON object/array node or a byte[], which are
+            // IEnumerable too but carry structure (or raw bytes) this cannot redact item by item.
+            case System.Collections.IEnumerable items
+                when value is not (System.Collections.IDictionary or JsonNode or byte[])
+                    && items.Cast<object?>().All(item => item is null or string):
+                var redacted = items.Cast<string?>()
+                    .Select(item => item is null ? null : TransformScalar(item, strategy, hop.ConfigJson))
+                    .ToArray();
+                // Nothing left in it: the value is gone, and is reported as such (null), not as an empty-looking list.
+                return redacted.All(item => item is null) ? null : redacted;
 
             default:
                 return null;

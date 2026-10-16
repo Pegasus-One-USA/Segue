@@ -92,4 +92,25 @@ describe('WorkflowListComponent — Run asks before a live EHR write', () => {
     expect(dialogs.open).not.toHaveBeenCalled();
     expect(api.run).toHaveBeenCalledOnceWith('wf-1', true);
   });
+
+  it('Execute V2 asks the same question before opening its dialog', () => {
+    create('Epic');
+
+    component.onExecuteV2(row);
+
+    expect(dialogs.open).toHaveBeenCalledTimes(1);
+    expect(dialogs.open.calls.mostRecent().args[1].data.title).toBe('Write into Epic now?');
+
+    closed.next(true);
+    expect(dialogs.open).toHaveBeenCalledTimes(2);
+    expect(dialogs.open.calls.mostRecent().args[1].data).toEqual({ workflowId: 'wf-1', workflowName: 'Allergies to Epic' });
+  });
+
+  it('Execute V2 opens straight away for a workflow that writes nothing live', () => {
+    create(null);
+
+    component.onExecuteV2(row);
+
+    expect(dialogs.open).toHaveBeenCalledOnceWith(jasmine.anything(), jasmine.objectContaining({ data: { workflowId: 'wf-1', workflowName: 'Allergies to Epic' } }));
+  });
 });

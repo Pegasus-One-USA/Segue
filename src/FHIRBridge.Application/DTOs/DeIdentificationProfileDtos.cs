@@ -10,3 +10,7 @@ public sealed record CreateDeIdentificationProfileRequest(string Name, string? D
 public sealed record DeIdentificationPreviewRequest(string ResourceType, string SampleJson);
 
 public sealed record DeIdentificationPreviewResult(string RedactedJson);
+
+/// <summary>Outcome of deleting the rules of a workflow's own de-identification policy: how many were deleted, or —
+/// when <see cref="UsedElsewhere"/> is not empty — nothing, because the policy is still used outside the workflow.</summary>
+public sealed record WorkflowDeIdentificationRuleDeletionResult(int Deleted, IReadOnlyList<string> UsedElsewhere);

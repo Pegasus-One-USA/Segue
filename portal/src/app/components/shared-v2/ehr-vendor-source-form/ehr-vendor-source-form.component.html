@@ -842,14 +842,6 @@
                 @if (groupIdHint(field); as hint) {
                   <p class="eaf-hint">{{ hint }}</p>
                 }
-                @if (field.key === 'searchCriteria' && showAthenaPatientSearchCriteriaWarning()) {
-                  <p class="eaf-error-msg">
-                    ⚠ athenahealth rejects an unscoped Patient search ("open enumeration forbidden"). Supply at
-                    least one identifying criterion here — e.g. <code>identifier=MRN12345</code>,
-                    <code>name=Smith</code>, or <code>family=Smith&amp;birthdate=1990-01-01</code> — or every run
-                    will fail on the Patient resource type.
-                  </p>
-                }
               </div>
             }
 

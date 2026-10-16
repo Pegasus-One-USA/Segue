@@ -1,0 +1,99 @@
+<div class="fullscreen-shell">
+  <header class="fullscreen-shell__topbar">
+    <div class="title-group">
+      <span class="fullscreen-shell__title">HealthApp</span>
+      <span class="login-type-badge">{{ loginTypeLabel() }}</span>
+    </div>
+    <div class="fullscreen-shell__actions">
+      <a class="topbar-link" href="/">Workflow Settings</a>
+      <button type="button" class="icon-btn" (click)="logout.emit()" aria-label="Log out">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="query-page">
+    <header class="page-header">
+      <h1>Query Console</h1>
+      <p class="subtitle">Run a read-only SELECT against the HealthApp database. Click a row to see it as a form.</p>
+    </header>
+
+    <textarea
+      class="query-input"
+      rows="6"
+      spellcheck="false"
+      aria-label="SQL query"
+      [ngModel]="sql()"
+      (ngModelChange)="sql.set($event)"
+      (keydown.control.enter)="run()"
+      placeholder="SELECT * FROM ..."
+    ></textarea>
+    <div class="query-actions">
+      <button type="button" class="connect-btn" [disabled]="isRunning()" (click)="run()">
+        {{ isRunning() ? 'Running…' : 'Run query' }}
+      </button>
+      <span class="hint">Ctrl+Enter to run</span>
+    </div>
+
+    @if (error()) {
+      <p class="error-banner">{{ error() }}</p>
+    }
+
+    @if (result(); as r) {
+      <p class="result-meta">
+        {{ r.rowCount }} {{ r.rowCount === 1 ? 'row' : 'rows' }}
+        @if (r.truncated) {
+          <span class="truncated">— showing the first {{ r.maxRows }} only</span>
+        }
+      </p>
+
+      @if (r.rowCount === 0) {
+        <p class="empty">The query returned no rows.</p>
+      } @else {
+        <div class="table-wrap">
+          <table class="result-table">
+            <thead>
+              <tr>
+                @for (col of r.columns; track col) {
+                  <th>{{ col }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of r.rows; track $index) {
+                <tr tabindex="0" (click)="openRow(row)" (keydown.enter)="openRow(row)">
+                  @for (col of r.columns; track col) {
+                    <td [class.null-cell]="isNull(row[col])" [title]="format(row[col])">{{ format(row[col]) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </div>
+
+  @if (selectedRow(); as row) {
+    <div class="modal-backdrop" (click)="closeRow()">
+      <div class="modal" role="dialog" aria-modal="true" aria-label="Record details" (click)="$event.stopPropagation()" (keydown.escape)="closeRow()">
+        <header class="modal__header">
+          <h2>Record details</h2>
+          <button type="button" class="icon-btn" (click)="closeRow()" aria-label="Close">×</button>
+        </header>
+        <div class="modal__body">
+          @for (col of result()!.columns; track col) {
+            <label class="field">
+              {{ col }}
+              <textarea readonly rows="1" [class.null-cell]="isNull(row[col])" [value]="format(row[col])"></textarea>
+            </label>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

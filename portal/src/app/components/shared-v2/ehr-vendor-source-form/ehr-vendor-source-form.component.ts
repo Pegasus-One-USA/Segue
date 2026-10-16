@@ -380,7 +380,7 @@ interface RetrievalFieldDef {
   /**
    * Rendered inside the collapsed "Advanced Search Options" disclosure instead of the main field grid. A function
    * lets a field be "advanced" for one retrieval scope and promoted to the main grid for another (e.g. Max Results
-   * and Include Related Resources are two of only four fields Standalone sees, so they belong in the main grid
+   * and Include Related Resources are the only fields Standalone sees here, so they belong in the main grid
    * there, while they stay tucked away for Backend System's much larger field set).
    */
   advanced?: boolean | ((ctx: RetrievalFieldVisibilityContext) => boolean);
@@ -569,8 +569,8 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
       label: 'Search (REST)',
       description: 'Segue polls the server’s FHIR REST API on a schedule.',
       fields: [
-        // Resource Type / Search Criteria / Max Results / Include Related Resources are the only four fields shown to
-        // Provider Standalone (one-shot, user-initiated) — everything else here is scheduling/automation plumbing
+        // Max Results / Include Related Resources are the only fields shown to Provider Standalone (one-shot,
+        // user-initiated; Resource Type and Search Criteria are hidden) — everything else here is scheduling/automation plumbing
         // that only makes sense for Backend System's unattended, recurring execution.
         //
         // For Standalone this field is hidden — it reuses the shared Resource Type & Scopes picker (Section 5)
@@ -587,11 +587,15 @@ const RETRIEVAL_METHOD_CONFIG: Record<RetrievalMethod, RetrievalMethodConfig> =
           required: false,
           visibleWhen: () => false,
         },
+        // Hidden: search criteria are authored per resource type (the destination wizard's Map-fields Criteria
+        // button) and, on an API run, by the caller — workflow runs no longer read this field at all. The control
+        // stays so a value saved before it was hidden round-trips untouched rather than being wiped on save.
         {
           key: 'searchCriteria',
           label: 'Search Criteria',
           type: 'text',
           required: false,
+          visibleWhen: () => false,
           placeholder: 'status=active&category=vital-signs',
           hint: 'Optional FHIR search parameters appended to every request.',
         },
@@ -1249,10 +1253,6 @@ export class EhrVendorSourceFormComponent
     this.form.controls.runMode.valueChanges,
     { initialValue: this.form.controls.runMode.value },
   );
-  private readonly searchCriteriaValue = toSignal(
-    this.form.controls.searchCriteria.valueChanges,
-    { initialValue: this.form.controls.searchCriteria.value },
-  );
   private readonly scopeVersionValue = toSignal(
     this.form.controls.scopeVersion.valueChanges,
     { initialValue: this.form.controls.scopeVersion.value },
@@ -1651,36 +1651,6 @@ export class EhrVendorSourceFormComponent
     () =>
       this.retrievalMethod() === 'search-rest' &&
       this.runModeValue() === 'full',
-  );
-
-  /**
-   * athenahealth rejects an unscoped `Patient` search outright ("open enumeration forbidden") — it requires at
-   * least one identifying criterion (identifier, name, or family + birthdate/gender/given) on every Patient
-   * search. Whenever the source reads Patient (see declaredResourceTypes), Search Criteria is the only lever an
-   * admin has here to avoid a run that always fails on the Patient resource type. Independent of whether
-   * the field currently has a value — drives the Search Criteria control's required validator (see
-   * syncRetrievalValidators), which doesn't need that distinction since Angular re-evaluates Validators.required
-   * against the live value on every keystroke regardless.
-   *
-   * Gated on showRetrievalSection() — this section (and Search Criteria within it) only renders for the Backend
-   * System audience. Other audiences (Patient, Provider Standalone/EHR Launch) still carry a 'search-rest'
-   * retrievalMethod / Patient-inclusive resources from cloning an existing connection (see the clone fallback a
-   * few hundred lines down), but their data actually flows through the SMART launch context, not a live
-   * search-rest query — requiring a field the admin can never see would leave the form permanently invalid.
-   */
-  protected readonly athenaPatientSearchNeedsCriteria = computed(
-    () =>
-      this.showRetrievalSection() &&
-      this.vendor() === 'Athenahealth' &&
-      this.retrievalMethod() === 'search-rest' &&
-      this.activeRetrievalResourceTypes().includes('Patient'),
-  );
-
-  /** Display-only variant of the above — hides the warning callout once the admin has actually filled the field
-   *  in, even though the control stays required (an empty search-then-filled field is no longer the problem). */
-  protected readonly showAthenaPatientSearchCriteriaWarning = computed(
-    () =>
-      this.athenaPatientSearchNeedsCriteria() && !this.searchCriteriaValue(),
   );
 
   /**
@@ -2937,14 +2907,6 @@ export class EhrVendorSourceFormComponent
         required = false;
       }
       apply(key, required);
-    }
-
-    // Overrides the generic per-field loop above (which leaves Search Criteria optional for every vendor, per its
-    // static RETRIEVAL_METHOD_CONFIG entry) only for athenahealth + Search REST + a Patient-inclusive resource
-    // selection — see athenaPatientSearchNeedsCriteria's own remarks for why this is the one lever that keeps the
-    // run from always failing on an unscoped Patient search.
-    if (this.athenaPatientSearchNeedsCriteria()) {
-      apply('searchCriteria', true);
     }
   }
 

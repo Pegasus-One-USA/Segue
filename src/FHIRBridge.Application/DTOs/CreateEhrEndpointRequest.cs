@@ -9,4 +9,9 @@ public sealed record CreateEhrEndpointRequest(
     string FhirBaseUrl,
     string FormatType,
     string Status,
-    EhrEndpointType EndpointType = EhrEndpointType.MyChart);
+    EhrEndpointType EndpointType = EhrEndpointType.MyChart,
+    string? TokenEndpoint = null,
+    string? ClientId = null,
+    string? KeyId = null,
+    string? JwksUrl = null,
+    string? PracticeId = null);

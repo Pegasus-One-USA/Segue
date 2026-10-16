@@ -1,0 +1,78 @@
+<div class="list-page">
+
+  <div class="page-header">
+    <div class="page-header__row">
+      <div>
+        <h1 class="page-title">Allowed Caller URLs — {{ client().name }}</h1>
+        <p class="page-sub">
+          Allowed redirect targets for the browser-redirect external-trigger flow
+          (<code>/api/v1/workflows/external/run</code>). The caller URL must match one of
+          these entries — exactly, or by domain when "Full domain" is set — and its Referer, when the
+          browser sends one, must match one of these same origins.
+        </p>
+      </div>
+      <button class="btn-add" type="button" (click)="openAdd()">Add Allowed Caller URL</button>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="client().returnUrls" class="data-table">
+
+        <ng-container matColumnDef="url">
+          <th mat-header-cell *matHeaderCellDef>URL</th>
+          <td mat-cell *matCellDef="let r">
+            <code class="mono">{{ r.url }}{{ r.matchMode === 'Domain' ? '/*' : '' }}</code>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="matchMode">
+          <th mat-header-cell *matHeaderCellDef>Full Domain</th>
+          <td mat-cell *matCellDef="let r">
+            <span class="status-chip" [class.status-chip--off]="r.matchMode !== 'Domain'">
+              {{ r.matchMode === 'Domain' ? 'Yes' : 'No' }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="label">
+          <th mat-header-cell *matHeaderCellDef>Label</th>
+          <td mat-cell *matCellDef="let r">{{ r.label || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef class="col-actions">Actions</th>
+          <td mat-cell *matCellDef="let r" class="col-actions">
+            <div class="actions-cell">
+              <button mat-icon-button matTooltip="Edit" (click)="openEdit(r)">
+                <mat-icon>edit_outlined</mat-icon>
+              </button>
+              <button mat-icon-button matTooltip="Delete" (click)="confirmDelete(r)">
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+            </div>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedCols"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedCols;" class="data-row"></tr>
+
+      </table>
+    </div>
+
+    @if (client().returnUrls.length === 0) {
+      <div class="empty-state">
+        <div class="empty-state__icon-wrap">
+          <mat-icon>link</mat-icon>
+        </div>
+        <h3 class="empty-state__title">No return URLs registered yet</h3>
+        <p class="empty-state__sub">Add one to let the browser-redirect trigger flow send outcomes back to a page you control.</p>
+      </div>
+    }
+  </div>
+
+  <div class="page-footer">
+    <button mat-flat-button class="btn-done" type="button" (click)="close()">Done</button>
+  </div>
+
+</div>

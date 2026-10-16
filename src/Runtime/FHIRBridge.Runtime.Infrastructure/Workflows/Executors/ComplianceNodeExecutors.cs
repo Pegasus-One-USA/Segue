@@ -212,6 +212,19 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                 });
         }
 
+        // A policy with no rule at all — missing, never filled, or emptied — would let every resource through
+        // unredacted while the run reported success (the warning below was the only trace). That is a
+        // configuration error, not a valid state: fail the node, before anything reaches the destination. A
+        // policy whose rules simply do not cover this run's resource type is different, and still only warns.
+        if (resourceInputs.Length > 0 && _deIdentificationService is not null
+            && !await _deIdentificationService.HasRulesAsync(resolvedProfileId, cancellationToken))
+        {
+            throw new InvalidOperationException(
+                $"De-identification policy {resolvedProfileId} has no rules, so nothing could be de-identified and "
+                + "nothing was written. Add de-identification rules to the workflow, or remove its "
+                + "De-identification step.");
+        }
+
         if (resourceInputs.Length > 0)
         {
             var deIdentifiedResources = new List<ResourceEnvelope>();
@@ -222,10 +235,12 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
             var redactionsByResourceId = new Dictionary<string, IReadOnlyList<DeIdentificationFieldHop>>();
             foreach (var resource in resourceInputs)
             {
+                var originalJson = Convert.ToString(resource.Payload) ?? "{}";
                 string sourceJson;
+                string? deferrableOriginalJson = null;
                 if (_deIdentificationService is null)
                 {
-                    sourceJson = Convert.ToString(resource.Payload) ?? "{}";
+                    sourceJson = originalJson;
                 }
                 else
                 {
@@ -233,7 +248,7 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                         new DeIdentificationRequest(
                             resource.ResourceType,
                             resource.ResourceId,
-                            Convert.ToString(resource.Payload) ?? "{}",
+                            originalJson,
                             [],
                             resolvedProfileId),
                         cancellationToken);
@@ -242,9 +257,20 @@ public sealed class DeIdentificationNodeExecutor : WorkflowNodeExecutorBase
                     {
                         redactionsByResourceId[resource.ResourceId] = result.Hops;
                     }
+
+                    deferrableOriginalJson = result.DeferrableOriginalJson;
                 }
 
-                deIdentifiedResources.Add(resource with { Payload = sourceJson });
+                var redactedEnvelope = resource with { Payload = sourceJson };
+                // Held in memory against THIS envelope only (see DeIdentificationSnapshots), so a mapped column with its
+                // own Transformations can run them on real values and be redacted afterwards. It holds only the fields
+                // a deferrable rule (Mask/Redact/Remove) covered, and only when such a rule actually applied.
+                if (deferrableOriginalJson is not null)
+                {
+                    DeIdentificationSnapshots.Attach(redactedEnvelope, deferrableOriginalJson, sourceJson);
+                }
+
+                deIdentifiedResources.Add(redactedEnvelope);
             }
 
             // De-identification was asked for and nothing at all was redacted. Almost always a misconfiguration

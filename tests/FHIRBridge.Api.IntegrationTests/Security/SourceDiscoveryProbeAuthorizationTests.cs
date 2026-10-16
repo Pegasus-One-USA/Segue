@@ -65,8 +65,8 @@ public sealed class SourceDiscoveryProbeAuthorizationTests
         public Task<SmartConfigurationDto> ProbeSmartConfigurationAsync(string baseUrl, CancellationToken cancellationToken)
             => Task.FromResult(SmartConfigurationDto.Empty);
 
-        public Task<IReadOnlyList<string>> ProbeSupportedResourceTypesAsync(string baseUrl, CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<SourceEndpointCapabilities> ProbeCapabilitiesAsync(string baseUrl, CancellationToken cancellationToken)
+            => Task.FromResult(new SourceEndpointCapabilities([], new Dictionary<string, IReadOnlyList<string>>()));
     }
 
     private sealed class NoOpBackendAuthScopeProbeService : IBackendAuthScopeProbeService

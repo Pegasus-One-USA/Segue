@@ -844,6 +844,9 @@ app.MapPipelineRunPatientEndpoints();
 // "New 11" menu data — read-only GETs over the curated _11 tables, available to any authenticated role.
 app.MapResource11Endpoints();
 
+// Admin-only read-only SQL runner behind the Query Console screen.
+app.MapQueryConsoleEndpoints();
+
 // Data Lake Webhook receiver — the "lake" side of FHIRBridge's DataLakeWebhook destination, so a
 // workflow can be run end to end against this app. POST /api/datalake/webhook is anonymous by design
 // (server-to-server, no session cookie); see DataLakeWebhookEndpoints for the optional
@@ -858,6 +861,16 @@ app.MapApiEndpointTestEndpoints();
 // Basic/HmacSha256/OAuth2ClientCredentials/ClientCertificate), always live simultaneously with fixed, documented
 // test credentials — see ApiAuthTestEndpoints.
 app.MapApiAuthTestEndpoints();
+
+// Exercises FHIRBridge's own OAuth 2.0 Client Credentials Grant (Settings > API Clients) end to end: obtains a
+// Bearer token from FHIRBridge's /api/v1/oauth/token, then uses it to trigger /api/v1/workflows/{id}/run — see
+// ClientCredentialsDemoEndpoints.
+app.MapClientCredentialsDemoEndpoints();
+
+// Read-only proxy for the browser-redirect external-trigger console's workflow picker — see
+// ExternalTriggerDemoEndpoints. The actual trigger action is a real form POST straight to FHIRBridge, not
+// proxied through here.
+app.MapExternalTriggerDemoEndpoints();
 
 // SPA fallback: any GET that doesn't match a mapped route or an existing static file resolves to
 // index.html instead of 404ing, so Angular's client-side routes work on refresh/deep link. Fallback

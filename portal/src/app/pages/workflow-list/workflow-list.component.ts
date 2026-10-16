@@ -32,6 +32,7 @@ import { PhaseConfigService } from '../../services/phase-config.service';
 import { EhrLiveWriteCheckService } from '../../services/ehr-live-write-check.service';
 import { DialogService } from '../../core/services/dialog.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../core/components/confirm-dialog/confirm-dialog.component';
+import { ExecuteV2DialogComponent, ExecuteV2DialogData } from './execute-v2-dialog/execute-v2-dialog.component';
 import {
   IntegrationDetails,
   buildIntegrationDetails,
@@ -70,6 +71,7 @@ type FilterCategory = 'status' | 'audience' | 'source' | 'destination' | 'lastRu
 })
 export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly api = inject(WorkflowApiService);
+  private readonly customDialog = inject(DialogService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly runStatusHub = inject(RunStatusHubService);
@@ -78,7 +80,6 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly phaseCfg = inject(PhaseConfigService);
   private readonly authStore = inject(AuthStore);
   private readonly liveWriteCheck = inject(EhrLiveWriteCheckService);
-  private readonly dialogs = inject(DialogService);
 
   // ── RBAC: workflow.view (the route guard already reached here) only grants VIEW access — these four
   // are what actually gate each action-specific button/menu-item below, kept independent of one another
@@ -506,15 +507,20 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // A live EHR write-back that has not run yet asks first: records written into an EHR cannot be taken back.
+    this.confirmLiveWrite(row, () => this.dispatchRun(row, mode));
+  }
+
+  /** A live EHR write-back that has not run yet asks first, whichever button starts the run: records written into an
+   *  EHR cannot be taken back. Runs <paramref name="proceed"/> at once when the workflow writes nothing live. */
+  private confirmLiveWrite(row: WorkflowSummary, proceed: () => void): void {
     this.busyId.set(row.workflowId);
     this.liveWriteCheck.firstLiveWrite(row.workflowId, row.modifiedOnUtc).subscribe(ehr => {
       this.busyId.set(null);
       if (!ehr) {
-        this.dispatchRun(row, mode);
+        proceed();
         return;
       }
-      this.dialogs
+      this.customDialog
         .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
           width: '440px',
           data: {
@@ -526,7 +532,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         })
         .afterClosed()
         .subscribe(confirmed => {
-          if (confirmed) this.dispatchRun(row, mode);
+          if (confirmed) proceed();
         });
     });
   }
@@ -584,6 +590,33 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
         this.toast.error('Workflow run', this.messageOf(err, 'The background run could not be started.'));
       },
     });
+  }
+
+  /** "Execute V2": pick the hospital (EHR Endpoint) for this one run, review what changes, then execute. */
+  onExecuteV2(row: WorkflowSummary): void {
+    if (this.busyId() || !this.canRun()) return;
+    if (row.status !== 'Ready') {
+      this.toast.error(this.statusHint(row.status));
+      return;
+    }
+
+    this.confirmLiveWrite(row, () =>
+      this.customDialog
+        .open<ExecuteV2DialogComponent, ExecuteV2DialogData, boolean>(ExecuteV2DialogComponent, {
+          width: '640px',
+          disableClose: true,
+          data: { workflowId: row.workflowId, workflowName: row.name },
+        })
+        .afterClosed()
+        .subscribe(started => {
+          if (!started) return;
+          this.summaries.update(rows =>
+            rows.map(w =>
+              w.workflowId === row.workflowId ? { ...w, lastRun: 'Running', lastRunAt: new Date().toISOString() } : w,
+            ),
+          );
+        }),
+    );
   }
 
   onViewData(row: WorkflowSummary): void {

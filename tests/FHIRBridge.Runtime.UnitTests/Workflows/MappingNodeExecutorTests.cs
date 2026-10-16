@@ -33,7 +33,7 @@ namespace FHIRBridge.Runtime.UnitTests.Workflows;
 /// must resolve one profile per resource type and apply only the matching one, skipping any resource type with
 /// no configured mapping.
 /// </summary>
-public sealed class MappingNodeExecutorTests
+public sealed partial class MappingNodeExecutorTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
