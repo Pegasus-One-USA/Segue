@@ -573,6 +573,34 @@ public sealed class RankedWorkflowOrchestratorTests
     }
 
     [Fact]
+    public async Task A_resume_that_fails_before_its_nodes_run_fails_the_run_with_the_real_error()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("resume-bad-context");
+        var sourceNodeId = workflow.Nodes.Single(n => n.NodeType == WorkflowNodeTypes.EpicSource).Id;
+        var runStore = new InMemoryWorkflowRunStore();
+        var pausedRun = new WorkflowRun(Guid.NewGuid(), workflow.Id, DateTimeOffset.UtcNow);
+        pausedRun.AwaitBulkExport();
+        await runStore.SaveAsync(pausedRun, CancellationToken.None);
+        var nodeRan = false;
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => nodeRan = true)),
+            runStore: runStore,
+            workflowDefinitionStore: new StubWorkflowDefinitionStore(workflow),
+            activeRuns: new ActiveWorkflowRuns());
+
+        var act = () => orchestrator.ResumeAfterBulkExportAsync(
+            pausedRun.Id, sourceNodeId, priorNodeOutputsJson: null, contextJson: "{ not json",
+            [], cancellationToken: CancellationToken.None);
+
+        await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+        nodeRan.Should().BeFalse();
+        var saved = await runStore.GetAsync(pausedRun.Id, CancellationToken.None);
+        saved!.Status.Should().Be(WorkflowRunStatus.Failed, because: "left Running, the expiry sweep would close it as interrupted");
+        saved.ErrorMessage.Should().NotBe(WorkflowRunLease.InterruptedReason);
+    }
+
+    [Fact]
     public async Task A_paused_run_closed_elsewhere_is_not_resumed()
     {
         var workflow = BuildValidSourceToSqlWorkflow("resume-closed");

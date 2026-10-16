@@ -205,7 +205,50 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
         var leasePersisted = await PersistRunStartedAsync(workflowRun, cancellationToken);
 
-        var context = DeserializeExecutionContext(contextJson, workflowRunId);
+        // From here until RunNodesAsync holds the run, nothing renews its lease: a failure in between (a malformed
+        // context or prior outputs, the dump or history write) would leave a Running row for the expiry sweep to close
+        // as "Interrupted", with the real error lost. So it fails the run here, with that error, before rethrowing.
+        WorkflowExecutionContext context;
+        ResumedRun resumed;
+        try
+        {
+            context = DeserializeExecutionContext(contextJson, workflowRunId);
+            resumed = await PrepareResumeAsync(
+                workflowRun, effectiveDefinition, pausedNode, context, priorNodeOutputsJson, resources,
+                skippedResourceTypeReasons, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await FailResumeAsync(workflowDefinition, workflowRun, exception);
+            throw;
+        }
+
+        return await RunNodesAsync(
+            workflowDefinition, effectiveDefinition, workflowRun, context, resumed.RemainingNodes,
+            resumed.OutputsByNodeId, resumed.SkippedResourceTypesAcrossRun, cancellationToken,
+            confirmedLeaseExpiresAt: leasePersisted ? workflowRun.LeaseExpiresAt : null);
+    }
+
+    /// <summary>What a resume restores before its remaining nodes run: the prior outputs with the paused node's
+    /// delivered resources, the nodes after it, and the skipped resource types carried so far.</summary>
+    private sealed record ResumedRun(
+        IReadOnlyCollection<WorkflowNode> RemainingNodes,
+        Dictionary<Guid, WorkflowNodeOutput> OutputsByNodeId,
+        List<string> SkippedResourceTypesAcrossRun);
+
+    /// <summary>Rebuilds the paused run from what was persisted at pause time and records the paused node's delivered
+    /// resources as its output (see <see cref="ResumeAfterBulkExportAsync"/>).</summary>
+    private async Task<ResumedRun> PrepareResumeAsync(
+        WorkflowRun workflowRun,
+        WorkflowDefinition effectiveDefinition,
+        WorkflowNode pausedNode,
+        WorkflowExecutionContext context,
+        string? priorNodeOutputsJson,
+        IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> resources,
+        IReadOnlyList<string>? skippedResourceTypeReasons,
+        CancellationToken cancellationToken)
+    {
+        var workflowRunId = workflowRun.Id;
         var orderedNodes = TopologicalSort(effectiveDefinition);
         var outputsByNodeId = DeserializePriorNodeOutputs(priorNodeOutputsJson);
         var skippedResourceTypesAcrossRun = new List<string>();
@@ -284,11 +327,67 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         }
 
         var remainingNodes = orderedNodes.SkipWhile(n => n.Id != pausedNode.Id).Skip(1).ToArray();
+        return new ResumedRun(remainingNodes, outputsByNodeId, skippedResourceTypesAcrossRun);
+    }
 
-        return await RunNodesAsync(
-            workflowDefinition, effectiveDefinition, workflowRun, context, remainingNodes,
-            outputsByNodeId, skippedResourceTypesAcrossRun, cancellationToken,
-            confirmedLeaseExpiresAt: leasePersisted ? workflowRun.LeaseExpiresAt : null);
+    /// <summary>
+    /// A resume that failed after its run was made Running again but before <see cref="RunNodesAsync"/> held it: the
+    /// run is failed here with the real error, as RunNodesAsync would fail it. Left Running, nothing would renew its
+    /// lease, and the expiry sweep would close it as interrupted with the cause lost. A run another instance closed in
+    /// the meantime keeps its recorded status.
+    /// </summary>
+    private async Task FailResumeAsync(WorkflowDefinition workflowDefinition, WorkflowRun workflowRun, Exception exception)
+    {
+        _logger.LogError(
+            LogEvents.WorkflowRunFailed,
+            exception,
+            "Workflow run {WorkflowRunId} for {WorkflowId} '{WorkflowName}' could not resume after its bulk export: " +
+            "{FailureReason}",
+            workflowRun.Id, workflowDefinition.Id, workflowDefinition.Name, exception.Message);
+
+        workflowRun.Fail(exception.Message, DateTimeOffset.UtcNow);
+        await _auditRecorder.RecordAsync(new(
+            WorkflowAuditEventType.WorkflowRunFailed,
+            workflowDefinition.Id,
+            workflowRun.Id,
+            null,
+            null,
+            null,
+            null,
+            WorkflowDataContract.None,
+            WorkflowDataContract.None,
+            DateTimeOffset.UtcNow,
+            exception.Message), CancellationToken.None);
+
+        string? failureReferenceId = null;
+        if (_exceptionManager is not null)
+        {
+            var report = await _exceptionManager.CaptureAsync(
+                exception,
+                new ExceptionContext(
+                    Module: "Workflow",
+                    WorkflowId: workflowDefinition.Id.ToString(),
+                    ExecutionId: workflowRun.Id.ToString()),
+                CancellationToken.None);
+            failureReferenceId = report.ErrorReferenceId;
+        }
+
+        workflowRun.SetErrorReference(failureReferenceId);
+
+        var status = workflowRun.Status.ToString();
+        try
+        {
+            status = await PersistOutcomeAsync(workflowRun, CancellationToken.None);
+        }
+        catch (Exception persistException)
+        {
+            _logger.LogError(persistException,
+                "Failed to persist failed workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
+                workflowRun.Id, workflowDefinition.Id);
+        }
+
+        await NotifyRunStatusAsync(
+            workflowRun.Id, workflowDefinition.Id, status, DateTimeOffset.UtcNow, exception.Message, CancellationToken.None, failureReferenceId);
     }
 
     /// <summary>Runs <paramref name="nodesToRun"/> in order against <paramref name="workflowRun"/>, shared by both a

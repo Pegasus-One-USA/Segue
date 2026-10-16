@@ -151,19 +151,20 @@ public sealed class ActiveWorkflowRuns : IActiveWorkflowRuns
 
 /// <summary>
 /// Lease timings. A process renews its runs' leases every <see cref="HeartbeatInterval"/> for
-/// <see cref="Duration"/>, so a live run's lease never lapses unless its process misses three heartbeats in a row
-/// (stopped, crashed, or hung). The process itself stops acting for a run <see cref="FenceMargin"/> before its
-/// confirmed lease lapses, so it has stopped before another instance can close the run; the margin also absorbs that
-/// much clock difference between instances. A run from before leases existed counts as dead once it is older than
-/// <see cref="LegacyGrace"/>.
+/// <see cref="Duration"/>. The process itself stops acting for a run <see cref="FenceMargin"/> before its confirmed
+/// lease lapses, so it has stopped before another instance can close the run; the margin also absorbs that much clock
+/// difference between instances, and the time a node already past its last fence check takes to reach the next one.
+/// A live process keeps acting for a run until it has missed seven heartbeats in a row (3.5 minutes without a
+/// renewal: a stalled thread pool or database rides that out), and a crashed one's run is closed after five minutes.
+/// A run from before leases existed counts as dead once it is older than <see cref="LegacyGrace"/>.
 /// </summary>
 public static class WorkflowRunLease
 {
     public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
 
-    public static readonly TimeSpan Duration = TimeSpan.FromMinutes(2);
+    public static readonly TimeSpan Duration = TimeSpan.FromMinutes(5);
 
-    public static readonly TimeSpan FenceMargin = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan FenceMargin = TimeSpan.FromSeconds(90);
 
     public static readonly TimeSpan LegacyGrace = TimeSpan.FromMinutes(30);
 
