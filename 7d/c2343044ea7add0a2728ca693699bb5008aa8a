@@ -1,0 +1,26 @@
+src/FHIRBridge.Infrastructure/Tabular/TabularSqlGuard.cs
+  s_0121045dc9abeb::t_40a2a455d1583d 18-21
+src/FHIRBridge.Infrastructure/Tabular/TabularRowReader.cs
+  s_0121045dc9abeb::t_68d50717f369d2 204-208,210
+  s_0121045dc9abeb::t_aca13c80dd8af0 279-281
+  s_0121045dc9abeb::t_869a6db418fb70 135-137
+  s_0121045dc9abeb::t_69a958f2208437 445-486
+  s_0121045dc9abeb::t_a32095165f25ea 107-109
+  s_0121045dc9abeb::t_95f675cdb86fdb 223-226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7dc2343044ea7add0a2728ca693699bb5008aa8a",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
