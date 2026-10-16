@@ -118,12 +118,17 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
 
         var writeVendor = options.TestAsVendor ?? connection.SourceSystemType;
 
+        // What the run writes as: the tested vendor on a test run, so the rehearsal accepts only a connection that
+        // vendor would accept. The token request below stays the connection's own (see there).
+        var writeProfile = EhrWriteCapabilities.VendorProfile(writeVendor)
+            ?? throw new InvalidOperationException($"{writeVendor} does not accept EHR write-back.");
+
         // A null application type is a legacy Backend row.
         var applicationType = connection.ApplicationType ?? FHIRBridge.SharedKernel.Enums.ApplicationType.Backend;
-        if (!vendor.Capabilities.Any(capability => capability.AllowedApplicationTypes.Contains(applicationType)))
+        if (!writeProfile.Capabilities.Any(capability => capability.AllowedApplicationTypes.Contains(applicationType)))
         {
             throw new InvalidOperationException(
-                $"The EHR connection '{connection.Name}' uses the {applicationType} audience; {connection.SourceSystemType} write-back needs a Backend System connection.");
+                $"The EHR connection '{connection.Name}' uses the {applicationType} audience; {writeVendor} write-back needs a Backend System connection.");
         }
 
         var source = await _sourceConnectionResolver!.ResolveAsync(targetId, null, null, cancellationToken)
@@ -131,7 +136,10 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
 
         // The write connection is never searched the way a source is, so none of the source-side search settings
         // apply. A vendor that ignores requested scopes (Epic) gets no scope at all; the granted scope is checked
-        // instead.
+        // instead. The token comes from the connection's own authorization server, so its profile decides what is
+        // asked for: on a test run that is the test server, which grants no vendor scope (athena's
+        // athena/service/Athenanet.MDP.* included), and asking it for one could only fail the rehearsal for a reason
+        // the vendor itself would not have.
         source = source with
         {
             SearchParameters = null,
