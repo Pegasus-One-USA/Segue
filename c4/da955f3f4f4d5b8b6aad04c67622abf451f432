@@ -1,0 +1,22 @@
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_b1e7fcc7fc9bab::t_72f27f18de7fbb 23-31,271,314-431,813,817-818
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_b1e7fcc7fc9bab::t_72f27f18de7fbb 115-118
+  s_b1e7fcc7fc9bab::t_71ee97a8efb7ec 152-157,162,174-196,286-288,323
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c4da955f3f4f4d5b8b6aad04c67622abf451f432",
+  "prompts": {},
+  "sessions": {
+    "s_b1e7fcc7fc9bab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339ebaf9-b31a-49e1-b147-e7b3f8c890e8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "devamitsable <amitsable11@gmail.com>"
+    }
+  }
+}

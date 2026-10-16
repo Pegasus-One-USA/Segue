@@ -1,0 +1,32 @@
+Documents/Client-Credentials-Workflow-Trigger.html
+  s_2858ad6a6dacd2::t_5b254937b7a239 556
+  s_2858ad6a6dacd2::t_3a0291c606880a 230,457,459-462,466-472,475-484,490-491,493,495-501,503-517,520
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_2858ad6a6dacd2::t_b9a8ff62cb70f5 343
+tests/FHIRBridge.UnitTests/Infrastructure/ResourceTypeCriteriaBackfillTests.cs
+  s_2858ad6a6dacd2::t_3ef91a3c39851c 1-180
+src/FHIRBridge.Application/Abstractions/Persistence/IResourceTypeCriteriaBackfill.cs
+  s_2858ad6a6dacd2::t_576bdf5b2109fd 1-11
+src/FHIRBridge.Infrastructure/Persistence/ResourceTypeCriteriaBackfill.cs
+  s_2858ad6a6dacd2::t_ccd6aadea3d02a 1-210
+src/Api/FHIRBridge.Api/Program.cs
+  s_2858ad6a6dacd2::t_b9a8ff62cb70f5 1027-1031
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_2858ad6a6dacd2::t_d32f020b1cb2a8 1757-1762
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d8dc4b56aab8a416ae856cb2ea255ef5f7ce2afe",
+  "prompts": {},
+  "sessions": {
+    "s_2858ad6a6dacd2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10f975bc-e65d-460b-891b-694aafcfefd5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Faisal-PegasusOne <faisal.khan@pegasusone.com>"
+    }
+  }
+}
