@@ -143,6 +143,16 @@ public sealed class WorkflowRun
     /// <paramref name="bulkRequestId"/> is the vendor's own export-job id (see <see cref="BulkRequestId"/>); it is
     /// optional because a status URL a vendor shapes differently may not yield one, and a run that paused is still
     /// correctly paused either way — only the operator-facing lookup is unavailable.</summary>
+    /// <summary>A paused run executes again (the bulk export it waited on is ready): it is Running once more, so the
+    /// executing process holds and renews its lease and other instances see it as a live run.</summary>
+    public void ResumeAfterBulkExport()
+    {
+        if (Status == WorkflowRunStatus.AwaitingBulkExport)
+        {
+            Status = WorkflowRunStatus.Running;
+        }
+    }
+
     public void AwaitBulkExport(string? bulkRequestId = null)
     {
         Status = WorkflowRunStatus.AwaitingBulkExport;
