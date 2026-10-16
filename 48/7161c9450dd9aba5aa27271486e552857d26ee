@@ -1,0 +1,491 @@
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_0121045dc9abeb::t_0749135f23928e 83-211,651-654,689-696,708-711,723-726,5956-5962,5977-5984,6023-6031,6834-6838
+Demo_TestApp/frontend/src/app/demo-types/external-trigger-console/external-trigger-console.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-164
+src/FHIRBridge.Application/Abstractions/Governance/DeIdentificationStrategyNames.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-29
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261001054010_AddEhrEndpointOverrides.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-95
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorCriteriaPrecedenceTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-277
+tests/FHIRBridge.UnitTests/Sources/SourceConnectionSearchParameterCompositionTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-61
+Demo_TestApp/frontend/src/app/demo-types/provider-standalone/launch-standalone-provider.html
+  s_0121045dc9abeb::t_83a6f90301346c 9
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/EhrEndpointSourceOverride.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-54
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 100-137
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_0121045dc9abeb::t_83a6f90301346c 61-62,270-271
+src/FHIRBridge.Application/Services/IApiClientService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-24
+portal/src/app/pages/workflow-list/workflow-list.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 185-195
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/SearchCriteriaPostFilter.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-186
+src/FHIRBridge.Application/Services/DeIdentificationProfileService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 15,19-20,24,74-103
+portal/src/app/app.config.ts
+  s_0121045dc9abeb::t_83a6f90301346c 32-33,140
+src/FHIRBridge.Infrastructure/Sources/EhrEndpointOverrideProvider.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-30
+Demo_TestApp/frontend/src/app/core/searchable-select/searchable-select.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-144
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260930060231_AddApiClientReturnUrls.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6551
+tests/FHIRBridge.Api.IntegrationTests/ApiFixture.cs
+  s_0121045dc9abeb::t_83a6f90301346c 5,65-81
+tests/FHIRBridge.UnitTests/ApiClients/ApiClientServiceTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-167
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/Payloads/DeIdentificationSnapshots.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-60
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 208-216
+Documents/Workflow-Trigger-Integration-PHP-V3.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-551
+Demo_TestApp/backend/QueryConsole-ReadOnlyLogin.sql
+  s_0121045dc9abeb::t_83a6f90301346c 1-19
+portal/src/app/components/canvas-v2/canvas.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 234-237,254,305-306,317-357,470-474
+src/FHIRBridge.Domain/Entities/ApiClient.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-81
+portal/src/app/pages/workflow-list/workflow-list.component.spec.ts
+  s_0121045dc9abeb::t_93a381b28069c5 95-115
+portal/src/app/api-clients/dialogs/api-client-secret-dialog/api-client-secret-dialog.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-120
+portal/src/app/api-clients/dialogs/api-client-edit-dialog/api-client-edit-dialog.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-103
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/ComplianceNodeExecutors.cs
+  s_0121045dc9abeb::t_83a6f90301346c 215-227,238,240,243,251,260-270,273
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.TransformChainOrder.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-292
+src/FHIRBridge.Application/DTOs/SourceDiscoveryProbeDtos.cs
+  s_0121045dc9abeb::t_83a6f90301346c 20-23,28-35
+src/FHIRBridge.Application/DTOs/EhrEndpointDto.cs
+  s_0121045dc9abeb::t_83a6f90301346c 17-22
+src/FHIRBridge.Infrastructure/Persistence/EfTransformationRuleRepository.cs
+  s_0121045dc9abeb::t_83a6f90301346c 233-258
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 854-856,878-890,1247-1249,1251-1252,1258,1265,1278,1281-1320,1335
+src/Api/FHIRBridge.Api/Controllers/V1/ApiClientsController.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-106
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Connectors/FhirSourceConnectorBase.cs
+  s_0121045dc9abeb::t_83a6f90301346c 595-604
+portal/src/app/api-clients/pages/api-client-list/api-client-list.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-58
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 159,165-174,668-669,2413-2416,2759-2781,3264-3329,4403-4406,4409-4425,4438,4440-4447,4462-4463,4471,4539-4544,4553,4573-4576,4578-4585
+src/FHIRBridge.Infrastructure/Persistence/Configurations/ApiClientConfiguration.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-53
+Demo_TestApp/frontend/src/app/demo-types/external-trigger-console/external-trigger-console.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-152
+src/FHIRBridge.Domain/Entities/EhrEndpoint.cs
+  s_0121045dc9abeb::t_83a6f90301346c 26-31,41-45,55-60,69-73,89-108
+Demo_TestApp/frontend/src/app/demo-types/admin-settings/admin-settings.html
+  s_0121045dc9abeb::t_83a6f90301346c 8,10
+portal/src/app/pages/workflow-list/execute-v2-dialog/execute-v2-dialog.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-68
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_0121045dc9abeb::t_0749135f23928e 81-207,643-646,681-688,700-703,714-717,5917-5923,5938-5945,5984-5992,6795-6799
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261001071420_AddWorkflowRunSourceOverrides.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6588
+Demo_TestApp/frontend/src/app/demo-types/query-console/query-console.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-97
+tests/FHIRBridge.UnitTests/Infrastructure/WorkflowGraphLaunchTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 267-271
+tests/FHIRBridge.UnitTests/Sources/SourceRetrievalRunOverridesTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-45
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261001044702_AddEhrEndpointOverrides.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6580
+src/FHIRBridge.Infrastructure/Persistence/EfDeIdentificationProfileRepository.cs
+  s_0121045dc9abeb::t_83a6f90301346c 27-102
+Demo_TestApp/frontend/src/app/demo-types/query-console/query-console.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-99
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260930060231_AddApiClientReturnUrls.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-55
+tests/FHIRBridge.UnitTests/Governance/WorkflowDeIdentificationRuleDeletionTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-207
+src/FHIRBridge.Infrastructure/Persistence/InMemoryApiClientRepository.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-64
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/TransformNodeExecutors.cs
+  s_0121045dc9abeb::t_83a6f90301346c 416,427-428,431,586-588,713-739,783,787-793,848-849,887-889,939-941,1101-1102,1113-1122,1207-1216,1242-1244,1267,1269-1273,1276-1279,1296,1300,1306-1317,1398-1424,1437-1439,1465-1515,1864-2183
+src/FHIRBridge.Infrastructure/Persistence/EfApiClientRepository.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-65
+portal/src/app/api-clients/pages/api-client-list/api-client-list.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-157
+tests/FHIRBridge.Runtime.UnitTests/Workflows/EhrEndpointSourceOverrideTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-86
+portal/src/app/ehr-endpoints/pages/ehr-endpoint-list/ehr-endpoint-list.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 166-176
+portal/src/app/api-clients/dialogs/api-client-return-url-dialog/api-client-return-url-dialog.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-103
+Demo_TestApp/backend/Program.cs
+  s_0121045dc9abeb::t_83a6f90301346c 847-849,865-874
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_0121045dc9abeb::t_f0c366a12f2d81 383,572-573,590-592,598
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/IEhrEndpointOverrideProvider.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-24
+portal/src/app/ehr-endpoints/models/ehr-endpoint.model.ts
+  s_0121045dc9abeb::t_83a6f90301346c 34-38,82-86
+portal/src/app/api-clients/dialogs/api-client-secret-dialog/api-client-secret-dialog.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-63
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 35-38,115-116,673-675,748-750,766,783,786-787,790,811-812,817,827-833,835,870,879,881-882,890,893-896,899,908-909,972-1032
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_0121045dc9abeb::t_fb4fbb2ffa5525 492
+  s_0121045dc9abeb::t_c1f62daf66a133 2,273-277,283-285,293-316,346-352,354,453-465,467,486-490,493-495,499-502,757-761,767-791,840,871-877,914,939-940,993-996,1063-1064,1095-1102,1106-1150,1152,1154,1157-1206,1211,1213-1219,1232,1237,1249-1285,1293-1297,1299,1301-1302,1304,1308-1313,1323,1353-1354,1360-1363,1521,1547-1607
+Demo_TestApp/frontend/src/app/demo-types/new-11/resource-11-browser.html
+  s_0121045dc9abeb::t_83a6f90301346c 9
+portal/src/app/components/node-library-v2/generic-fhir-source-form/generic-fhir-source-form.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 186-188
+portal/src/app/pages/workflow-list/execute-v2-dialog/execute-v2-dialog.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-232
+portal/src/app/components/node-library-v2/destination-wizard/destination-wizard.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 725,733-734,768-773,776-793
+tests/FHIRBridge.Api.IntegrationTests/Security/SourceDiscoveryProbeAuthorizationTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 68-69
+portal/src/app/services/node-delete-plan-v2.util.spec.ts
+  s_0121045dc9abeb::t_83a6f90301346c 108-110,112-163,174-175,177-179,182
+portal/src/app/api-clients/dialogs/api-client-return-url-dialog/api-client-return-url-dialog.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-103
+portal/src/app/api-clients/pages/api-client-return-url-list/api-client-return-url-list.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-84
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260929181821_AddApiClients.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-53
+portal/src/app/components/node-library-v2/node-library-dialog.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 345
+src/Runtime/FHIRBridge.Runtime.Application/DTOs/FhirSourceConfiguration.cs
+  s_0121045dc9abeb::t_83a6f90301346c 83-95
+tests/FHIRBridge.Runtime.UnitTests/Connectors/PatientScopedSearchTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 183-233
+Demo_TestApp/frontend/src/app/app.ts
+  s_0121045dc9abeb::t_83a6f90301346c 9-11,44-57,117-119,147-149,153-161
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 688-697
+portal/src/app/services/node-delete-plan-v2.util.ts
+  s_0121045dc9abeb::t_83a6f90301346c 26-27,73-74,76-84,264,276-278,280-292,316-330,356-357
+portal/src/app/app.routes.ts
+  s_0121045dc9abeb::t_83a6f90301346c 36-46
+src/FHIRBridge.Application/DTOs/ClientCredentialsTokenResult.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-11
+src/FHIRBridge.Application/DTOs/CreateEhrEndpointRequest.cs
+  s_0121045dc9abeb::t_83a6f90301346c 12-17
+portal/src/app/external-run/pages/external-run/external-run.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-49
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/SmartBackendServicesTokenProvider.cs
+  s_0121045dc9abeb::t_83a6f90301346c 128-129
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261001044702_AddEhrEndpointOverrides.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-95
+Demo_TestApp/frontend/src/app/demo-types/external-trigger-console/external-trigger-console.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-326
+src/FHIRBridge.Infrastructure/Persistence/InMemoryNoDatabaseRepositories.cs
+  s_0121045dc9abeb::t_83a6f90301346c 28-37
+src/FHIRBridge.Application/Services/EhrEndpointService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 101-106,125-130,148-149,168-175
+src/FHIRBridge.Application/Services/BulkExportPollService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 25,37-38,49,179,201-367
+src/FHIRBridge.Domain/Entities/ApiClientReturnUrl.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-56
+portal/src/app/api-clients/dialogs/api-client-edit-dialog/api-client-edit-dialog.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-87
+src/FHIRBridge.Infrastructure/Sources/SourceConnectionRuntimeResolver.cs
+  s_0121045dc9abeb::t_83a6f90301346c 75,82-101,154-161,276-287,402-425,436
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_0121045dc9abeb::t_83a6f90301346c 90-92
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260929181900_AddApiClients.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6480
+src/FHIRBridge.Application/Mappings/ApiClientMapper.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-18
+Demo_TestApp/backend/ClientCredentialsDemoEndpoints.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-118
+Demo_TestApp/frontend/src/app/demo-types/client-credentials-console/client-credentials-console.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-81
+portal/src/app/api-clients/services/api-api-client.service.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-72
+portal/src/app/services/epic-discovery.service.ts
+  s_0121045dc9abeb::t_83a6f90301346c 19-21,38,108
+portal/src/app/api-clients/dialogs/api-client-edit-dialog/api-client-edit-dialog.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-56
+src/FHIRBridge.Application/Services/IClientCredentialsTokenService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-12
+src/Api/FHIRBridge.Api/Workflows/ExternalRunOverridesToken.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-69
+tests/FHIRBridge.UnitTests/ApiClients/ClientCredentialsAccessTokenIssuerTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-111
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260930085110_AddApiClientReturnUrlMatchMode.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-29
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/WorkflowExecutionContext.cs
+  s_0121045dc9abeb::t_83a6f90301346c 14-16,27-28,82-103
+src/FHIRBridge.Application/Mappings/EhrEndpointMapper.cs
+  s_0121045dc9abeb::t_83a6f90301346c 21-26
+src/FHIRBridge.Application/Services/PassThroughDeIdentificationService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 13-21
+tests/FHIRBridge.Api.IntegrationTests/Tests/ExternalWorkflowTriggerTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-157
+src/FHIRBridge.Application/Abstractions/Security/IClientCredentialsAccessTokenIssuer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-14
+tests/FHIRBridge.UnitTests/Pipeline/BulkExportPollServiceTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 399-477
+tests/FHIRBridge.UnitTests/Sources/SourceEndpointProbeSearchParameterTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-39
+portal/src/app/core/api-endpoints.ts
+  s_0121045dc9abeb::t_83a6f90301346c 270-282,545
+tests/FHIRBridge.UnitTests/Workflows/TransformBeforeDeIdentificationTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-1322
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261001054010_AddEhrEndpointOverrides.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6619
+tests/FHIRBridge.UnitTests/ApiClients/ExternalWorkflowTriggerServiceTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-200
+portal/src/app/api-clients/pages/api-client-return-url-list/api-client-return-url-list.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-104
+src/FHIRBridge.Application/Abstractions/Governance/DeIdentificationDeferral.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-72
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261001071446_AddWorkflowRunSourceOverrides.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6627
+portal/src/app/services/workflow-graph-mapper-v2.service.ts
+  s_0121045dc9abeb::t_83a6f90301346c 288-292,294-296
+src/FHIRBridge.Infrastructure/Persistence/Configurations/EhrEndpointConfiguration.cs
+  s_0121045dc9abeb::t_83a6f90301346c 21-25
+src/FHIRBridge.Application/Services/JsonMappingEngine.cs
+  s_0121045dc9abeb::t_83a6f90301346c 28-29,92-94,97,224-234,343-344,654-696
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260930060136_AddApiClientReturnUrls.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6590
+Documents/FHIRBridge-Architecture-Code-Review-Guide.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-939
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorNoPatientsTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-95
+src/FHIRBridge.Infrastructure/Governance/SafeHarborDeIdentificationService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 7,97-210,309,418-419,455-496
+src/Api/FHIRBridge.Api/Controllers/V1/ClientCredentialsTokenController.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-104
+src/FHIRBridge.Domain/ValueObjects/SourceRetrievalConfiguration.cs
+  s_0121045dc9abeb::t_83a6f90301346c 145-160
+src/FHIRBridge.Application/DTOs/ExternalWorkflowTriggerDtos.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-7
+src/Runtime/FHIRBridge.Runtime.Domain/Workflows/WorkflowRun.cs
+  s_0121045dc9abeb::t_83a6f90301346c 15-19,35-38,87-99
+src/FHIRBridge.Infrastructure/Persistence/ResourceTypeCriteriaBackfill.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-210
+src/FHIRBridge.Application/Abstractions/Governance/DeIdentificationSourcePath.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-51
+src/Api/FHIRBridge.Api/Workflows/ExternalRunTicketService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-126
+portal/src/app/components/canvas-v2/canvas.delete-transformation-rules.spec.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-106
+tests/FHIRBridge.Runtime.UnitTests/Workflows/MappingNodeExecutorTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 36
+Documents/Athena-Patient-Standalone-Flow.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-1155
+Demo_TestApp/frontend/src/app/demo-types/client-credentials-console/client-credentials-console.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-139
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 229-235
+src/FHIRBridge.Application/Abstractions/Persistence/IDeIdentificationProfileRepository.cs
+  s_0121045dc9abeb::t_83a6f90301346c 12-32,34-38
+portal/src/app/services/workflow-api.service.ts
+  s_0121045dc9abeb::t_83a6f90301346c 487-502,603-640
+Demo_TestApp/frontend/src/app/demo-types/client-credentials-console/client-credentials-console.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-106
+tests/FHIRBridge.Api.IntegrationTests/Tests/ClientCredentialsTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-160
+portal/src/app/ehr-endpoints/dialogs/ehr-endpoint-dialog/ehr-endpoint-dialog.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 101-106,109-119
+Demo_TestApp/backend/QueryConsoleEndpoints.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-271
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260930060136_AddApiClientReturnUrls.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-55
+portal/src/app/components/canvas-v2/canvas.delete-deidentification-rules.spec.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-91
+src/FHIRBridge.Application/Abstractions/Sources/ISourceEndpointProbeService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 16-18,20
+src/FHIRBridge.Infrastructure/Persistence/InMemoryTransformationRuleRepository.cs
+  s_0121045dc9abeb::t_83a6f90301346c 143-152
+tests/FHIRBridge.UnitTests/Infrastructure/ResourceTypeCriteriaBackfillTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-180
+src/FHIRBridge.Infrastructure/Sources/SourceEndpointProbeService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 2,31,37,43-104
+src/FHIRBridge.Application/Services/IDeIdentificationProfileService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 17-31
+src/FHIRBridge.Application/Services/ClientCredentialsTokenService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-75
+Demo_TestApp/backend/ExternalTriggerDemoEndpoints.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-196
+portal/proxy.conf.json
+  s_0121045dc9abeb::t_83a6f90301346c 1-8
+portal/src/app/execution-history/models/execution-history.model.ts
+  s_0121045dc9abeb::t_83a6f90301346c 29-33
+src/FHIRBridge.Application/Services/ExternalWorkflowTriggerService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-201
+portal/src/app/api-clients/models/api-client.model.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-57
+Demo_TestApp/frontend/src/app/demo-types/demo-type-2/launch-provider-in-app.html
+  s_0121045dc9abeb::t_83a6f90301346c 9
+Demo_TestApp/frontend/src/app/demo-types/backend-system/backend-system.html
+  s_0121045dc9abeb::t_83a6f90301346c 9
+src/FHIRBridge.Application/Abstractions/Persistence/IResourceTypeCriteriaBackfill.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-11
+portal/src/app/api-clients/pages/api-client-list/api-client-list.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-220
+Demo_TestApp/frontend/src/app/demo-types/query-console/query-console.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-187
+portal/src/app/execution-history/pages/execution-history-list/execution-history-list.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 185
+src/FHIRBridge.Application/DTOs/MappingTestResultDto.cs
+  s_0121045dc9abeb::t_83a6f90301346c 22-27
+src/FHIRBridge.Infrastructure/Persistence/Configurations/WorkflowPersistenceConfigurations.cs
+  s_0121045dc9abeb::t_83a6f90301346c 158-161
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/RunSourceOverrides.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-13
+tests/FHIRBridge.UnitTests/ApiClients/ClientCredentialsTokenServiceTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-99
+tests/FHIRBridge.UnitTests/Workflows/ExternalRunOverridesTokenTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-55
+portal/angular.json
+  s_0121045dc9abeb::t_83a6f90301346c 173-174
+src/FHIRBridge.Application/DTOs/DeIdentificationProfileDtos.cs
+  s_0121045dc9abeb::t_83a6f90301346c 13-16
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260929181900_AddApiClients.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-53
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorDestinationRestrictionTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 298-403
+tests/FHIRBridge.UnitTests/ApiClients/ExternalRunTicketServiceTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-63
+portal/src/app/external-run/pages/external-run/external-run.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-79
+portal/src/app/pages/workflow-list/integration-details.util.ts
+  s_0121045dc9abeb::t_83a6f90301346c 6-8,10-14,16-17,19-21,61,65,88-107,109-110,112,132-133,135,137-139,141-160,164-188,284-331,337-363,365-367,371-378,381-396,400-401,411-413,415-418,569,571-576,580-582,586-591,593-594,598-603,607-612,616-619,622,624-628,632-633,635-638,642-647,658-663,665-671
+tests/FHIRBridge.Api.IntegrationTests/Tests/WorkflowCopyCriteriaTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-60
+portal/src/app/pages/workflow-list/execute-v2-dialog/execute-v2-dialog.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-125
+portal/src/app/system-settings/pages/system-setting-list/system-setting-list.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 137-148
+src/Runtime/FHIRBridge.Runtime.Application/Abstractions/Sources/ISourceConnectionRuntimeResolver.cs
+  s_0121045dc9abeb::t_83a6f90301346c 20-30
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorBulkExportCriteriaTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-117
+portal/src/app/api-clients/dialogs/api-client-create-dialog/api-client-create-dialog.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-46
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260929181821_AddApiClients.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6518
+tests/FHIRBridge.UnitTests/Governance/WorkflowSaveRuleCleanupTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-317
+src/Api/FHIRBridge.Api/Workflows/WorkflowApiModels.cs
+  s_0121045dc9abeb::t_83a6f90301346c 71-92
+src/FHIRBridge.Application/Abstractions/Persistence/IApiClientRepository.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-20
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_0121045dc9abeb::t_83a6f90301346c 3,28,45,60,96-99,108-122,1256-1274,1282-1283,1303-1304
+  s_0121045dc9abeb::t_89f1e8e83145cb 44
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20260930085110_AddApiClientReturnUrlMatchMode.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6592
+Documents/Code-Review-External-Workflow-Trigger.md
+  s_0121045dc9abeb::t_83a6f90301346c 1-120
+portal/src/app/pages/workflow-list/workflow-list.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 35,74,595-602,620-621
+  s_0121045dc9abeb::t_b69e862341cd87 510-515,520,523,535
+  s_0121045dc9abeb::t_55bfab3a86c73b 603-619
+portal/src/app/api-clients/dialogs/api-client-return-url-dialog/api-client-return-url-dialog.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-78
+portal/src/app/components/canvas-v2/canvas.paste-auto-added.spec.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-40
+src/FHIRBridge.Application/Services/Workflows/WorkflowNodeResourceTypes.cs
+  s_0121045dc9abeb::t_abf275f1a23c1a 57-59
+src/FHIRBridge.Application/Services/IExternalWorkflowTriggerService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-28
+src/Api/FHIRBridge.Api/Controllers/V1/SourceDiscoveryController.cs
+  s_0121045dc9abeb::t_83a6f90301346c 73,77-79,87-88
+portal/src/app/api-clients/dialogs/api-client-create-dialog/api-client-create-dialog.component.scss
+  s_0121045dc9abeb::t_83a6f90301346c 1-90
+portal/src/app/pages/workflow-list/integration-details.util.spec.ts
+  s_0121045dc9abeb::t_d3155a5f1300c8 5-8,12,16,42-50,52,54,57-62,65,68-70,73-74,76-77,80-81,83-87,90-97,99-103,106-115,118-121,125-127,129-130,134-136,138-139,143-145,147-148,152-156,158-159,162-164,166,170-172,174-175,179-182,185-189,191,193-195,197-200,206-207,211-212,214-221,225,227-228,231-234,236-238,242-246,248-249,252-253,255,257,259-262,264-269,272-275,277,280-282,284-288,290-292,295,297,299-300,303-305,307-308,312,315,366-374,386
+portal/src/app/components/node-library-v2/node-library-dialog.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 61-63,393-397,954-961,1111
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260930085410_AddApiClientReturnUrlMatchMode.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-29
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_0121045dc9abeb::t_83a6f90301346c 235-236,238,338,344,370
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261001071420_AddWorkflowRunSourceOverrides.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-40
+src/Api/FHIRBridge.Api/Program.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1,173,277,304-311,439-445,481-490,1024-1028
+src/FHIRBridge.Application/Services/IWorkflowConfigurationCleanupService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 8-9,28-29,34,38-40,44-47,51-53
+src/FHIRBridge.Application/Abstractions/Persistence/ITransformationRuleRepository.cs
+  s_0121045dc9abeb::t_83a6f90301346c 133-140
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SearchCriteriaPostFilterTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-109
+Demo_TestApp/frontend/src/app/app.html
+  s_0121045dc9abeb::t_83a6f90301346c 5-12,45-46,70-74
+src/FHIRBridge.Application/Services/ApiClientService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-197
+portal/src/app/api-clients/dialogs/api-client-create-dialog/api-client-create-dialog.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-55
+portal/src/app/settings/services/settings-page-dialog.service.ts
+  s_0121045dc9abeb::t_83a6f90301346c 9,61-63
+src/Api/FHIRBridge.Api/Workflows/WorkflowRunHistoryDto.cs
+  s_0121045dc9abeb::t_83a6f90301346c 33-40
+portal/src/app/services/workflow-graph-mapper-v2.auto-added.spec.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-46
+portal/src/app/external-run/pages/external-run/external-run.component.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-322
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261001071446_AddWorkflowRunSourceOverrides.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-40
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/OAuth2ClientCredentialsTokenProvider.cs
+  s_0121045dc9abeb::t_83a6f90301346c 158-162
+Documents/Client-Credentials-Workflow-Trigger.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-594
+Demo_TestApp/docs/athena-patient-standalone-flow.md
+  s_0121045dc9abeb::t_83a6f90301346c 1-281
+src/Api/FHIRBridge.Api/Workflows/WorkflowEndpoints.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1,34,42-45,555,1347,1366,1594-1605,1737-1738,1742-1754,1762-1772,1774-1775,1777,1791-1810,1816-1817,1829-1894,1942-1948,1955-1956,1986,2000,2015-2023,2026-2034,2110-2894,3364-3367,3560-3563,4420-4508,4953-5157
+src/Api/FHIRBridge.Api/Security/ClientCredentialsAccessTokenIssuer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-102
+src/FHIRBridge.Application/DTOs/ApiClientDto.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-24
+src/FHIRBridge.Application/Services/WorkflowConfigurationCleanupService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 6,9-10,20-21,26-28,33-34,40,48-61,72,88-177
+portal/src/app/api-clients/pages/api-client-return-url-list/api-client-return-url-list.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-78
+portal/src/app/api-clients/services/i-api-client.service.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-20
+Documents/FHIRBridge-Code-Architecture-Overview.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-796
+tests/FHIRBridge.UnitTests/Configuration/WorkflowConfigurationCleanupServiceTests.cs
+  s_0121045dc9abeb::t_83a6f90301346c 31,46,66,87,102,114,121-124,244-249
+src/FHIRBridge.Application/Abstractions/Governance/IDeIdentificationService.cs
+  s_0121045dc9abeb::t_83a6f90301346c 8-26,43-58
+portal/src/app/api-clients/dialogs/api-client-secret-dialog/api-client-secret-dialog.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 1-68
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20260930085410_AddApiClientReturnUrlMatchMode.Designer.cs
+  s_0121045dc9abeb::t_83a6f90301346c 1-6553
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Auth/MeditechGreenfieldTokenProvider.cs
+  s_0121045dc9abeb::t_83a6f90301346c 46-49
+src/BuildingBlocks/FHIRBridge.Observability/Logging/LogEvents.cs
+  s_0121045dc9abeb::t_83a6f90301346c 79
+portal/src/app/execution-history/pages/execution-history-detail/execution-history-detail.component.html
+  s_0121045dc9abeb::t_83a6f90301346c 55-77
+.claude/skills/runsegue/scripts/runsegue.ps1
+  s_0121045dc9abeb::t_83a6f90301346c 245-246
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.chain-step-sync.spec.ts
+  s_0121045dc9abeb::t_83a6f90301346c 1-277
+Documents/Patient-Standalone-Integration-V2.html
+  s_0121045dc9abeb::t_36ca3334740897 1-1307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "487161c9450dd9aba5aa27271486e552857d26ee",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
