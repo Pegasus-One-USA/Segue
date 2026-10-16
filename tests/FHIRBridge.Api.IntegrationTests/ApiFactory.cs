@@ -85,7 +85,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ["Authentication:Google:ClientId"]          = "test-google-client-id",
                 // Disable rate limiting so the hermetic test suite (many requests from one client)
                 // isn't throttled; enforcement is validated in production config, not here.
-                ["RateLimiting:Enabled"]                    = "false"
+                ["RateLimiting:Enabled"]                    = "false",
+                // The CDS Hooks audience comes only from this setting (never the Host header); TestServer's
+                // requests go to http://localhost, so that is the base the suite's CDS tokens are signed for.
+                ["Cds:PublicBaseUrl"]                       = "http://localhost"
             });
         });
 
@@ -121,6 +124,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 services.Remove(d);
 
             services.AddSingleton<ILicenseService, ActiveTestLicenseService>();
+
+            // CDS Hooks: the JWKS and FHIR callback clients reach an in-process stub instead of the network. Only the
+            // primary handler is replaced, so the clients' own handler chain (e.g. no request logging on callbacks)
+            // is what the tests exercise.
+            services.AddHttpClient(FHIRBridge.Infrastructure.Cds.CdsJwksProvider.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => new CdsTestHttpEndpoints.Handler());
+            services.AddHttpClient<FHIRBridge.Application.Abstractions.Cds.ICdsFhirCallbackClient, FHIRBridge.Infrastructure.Cds.CdsFhirCallbackClient>()
+                .ConfigurePrimaryHttpMessageHandler(() => new CdsTestHttpEndpoints.Handler());
         });
     }
 }

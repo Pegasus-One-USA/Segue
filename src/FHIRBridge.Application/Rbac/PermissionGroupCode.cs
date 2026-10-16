@@ -192,4 +192,10 @@ public enum PermissionGroupCode
     // running a workflow that reads one. The rows are PHI, so it is not folded into a broader group.
     [PermissionGroup("30000000-0000-0000-0000-000000000042", PermissionCategoryCode.Pipelines, "CSV / SQL Table Sources")]
     TabularSources = 42,
+
+    // CDS Hooks services EHRs call for real-time decision support: the configured service instances, the trusted
+    // issuers whose signed calls are accepted, the Test screen and the call activity. Its own group because a
+    // CDS service shows advice inside a clinician's workflow, separate from configuring data pipelines.
+    [PermissionGroup("30000000-0000-0000-0000-000000000043", PermissionCategoryCode.Platform, "CDS Hooks")]
+    CdsHooks = 43,
 }

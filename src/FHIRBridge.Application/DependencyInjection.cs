@@ -87,6 +87,16 @@ public static class DependencyInjection
         services.AddScoped<IWorkflowGraphVersionMigrationService, WorkflowGraphVersionMigrationService>();
         services.AddScoped<IEhrEndpointService, EhrEndpointService>();
         services.AddScoped<IAllowedCorsOriginsService, AllowedCorsOriginsService>();
+
+        // CDS Hooks admin. Handler types (ICdsServiceHandler) are registered as singletons alongside the CDS
+        // runtime, and the registry is a singleton over them — a handler must therefore hold no scoped state.
+        services.AddSingleton<Abstractions.Cds.ICdsServiceHandlerRegistry, Services.Cds.CdsServiceHandlerRegistry>();
+        services.AddScoped<Abstractions.Cds.ICdsPublicBaseUrlResolver, Services.Cds.CdsPublicBaseUrlResolver>();
+        services.AddScoped<Services.Cds.ICdsServiceInstanceService, Services.Cds.CdsServiceInstanceService>();
+        services.AddScoped<Services.Cds.ICdsTrustedIssuerService, Services.Cds.CdsTrustedIssuerService>();
+        services.AddScoped<Services.Cds.ICdsCatalogService, Services.Cds.CdsCatalogService>();
+        services.AddScoped<Services.Cds.ICdsSetupSheetService, Services.Cds.CdsSetupSheetService>();
+        services.AddScoped<Services.Cds.ICdsCallbackTestService, Services.Cds.CdsCallbackTestService>();
         services.AddSingleton<IScopeGeneratorService, ScopeGeneratorService>();
         services.AddScoped<IUserAccessService, UserAccessService>();
         services.AddScoped<ILocalAuthService, LocalAuthService>();

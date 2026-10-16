@@ -1,0 +1,47 @@
+<div class="cds-notice">
+  <mat-icon>key</mat-icon>
+  <p>
+    Epic names the address of its keys in each token (the <code>jku</code>). Segue accepts the call only when that
+    address is exactly the JWKS URL above, and never fetches keys from any other address. Use the JWKS URL the health
+    system gives you.
+  </p>
+</div>
+
+<div class="cds-form-grid">
+  <div class="cds-field cds-field--full" [class.cds-field--error]="showError(expectedSubject())">
+    <label for="cds-issuer-sub">Client id (sub)</label>
+    <input id="cds-issuer-sub" class="cds-mono" [formControl]="expectedSubject()" autocomplete="off" maxlength="500" />
+    <p class="cds-field__help">
+      For Epic, the CDS client id the health system registered for Segue. When filled in, a token with any other
+      <code>sub</code> is refused. Leave blank to skip this check.
+    </p>
+  </div>
+
+  <div class="cds-field cds-field--full" [class.cds-field--error]="showError(fhirBaseUrl())">
+    <label for="cds-issuer-fhir">EHR FHIR server</label>
+    <input
+      id="cds-issuer-fhir"
+      class="cds-mono"
+      [formControl]="fhirBaseUrl()"
+      autocomplete="off"
+      maxlength="1000"
+      [placeholder]="issuer() || 'https://ehr.example.org/api/FHIR/R4'"
+    />
+    @if (showError(fhirBaseUrl(), 'fhirBaseUrl')) {
+      <p class="cds-field__error">Enter a full web address starting with https:// and without ? or #.</p>
+    } @else {
+      <p class="cds-field__help">
+        Where Segue may read data the EHR left out. Leave blank to use the issuer address (for Epic the two are the
+        same). A call whose FHIR server is different is never fetched from.
+      </p>
+    }
+  </div>
+
+  <div class="cds-field cds-field--full">
+    <label class="cds-check" for="cds-issuer-callback">
+      <input id="cds-issuer-callback" type="checkbox" [formControl]="allowCallback()" />
+      Let Segue fetch missing data from this EHR
+    </label>
+    <p class="cds-field__help">Uses only the short-lived access the EHR sends with each call. Nothing fetched is stored.</p>
+  </div>
+</div>

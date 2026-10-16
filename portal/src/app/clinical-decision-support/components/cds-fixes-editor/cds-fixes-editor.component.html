@@ -1,0 +1,67 @@
+@if (descriptors().length === 0) {
+  <p class="hint">This check doesn't offer one-click fixes.</p>
+} @else {
+  <div class="cds-notice cds-notice--warning">
+    <mat-icon>edit_note</mat-icon>
+    <p>
+      A fix is a button on the card. When the clinician clicks it, the EHR changes their draft orders or problem list
+      (it adds or removes a draft, which they still sign themselves). Fixes stay off until you turn them on. Have your
+      clinical team check every code below.
+    </p>
+  </div>
+
+  <label class="cds-check" for="cds-fixes-enabled">
+    <input id="cds-fixes-enabled" type="checkbox" data-testid="cds-fixes-enabled" [formControl]="group().controls.enabled" />
+    Offer one-click fixes on this service's cards
+  </label>
+
+  @if (group().controls.enabled.value) {
+    @if (noTypeOn()) {
+      <p class="cds-field__error" role="alert" data-testid="cds-fixes-none-on">
+        Tick at least one fix below, or turn off "Offer one-click fixes".
+      </p>
+    }
+    <ul class="fix-list">
+      @for (type of group().controls.fixTypes.controls; track type.controls.key.value; let i = $index) {
+        @if (descriptorAt(i); as d) {
+          <li class="fix" [class.fix--on]="type.controls.enabled.value" data-testid="cds-fix-type">
+            <div class="fix__head">
+              <label class="cds-check" [for]="'cds-fix-' + d.key">
+                <input
+                  type="checkbox"
+                  [id]="'cds-fix-' + d.key"
+                  [formControl]="type.controls.enabled"
+                  (change)="onTypeToggled(type)"
+                />
+                <span class="fix__label">{{ d.label }}</span>
+              </label>
+              <span class="cds-badge" [class.cds-badge--info]="d.actionType === 'create'">{{ actionLabel(d) }}</span>
+            </div>
+            @if (d.help) {
+              <p class="cds-field__help">{{ d.help }}</p>
+            }
+            @if (type.controls.enabled.value && d.mappingFields.length > 0) {
+              <app-cds-fix-mapping-table
+                [descriptor]="d"
+                [mappings]="type.controls.mappings"
+                [showAllErrors]="showAllErrors()"
+                [needsMapping]="needsMapping(i, type)"
+              />
+            }
+          </li>
+        }
+      }
+    </ul>
+
+    <div class="cds-field recommended">
+      <label for="cds-fix-recommended">Pre-select a fix</label>
+      <select id="cds-fix-recommended" [formControl]="group().controls.recommendedFixType">
+        <option value="">None (the clinician picks)</option>
+        @for (d of enabledTypes(); track d.key) {
+          <option [value]="d.key">{{ d.label }}</option>
+        }
+      </select>
+      <p class="cds-field__help">The EHR ticks this fix in advance. The clinician can still untick it.</p>
+    </div>
+  }
+}

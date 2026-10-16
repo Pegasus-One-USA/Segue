@@ -1,0 +1,82 @@
+@if (mappings().length > 0) {
+  <div class="table-scroll">
+    <table class="mapping-table">
+      <thead>
+        <tr>
+          @for (f of fields(); track f.key) {
+            <th scope="col" [title]="f.help ?? ''">
+              {{ f.label }}@if (f.required && f.key !== 'trigger') { <span class="cds-req"> *</span> }
+            </th>
+          }
+          <th scope="col"><span class="visually-hidden">Remove</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of mappings().controls; track row; let i = $index) {
+          <tr [formGroup]="row" data-testid="cds-fix-mapping-row">
+            @for (f of fields(); track f.key) {
+              <td [class.cell--error]="showError(row, f.key)">
+                @switch (f.key) {
+                  @case ('trigger') {
+                    <select formControlName="trigger" [attr.aria-label]="f.label + ', row ' + (i + 1)">
+                      <option value="">Any</option>
+                      @for (t of descriptor().triggers ?? []; track t.value) {
+                        <option [value]="t.value">{{ t.label }}</option>
+                      }
+                    </select>
+                  }
+                  @case ('system') {
+                    @if (descriptor().codeSystems?.length) {
+                      <select formControlName="system" [attr.aria-label]="f.label + ', row ' + (i + 1)">
+                        @for (s of descriptor().codeSystems ?? []; track s.value) {
+                          <option [value]="s.value">{{ s.label }}</option>
+                        }
+                      </select>
+                    } @else {
+                      <input class="cds-mono" formControlName="system" maxlength="200" autocomplete="off" [attr.aria-label]="f.label + ', row ' + (i + 1)" />
+                    }
+                  }
+                  @case ('code') {
+                    <input class="cds-mono" formControlName="code" maxlength="100" autocomplete="off" [attr.aria-label]="f.label + ', row ' + (i + 1)" />
+                  }
+                  @case ('display') {
+                    <input formControlName="display" maxlength="200" autocomplete="off" [attr.aria-label]="f.label + ', row ' + (i + 1)" />
+                  }
+                }
+              </td>
+            }
+            <td class="col-remove">
+              @if (!mappings().disabled) {
+                <button type="button" class="btn-icon" matTooltip="Remove this code" [attr.aria-label]="'Remove code row ' + (i + 1)" (click)="remove(i)">
+                  <mat-icon>close</mat-icon>
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@let duplicate = duplicateTrigger();
+@if (needsMapping()) {
+  <p class="cds-field__error" role="alert">Add at least one code. This fix can't be offered without one.</p>
+} @else if (duplicate) {
+  <p class="cds-field__error" role="alert">
+    @if (duplicate === 'any') { Two rows are for any trigger. Keep one. } @else { Two rows are for {{ duplicate }}. Keep one. }
+  </p>
+}
+
+@for (f of fields(); track f.key) {
+  @if (f.help) {
+    <p class="cds-field__help"><strong>{{ f.label }}:</strong> {{ f.help }}</p>
+  }
+}
+
+@if (!mappings().disabled && mappings().length < max) {
+  <button type="button" class="btn btn-ghost btn-sm add" data-testid="cds-fix-mapping-add" (click)="add()">
+    <mat-icon>add</mat-icon>
+    Add a code
+  </button>
+}

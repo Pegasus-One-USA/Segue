@@ -212,6 +212,56 @@ public static class DependencyInjection
         // URL (OAuthController, PatientStandaloneLaunchController) — see its own remarks.
         services.AddScoped<IOAuthPublicOriginResolver, OAuthPublicOriginResolver>();
 
+        // CDS Hooks runtime. Handler TYPES are singletons collected by ICdsServiceHandlerRegistry (a duplicate key
+        // fails at first resolution); a new handler type is one more line here, never a switch. Registered
+        // unconditionally — the repositories they use come from the in-memory/DB branch below.
+        services.Configure<Cds.CdsOptions>(configuration.GetSection(Cds.CdsOptions.SectionName));
+        services.AddSingleton<Application.Abstractions.Cds.ICdsServiceHandler, Cds.Handlers.DrugAllergyCdsHandler>();
+        services.AddSingleton<Application.Abstractions.Cds.ICdsServiceHandler, Cds.Handlers.DrugInteractionCdsHandler>();
+        services.AddSingleton<Application.Abstractions.Cds.ICdsServiceHandler, Cds.Handlers.RenalDoseCdsHandler>();
+        services.AddSingleton<Application.Abstractions.Cds.ICdsServiceHandler, Cds.Handlers.CareGapCdsHandler>();
+        services.AddSingleton<Application.Abstractions.Cds.ICdsServiceHandler, Cds.Handlers.PriorAuthCdsHandler>();
+        // JWKS fetches get their own short timeout; HttpClient.Timeout also caps the default resilience retries.
+        // Its primary handler refuses private/loopback/link-local addresses (admin-entered URL → no internal SSRF).
+        services.AddHttpClient(Cds.CdsJwksProvider.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(sp => Cds.CdsJwksHttpHandler.Create(
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<Cds.CdsOptions>>()));
+        services.AddSingleton<Cds.CdsJwksProvider>();
+
+        // FHIR callback (missing prefetch from the EHR's fhirServer). Same SSRF guard as JWKS; the client enforces
+        // its own per-call deadline. HttpClient's default loggers are removed: request URLs carry patient ids.
+        // The client defaults above are removed too: ApiRequestLoggingHandler persists scheme://host/path, and a
+        // callback path such as Patient/<id> is a patient id; the standard resilience handler would resend the EHR's
+        // bearer token on retries and share one circuit breaker across every EHR (its BrokenCircuitException is not
+        // an HttpRequestException). The callback is a single attempt inside Cds:CallbackTimeoutMs.
+        var callbackClient = services.AddHttpClient<Application.Abstractions.Cds.ICdsFhirCallbackClient, Cds.CdsFhirCallbackClient>(
+                client => client.Timeout = TimeSpan.FromSeconds(30))
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+            {
+                var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<Cds.CdsOptions>>();
+                return Cds.CdsJwksHttpHandler.CreateGuarded(() => options.CurrentValue.AllowPrivateCallbackAddresses);
+            })
+            .RemoveAllLoggers()
+            .ConfigureAdditionalHttpMessageHandlers((handlers, _) =>
+            {
+                for (var i = handlers.Count - 1; i >= 0; i--)
+                {
+                    if (handlers[i] is ApiRequestLoggingHandler)
+                    {
+                        handlers.RemoveAt(i);
+                    }
+                }
+            });
+#pragma warning disable EXTEXP0001 // Evaluation-only, but the documented way to drop a ConfigureHttpClientDefaults resilience handler.
+        callbackClient.RemoveAllResilienceHandlers();
+#pragma warning restore EXTEXP0001
+        // jti replay protection: an atomic Redis SET NX when Redis is configured, otherwise a serialized in-process check.
+        services.AddSingleton<Cds.CdsReplayGuard>();
+        services.AddScoped<Cds.CdsJwtValidator>();
+        services.AddScoped<Cds.CdsEvaluator>();
+        services.AddScoped<Application.Abstractions.Cds.ICdsHooksService, Cds.CdsHooksService>();
+        services.AddScoped<Application.Abstractions.Cds.ICdsTestService, Cds.CdsTestService>();
+
         // Registered unconditionally — resolves against IUserAccessRepository, so it works identically whether
         // that's the in-memory or EF-backed implementation registered below.
         services.AddScoped<IUserDisplayNameResolver, UserDisplayNameResolver>();
@@ -232,6 +282,9 @@ public static class DependencyInjection
             services.AddSingleton<IExecutionResourceHistoryRecorder, InMemoryExecutionResourceHistoryRecorder>();
             services.AddSingleton<ISourceCapabilityRepository, InMemorySourceCapabilityRepository>();
             services.AddSingleton<IEhrEndpointRepository, InMemoryEhrEndpointRepository>();
+            services.AddSingleton<ICdsTrustedIssuerRepository, InMemoryCdsTrustedIssuerRepository>();
+            services.AddSingleton<ICdsServiceInstanceRepository, InMemoryCdsServiceInstanceRepository>();
+            services.AddSingleton<ICdsCallLogRepository, InMemoryCdsCallLogRepository>();
             services.AddSingleton<IAllowedCorsOriginRepository, InMemoryAllowedCorsOriginRepository>();
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<IEhrWriteLedgerRepository, InMemoryEhrWriteLedgerRepository>();
@@ -331,6 +384,9 @@ public static class DependencyInjection
             // is registering one more IEhrEndpointDirectorySeeder here; Program.cs runs every registered one.
             services.AddScoped<IEhrEndpointDirectorySeeder, EpicEndpointDirectorySeeder>();
             services.AddScoped<IEhrEndpointRepository, EfEhrEndpointRepository>();
+            services.AddScoped<ICdsTrustedIssuerRepository, EfCdsTrustedIssuerRepository>();
+            services.AddScoped<ICdsServiceInstanceRepository, EfCdsServiceInstanceRepository>();
+            services.AddScoped<ICdsCallLogRepository, EfCdsCallLogRepository>();
             services.AddScoped<IAllowedCorsOriginRepository, EfAllowedCorsOriginRepository>();
             services.AddScoped<IUserFhirContextBindingRepository, EfUserFhirContextBindingRepository>();
             services.AddScoped<ISystemSettingRepository, EfSystemSettingRepository>();
@@ -392,6 +448,8 @@ public static class DependencyInjection
                 sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "AuthorizationLog", x => x.OccurredOnUtc));
             services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.AlertHistoryEntry>(
                 sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "AlertHistoryEntry", x => x.FiredOnUtc));
+            services.AddScoped<IPurgeableStore>(sp => new Governance.GovernanceLogPurgeableStore<Domain.Entities.Governance.CdsCallLog>(
+                sp.GetRequiredService<FHIRBridgeDbContext>(), sp.GetRequiredService<IGovernanceLogArchiveWriter>(), "CdsCallLog", x => x.OccurredOnUtc));
 
             services.AddScoped<ISourceCapabilityRepository, EfSourceCapabilityRepository>();
 

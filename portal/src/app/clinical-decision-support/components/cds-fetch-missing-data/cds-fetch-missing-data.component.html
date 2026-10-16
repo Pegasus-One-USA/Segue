@@ -1,0 +1,9 @@
+<label class="cds-check" for="cds-fetch-missing">
+  <input id="cds-fetch-missing" type="checkbox" data-testid="cds-fetch-missing" [formControl]="control()" />
+  Fetch missing data from the EHR
+</label>
+<p class="cds-field__help">
+  Epic doesn't always send the data below. When it is missing, Segue reads it from the EHR's FHIR server, using the
+  short-lived access the EHR gives with each call. The answer must still come back in about a second, so a slow EHR
+  means fewer cards. Nothing fetched is stored. The trusted issuer must also allow this.
+</p>

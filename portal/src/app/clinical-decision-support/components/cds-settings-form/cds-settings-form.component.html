@@ -1,0 +1,63 @@
+@if (descriptors().length === 0) {
+  <p class="none">This check has no settings.</p>
+} @else {
+  <div class="settings-grid" [formGroup]="group()">
+    @for (d of descriptors(); track d.key) {
+      <div
+        class="cds-field"
+        [class.cds-field--full]="d.type === 'list' || d.type === 'boolean'"
+        [class.cds-field--error]="hasError(d.key)"
+        [attr.data-invalid]="hasError(d.key) ? 'true' : null"
+      >
+        @switch (d.type) {
+          @case ('boolean') {
+            <label class="cds-check" [for]="fieldId(d.key)">
+              <input type="checkbox" [id]="fieldId(d.key)" [formControlName]="d.key" />
+              {{ d.label }}
+            </label>
+          }
+          @case ('select') {
+            <label [for]="fieldId(d.key)">{{ d.label }} @if (d.required) {<span class="cds-req">*</span>}</label>
+            <select [id]="fieldId(d.key)" [formControlName]="d.key">
+              @if (!d.required) {
+                <option value="">Use default</option>
+              }
+              @for (o of d.options ?? []; track o.value) {
+                <option [value]="o.value">{{ o.label }}</option>
+              }
+            </select>
+          }
+          @case ('number') {
+            <label [for]="fieldId(d.key)">{{ d.label }} @if (d.required) {<span class="cds-req">*</span>}</label>
+            <input
+              type="number"
+              [id]="fieldId(d.key)"
+              [formControlName]="d.key"
+              [attr.min]="d.min"
+              [attr.max]="d.max"
+            />
+          }
+          @case ('list') {
+            <label [for]="fieldId(d.key)">{{ d.label }} @if (d.required) {<span class="cds-req">*</span>}</label>
+            <textarea [id]="fieldId(d.key)" [formControlName]="d.key" rows="4" placeholder="One per line"></textarea>
+          }
+          @default {
+            <label [for]="fieldId(d.key)">{{ d.label }} @if (d.required) {<span class="cds-req">*</span>}</label>
+            <input type="text" [id]="fieldId(d.key)" [formControlName]="d.key" autocomplete="off" />
+          }
+        }
+
+        @if (hasError(d.key)) {
+          <p class="cds-field__error">{{ errorText(d) }}</p>
+        }
+        @if (d.help || rangeHint(d) || defaultHint(d)) {
+          <p class="cds-field__help">
+            {{ d.help }}
+            @if (rangeHint(d); as range) { {{ range }} }
+            @if (defaultHint(d); as def) { {{ def }} }
+          </p>
+        }
+      </div>
+    }
+  </div>
+}

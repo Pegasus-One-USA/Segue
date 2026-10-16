@@ -1,0 +1,7 @@
+@if (extras().length) {
+  <ul class="extras" data-testid="cds-call-extras">
+    @for (e of extras(); track $index) {
+      <li class="extra" [title]="e.tip">{{ e.label }}</li>
+    }
+  </ul>
+}

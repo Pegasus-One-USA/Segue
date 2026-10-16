@@ -1,0 +1,227 @@
+<section class="cds-panel" data-testid="cds-epic-setup-sheet">
+  <div class="cds-panel__head">
+    <div>
+      <h2 class="cds-panel__title">Epic setup sheet</h2>
+      <p class="cds-panel__sub">
+        Epic doesn't read the discovery URL. The health system's Epic team enters these values by hand, one service at
+        a time. Send them this sheet.
+      </p>
+    </div>
+    @if (sheet()) {
+      <div class="head-actions">
+        <app-cds-copy-button [value]="json()" what="setup sheet as JSON" />
+        <button type="button" class="btn btn-secondary btn-sm" data-testid="cds-setup-sheet-download" (click)="download()">
+          <mat-icon>download</mat-icon>
+          Download JSON
+        </button>
+      </div>
+    }
+  </div>
+
+  @if (services().length === 0) {
+    <p class="hint">Add a service first. Its setup sheet appears here.</p>
+  } @else {
+    <div class="cds-field picker">
+      <label for="cds-setup-sheet-service">Service</label>
+      <select id="cds-setup-sheet-service" data-testid="cds-setup-sheet-service" (change)="select($any($event.target).value)">
+        @for (s of services(); track s.id) {
+          <option [value]="s.id" [selected]="s.id === selectedId()">{{ s.title }}{{ s.isEnabled ? '' : ' (off)' }}</option>
+        }
+      </select>
+    </div>
+
+    @if (loading()) {
+      <p class="hint">Loading...</p>
+    }
+
+    @if (errorMessage(); as message) {
+      <div class="cds-notice cds-notice--error" role="alert">
+        <mat-icon>error_outline</mat-icon>
+        <p>{{ message }}</p>
+      </div>
+    }
+
+    @if (sheet(); as s) {
+      @for (w of s.warnings; track $index) {
+        <div class="cds-notice cds-notice--warning">
+          <mat-icon>warning_amber</mat-icon>
+          <p>{{ w }}</p>
+        </div>
+      }
+
+      <!-- Service endpoint -->
+      <div class="block">
+        <h3 class="block__title">1. The service</h3>
+        <dl class="facts">
+          <dt>Runs when</dt>
+          <dd>{{ hookLabel(s.hook) }} <code>{{ s.hook }}</code></dd>
+          <dt>Service endpoint</dt>
+          <dd class="cds-url-row"><code class="cds-url">{{ s.serviceUrl }}</code><app-cds-copy-button [value]="s.serviceUrl" what="service endpoint" /></dd>
+          <dt>Feedback endpoint</dt>
+          <dd class="cds-url-row"><code class="cds-url">{{ s.feedbackUrl }}</code><app-cds-copy-button [value]="s.feedbackUrl" what="feedback endpoint" /></dd>
+          <dt>Token audience (aud)</dt>
+          <dd class="cds-url-row"><code class="cds-url">{{ s.defaultAudience }}</code><app-cds-copy-button [value]="s.defaultAudience" what="audience" /></dd>
+          <dt>Status</dt>
+          <dd>{{ s.isEnabled ? 'On' : 'Off: calls are refused until it is turned on' }}</dd>
+        </dl>
+      </div>
+
+      <!-- Issuers -->
+      <div class="block">
+        <h3 class="block__title">2. Who signs the calls</h3>
+        @if (s.issuers.length === 0) {
+          <p class="hint">No trusted issuer can call this service yet. Add one in Trusted issuers above.</p>
+        } @else {
+          <div class="table-scroll">
+            <table class="sheet-table">
+              <thead>
+                <tr>
+                  <th scope="col">Issuer</th>
+                  <th scope="col">Issuer (iss)</th>
+                  <th scope="col">Key set (jku)</th>
+                  <th scope="col">Client id (sub)</th>
+                  <th scope="col">Audience (aud)</th>
+                  <th scope="col">FHIR server</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (i of s.issuers; track i.id) {
+                  <tr>
+                    <td>{{ i.name }} <span class="muted">{{ i.vendor }}{{ i.isEnabled ? '' : ', off' }}</span></td>
+                    <td><code>{{ i.issuer }}</code></td>
+                    <td>
+                      @if (i.jwksUrl) { <code>{{ i.jwksUrl }}</code> } @else { <span class="muted">Pasted keys (no jku accepted)</span> }
+                    </td>
+                    <td>@if (i.expectedSubject) { <code>{{ i.expectedSubject }}</code> } @else { <span class="muted">Not checked</span> }</td>
+                    <td><code>{{ i.expectedAudience }}</code></td>
+                    <td>
+                      <code>{{ i.effectiveFhirBaseUrl }}</code>
+                      @if (!i.allowCallback) { <span class="muted">(not fetched from)</span> }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <!-- Prefetch -->
+      <div class="block">
+        <h3 class="block__title">3. Prefetch to configure</h3>
+        @if (s.prefetch.length === 0) {
+          <p class="hint">This service needs no prefetch.</p>
+        } @else {
+          <div class="table-scroll">
+            <table class="sheet-table">
+              <thead>
+                <tr>
+                  <th scope="col">Key</th>
+                  <th scope="col">FHIR query</th>
+                  <th scope="col">If Epic leaves it out</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of s.prefetch; track p.key) {
+                  <tr>
+                    <td><code>{{ p.key }}</code></td>
+                    <td><code>{{ p.query }}</code></td>
+                    <td>{{ p.fetchedIfMissing ? 'Segue fetches it' : 'Fewer or no cards' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <!-- Override reasons -->
+      <div class="block">
+        <h3 class="block__title">4. Dismiss reasons to map</h3>
+        <p class="hint">Code system <code>{{ s.overrideReasonSystem }}</code>. Map each code to one of your Epic override reasons.</p>
+        <div class="table-scroll">
+          <table class="sheet-table">
+            <thead>
+              <tr><th scope="col">Code</th><th scope="col">Text</th></tr>
+            </thead>
+            <tbody>
+              @for (r of s.overrideReasons; track r.code) {
+                <tr><td><code>{{ r.code }}</code></td><td>{{ r.display }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Fixes -->
+      <div class="block">
+        <h3 class="block__title">5. One-click fixes</h3>
+        @if (!s.fixesEnabled || s.fixes.length === 0) {
+          <p class="hint">Off. Cards from this service don't change anything in Epic.</p>
+        } @else {
+          <p class="hint">Epic creates these with its own default order details. Check each preference list item or code exists in your Epic build.</p>
+          <div class="table-scroll">
+            <table class="sheet-table">
+              <thead>
+                <tr>
+                  <th scope="col">Fix</th>
+                  <th scope="col">Does</th>
+                  <th scope="col">For</th>
+                  <th scope="col">Code system</th>
+                  <th scope="col">Code</th>
+                  <th scope="col">Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (f of s.fixes; track $index) {
+                  <tr>
+                    <td>
+                      {{ f.label }}
+                      @if (f.isRecommended) { <span class="cds-badge cds-badge--info">Pre-selected</span> }
+                    </td>
+                    <td>{{ f.actionType === 'delete' ? 'Removes' : 'Adds' }} {{ resourceLabel(f.resourceType) }}</td>
+                    <td>{{ f.triggerLabel ?? f.trigger ?? (f.code ? 'Any' : '—') }}</td>
+                    <td>@if (f.system) { <code>{{ f.system }}</code> } @else { — }</td>
+                    <td>@if (f.code) { <code>{{ f.code }}</code> } @else { — }</td>
+                    <td>{{ f.display ?? '' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <!-- Links -->
+      <div class="block">
+        <h3 class="block__title">6. Card links</h3>
+        @if (s.links.length === 0) {
+          <p class="hint">None.</p>
+        } @else {
+          @if (smartLinks().length > 0) {
+            <p class="hint">Add each SMART app below to your SMART app allow-list, or Epic won't open it.</p>
+          }
+          <div class="table-scroll">
+            <table class="sheet-table">
+              <thead>
+                <tr><th scope="col">Button</th><th scope="col">Opens</th><th scope="col">URL</th><th scope="col">Opens on its own</th></tr>
+              </thead>
+              <tbody>
+                @for (l of s.links; track $index) {
+                  <tr>
+                    <td>{{ l.label }}</td>
+                    <td>{{ l.type === 'smart' ? 'SMART app (allow-list it)' : 'Web page' }}</td>
+                    <td><code>{{ l.url }}</code></td>
+                    <td>{{ l.type === 'smart' && l.autolaunchable ? 'Yes' : 'No' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <p class="generated">Made {{ s.generatedOnUtc | date:'MMM d, y, h:mm a' }}. Contains settings only, no patient data.</p>
+    }
+  }
+</section>

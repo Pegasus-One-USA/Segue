@@ -1,0 +1,73 @@
+@use '../../../_list-page' as *;
+
+.btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--radius-base);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-base);
+
+  &:hover,
+  &:active { background: var(--color-primary-dark); }
+}
+
+.col-actions { width: 56px; }
+
+.btn-more {
+  --mat-icon-button-state-layer-size: 32px;
+
+  color: var(--color-muted);
+}
+
+.cell-link {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  text-decoration: none;
+
+  &:hover { color: var(--color-primary); text-decoration: underline; }
+}
+
+app-cds-fixes-badge { margin-top: 4px; }
+
+.cell-id {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.cell-by {
+  display: block;
+  font-size: 12px;
+  color: var(--color-muted-2);
+}
+
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-side);
+  border: 1px solid var(--color-border);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+
+  &--missing {
+    border-color: var(--color-warning);
+    background: var(--color-warning-soft);
+    color: var(--color-warning-strong);
+  }
+}

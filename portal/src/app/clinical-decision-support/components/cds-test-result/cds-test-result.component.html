@@ -1,0 +1,52 @@
+<section class="cds-panel" aria-live="polite">
+  <div class="status">
+    <span
+      class="cds-badge"
+      [class.cds-badge--success]="tone() === 'success'"
+      [class.cds-badge--warning]="tone() === 'warning'"
+      [class.cds-badge--error]="tone() === 'error'"
+      data-testid="cds-test-outcome"
+    >{{ outcomeLabel() }}</span>
+    <span class="status__meta">HTTP {{ result().httpStatus }}</span>
+    <span class="status__meta">{{ result().durationMs }} ms</span>
+    <span class="status__meta">{{ cards().length }} {{ cards().length === 1 ? 'card' : 'cards' }}</span>
+    @if (fixCount() > 0) {
+      <span class="status__meta">{{ fixCount() }} {{ fixCount() === 1 ? 'fix' : 'fixes' }} offered</span>
+    }
+  </div>
+
+  @if (result().messages.length) {
+    <ul class="messages">
+      @for (m of result().messages; track $index) {
+        <li>{{ m }}</li>
+      }
+    </ul>
+  }
+
+  @if (cards().length) {
+    <div class="cards">
+      @for (card of cards(); track $index) {
+        <app-cds-card-preview [card]="card" />
+      }
+    </div>
+  } @else if (result().outcome === 'NoCards') {
+    <p class="none">The service ran and had no advice for this request. That is a normal answer.</p>
+  }
+
+  <div class="raw">
+    <button type="button" class="btn btn-secondary btn-sm" [attr.aria-expanded]="showRaw()" (click)="showRaw.set(!showRaw())">
+      <mat-icon>{{ showRaw() ? 'expand_less' : 'code' }}</mat-icon>
+      {{ showRaw() ? 'Hide raw JSON' : 'Show raw JSON' }}
+    </button>
+    @if (showRaw()) {
+      <div class="raw__block">
+        <span class="raw__label">Response the EHR receives</span>
+        <pre>{{ rawResponse() }}</pre>
+      </div>
+      <div class="raw__block">
+        <span class="raw__label">Settings used</span>
+        <pre>{{ rawSettings() }}</pre>
+      </div>
+    }
+  </div>
+</section>

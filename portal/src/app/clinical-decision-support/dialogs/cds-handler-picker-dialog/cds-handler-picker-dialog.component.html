@@ -1,0 +1,30 @@
+<div class="dialog">
+  <div class="dialog-header">
+    <div class="dialog-header__icon"><mat-icon>medical_services</mat-icon></div>
+    <div class="dialog-header__text">
+      <h2>Add a service</h2>
+      <p>Choose the check this service runs. You can add the same check more than once with different settings.</p>
+    </div>
+  </div>
+
+  <div class="dialog-body">
+    @if (data.handlers.length === 0) {
+      <p class="empty">No checks are available.</p>
+    }
+    <ul class="handler-list">
+      @for (handler of data.handlers; track handler.key) {
+        <li>
+          <button type="button" class="handler" [attr.data-testid]="'cds-handler-' + handler.key" (click)="pick(handler)">
+            <span class="handler__name">{{ handler.displayName }}</span>
+            <span class="handler__desc">{{ handler.description }}</span>
+            <span class="handler__hooks">
+              @for (hook of handler.supportedHooks; track hook) {
+                <span class="hook-chip">{{ hookLabel(hook) }}</span>
+              }
+            </span>
+          </button>
+        </li>
+      }
+    </ul>
+  </div>
+</div>

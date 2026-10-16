@@ -1480,7 +1480,7 @@ input:-webkit-autofill:active {
        They stay full-bleed here and re-apply the gutter one level deeper, below.
    app-system-settings-shell is NOT in this list: it has no tab strip (it renders its child
    route directly), so it takes the gutter like any other page and its child inherits it. */
-$page-bleed: 'app-modal-overlay, app-dialog-outlet, app-workflow-builder-v2, app-governance-shell, app-operations-shell, app-settings-shell, app-terminology-configurations-shell, app-workflow-configurations-shell';
+$page-bleed: 'app-modal-overlay, app-dialog-outlet, app-workflow-builder-v2, app-governance-shell, app-operations-shell, app-settings-shell, app-terminology-configurations-shell, app-workflow-configurations-shell, app-cds-shell';
 
 .shell-content > *:not(#{$page-bleed}) {
   display: block;

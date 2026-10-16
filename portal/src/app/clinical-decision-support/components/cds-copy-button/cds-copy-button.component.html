@@ -1,0 +1,10 @@
+<button
+  type="button"
+  class="copy-btn"
+  [class.copy-btn--done]="copied()"
+  [matTooltip]="copied() ? 'Copied' : 'Copy ' + what()"
+  [attr.aria-label]="'Copy ' + what()"
+  (click)="copy()"
+>
+  <mat-icon>{{ copied() ? 'check' : 'content_copy' }}</mat-icon>
+</button>

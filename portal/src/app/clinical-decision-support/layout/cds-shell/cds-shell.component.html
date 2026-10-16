@@ -1,0 +1,11 @@
+<!-- No title of its own: each tab's page carries one, same as the Settings and Logs & Compliance shells. -->
+<nav class="shell-tabs" aria-label="Clinical Decision Support">
+  @for (tab of tabs(); track tab.route) {
+    <a class="shell-tab" [routerLink]="tab.route" routerLinkActive="active">
+      <mat-icon>{{ tab.icon }}</mat-icon>
+      {{ tab.label }}
+    </a>
+  }
+</nav>
+
+<router-outlet />

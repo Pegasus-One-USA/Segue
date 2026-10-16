@@ -1,0 +1,72 @@
+@if (links().length === 0) {
+  <p class="hint">No links. Cards show only their text and the source.</p>
+} @else {
+  <ul class="rows">
+    @for (row of links().controls; track row; let i = $index) {
+      <li class="link" [formGroup]="row" data-testid="cds-link-row">
+        <div class="link__head">
+          <span class="link__title">Link {{ i + 1 }}</span>
+          @if (!links().disabled) {
+            <button type="button" class="btn-icon" matTooltip="Remove this link" [attr.aria-label]="'Remove link ' + (i + 1)" (click)="remove(i)">
+              <mat-icon>close</mat-icon>
+            </button>
+          }
+        </div>
+
+        <div class="cds-form-grid">
+          <div class="cds-field" [class.cds-field--error]="showError(row, 'label')">
+            <label [for]="'cds-link-label-' + i">Button text <span class="cds-req">*</span></label>
+            <input [id]="'cds-link-label-' + i" formControlName="label" maxlength="100" autocomplete="off" placeholder="e.g. Dosing guide" />
+            @if (showError(row, 'label')) {
+              <p class="cds-field__error">Enter the text on the button.</p>
+            }
+          </div>
+
+          <div class="cds-field">
+            <label [for]="'cds-link-type-' + i">Opens</label>
+            <select [id]="'cds-link-type-' + i" formControlName="type">
+              <option value="absolute">A web page</option>
+              <option value="smart">A SMART app in the EHR</option>
+            </select>
+          </div>
+
+          <div class="cds-field cds-field--full" [class.cds-field--error]="showError(row, 'url')">
+            <label [for]="'cds-link-url-' + i">
+              {{ isSmart(row) ? 'App launch URL' : 'Web address' }} <span class="cds-req">*</span>
+            </label>
+            <input [id]="'cds-link-url-' + i" class="cds-mono" formControlName="url" maxlength="1000" autocomplete="off" placeholder="https://" />
+            @if (showError(row, 'url', 'required')) {
+              <p class="cds-field__error">Enter a web address.</p>
+            } @else if (showError(row, 'url')) {
+              <p class="cds-field__error">Enter a full web address starting with https://.</p>
+            } @else if (isSmart(row)) {
+              <p class="cds-field__help">The health system must add this app to its SMART app allow-list, or the EHR won't open it.</p>
+            }
+          </div>
+
+          @if (isSmart(row)) {
+            <div class="cds-field cds-field--full" [class.cds-field--error]="showError(row, 'appContext')">
+              <label [for]="'cds-link-context-' + i">App context</label>
+              <input [id]="'cds-link-context-' + i" class="cds-mono" formControlName="appContext" maxlength="1000" autocomplete="off" />
+              <p class="cds-field__help">Optional. Passed to the app when it opens. Don't put patient details here.</p>
+            </div>
+
+            <div class="cds-field cds-field--full">
+              <label class="cds-check" [for]="'cds-link-auto-' + i">
+                <input type="checkbox" [id]="'cds-link-auto-' + i" formControlName="autolaunchable" />
+                Let the EHR open the app on its own, without a click
+              </label>
+            </div>
+          }
+        </div>
+      </li>
+    }
+  </ul>
+}
+
+@if (!links().disabled && links().length < max) {
+  <button type="button" class="btn btn-ghost btn-sm add" data-testid="cds-link-add" (click)="add()">
+    <mat-icon>add</mat-icon>
+    Add a link
+  </button>
+}

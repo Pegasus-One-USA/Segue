@@ -1,0 +1,45 @@
+@if (issuers().length === 0) {
+  <p class="hint">
+    No trusted issuers yet. Add one on <a routerLink="/clinical-decision-support/connect">Connect your EHR</a> so EHR calls are accepted.
+  </p>
+} @else {
+  <p class="hint">
+    @if (control().value.length === 0) {
+      Any enabled trusted issuer can call this service. Tick issuers to allow only those.
+    } @else {
+      Only the ticked issuers can call this service.
+    }
+  </p>
+  <ul class="issuer-list">
+    @for (issuer of issuers(); track issuer.id) {
+      <li>
+        <label class="issuer">
+          <input
+            type="checkbox"
+            [checked]="isChecked(issuer.id)"
+            [disabled]="control().disabled"
+            (change)="toggle(issuer.id, $any($event.target).checked)"
+          />
+          <span class="issuer__text">
+            <span class="issuer__name">
+              {{ issuer.name }}
+              @if (!issuer.isEnabled) {
+                <span class="issuer__off">off</span>
+              }
+            </span>
+            <span class="issuer__iss">{{ issuer.issuer }}</span>
+          </span>
+        </label>
+      </li>
+    }
+  </ul>
+  @for (id of missingIds(); track id) {
+    <label class="issuer issuer--missing">
+      <input type="checkbox" checked [disabled]="control().disabled" (change)="toggle(id, false)" />
+      <span class="issuer__text">
+        <span class="issuer__name">Deleted issuer</span>
+        <span class="issuer__iss">Untick to remove it from the list.</span>
+      </span>
+    </label>
+  }
+}

@@ -1,0 +1,25 @@
+<div class="connect-page">
+  <div class="page-header">
+    <h1 class="page-title">Connect your EHR</h1>
+    <p class="page-sub">Point your EHR at Segue, then tell Segue which EHRs to trust.</p>
+  </div>
+
+  @if (!loading()) {
+    @if (discovery(); as info) {
+      <app-cds-discovery-panel [info]="info" />
+    }
+
+    <app-cds-trusted-issuer-list [issuers]="issuers()" (changed)="load()" />
+
+    @if (discovery(); as info) {
+      <app-cds-epic-setup-sheet [services]="info.services" [initialServiceId]="requestedServiceId" />
+    }
+
+    <app-cds-sandbox-hint
+      [discoveryUrl]="discovery()?.discoveryUrl ?? null"
+      [canAdd]="canCreate()"
+      [alreadyAdded]="sandboxTrusted()"
+      (addSandbox)="addSandbox()"
+    />
+  }
+</div>

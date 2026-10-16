@@ -76,6 +76,9 @@ const NAV_ENTRIES: NavEntry[] = [
     ],
   },
 
+  // CDS Hooks services EHRs call for advice cards. Same gate as the /clinical-decision-support route.
+  { type: 'item', label: 'Clinical Decision Support', route: '/clinical-decision-support', permissions: ['cdshooks.view'] },
+
   // Logs & Compliance hub — merges the former separate Operations and Governance sidebar entries
   // into one, per user direction, since only a handful of tabs remain visible across both shells
   // (Audit Logs/Correlation Search/Compliance Reports live under governance-shell.component.ts;

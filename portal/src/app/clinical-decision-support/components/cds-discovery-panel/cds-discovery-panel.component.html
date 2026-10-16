@@ -1,0 +1,56 @@
+<section class="cds-panel">
+  <div class="cds-panel__head">
+    <div>
+      <h2 class="cds-panel__title">Discovery URL</h2>
+      <p class="cds-panel__sub">Give this address to your EHR team. The EHR reads it to find every service that is on.</p>
+    </div>
+  </div>
+
+  <div class="cds-url-row">
+    <code class="cds-url" data-testid="cds-discovery-url">{{ info().discoveryUrl }}</code>
+    <app-cds-copy-button [value]="info().discoveryUrl" what="discovery URL" />
+  </div>
+
+  @if (!info().isConfigured) {
+    <div class="cds-notice cds-notice--warning">
+      <mat-icon>warning_amber</mat-icon>
+      <p>
+        This address was worked out from the page you are on. If EHRs reach Segue through a different address
+        (for example a gateway or proxy), ask your administrator to set <code>{{ info().configurationKey }}</code>
+        to that public address.
+      </p>
+    </div>
+  }
+
+  <div class="steps">
+    <h3 class="steps__title">For the EHR team</h3>
+    <ol>
+      <li>Register the discovery URL above as a CDS Hooks service provider (the EHR may call it a CDS client or CDS Hooks integration).</li>
+      <li>Have the EHR sign its calls with a JSON Web Token, and send us the token's issuer (<code>iss</code>) and the URL of its public keys (JWKS).</li>
+      <li>Add those values below as a trusted issuer. Calls from anyone else are refused.</li>
+      <li>Turn on the hooks you want in the EHR. Each service below answers one hook.</li>
+    </ol>
+  </div>
+
+  @if (info().services.length > 0) {
+    <div class="services">
+      <h3 class="steps__title">Service URLs</h3>
+      <p class="cds-panel__sub">The token's audience (<code>aud</code>) must be the service URL, unless the trusted issuer sets its own.</p>
+      <ul class="service-list">
+        @for (s of info().services; track s.id) {
+          <li class="service">
+            <div class="service__head">
+              <span class="service__title">{{ s.title }}</span>
+              <span class="cds-badge" [class.cds-badge--success]="s.isEnabled">{{ s.isEnabled ? 'On' : 'Off' }}</span>
+              <span class="service__hook">{{ hookLabel(s.hook) }}</span>
+            </div>
+            <div class="cds-url-row">
+              <code class="cds-url">{{ s.serviceUrl }}</code>
+              <app-cds-copy-button [value]="s.serviceUrl" what="service URL" />
+            </div>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+</section>

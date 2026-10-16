@@ -120,6 +120,16 @@ export const routes: Routes = [
           import('./settings/settings.routes').then(m => m.SETTINGS_ROUTES),
       },
 
+      // Clinical Decision Support (CDS Hooks) shell — Services, Connect your EHR, Test and Activity tabs. Every
+      // tab needs cdshooks.view (Test also needs cdshooks.test, checked on its own child route).
+      {
+        path: 'clinical-decision-support',
+        canActivate: [permissionGuard],
+        data: { permissions: ['cdshooks.view'] },
+        loadChildren: () =>
+          import('./clinical-decision-support/cds.routes').then(m => m.CDS_ROUTES),
+      },
+
       // Backward-compatible redirects for the old standalone URLs these pages used to live at.
       // EHR Endpoints and Allowed Origins are launcher rows on System Settings > General now (opened as
       // dialogs), not routes of their own — so these land on that page rather than a path that no longer

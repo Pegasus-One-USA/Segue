@@ -57,6 +57,11 @@ public sealed class FHIRBridgeDbContext : DbContext
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<ProvisionedSecret> ProvisionedSecrets => Set<ProvisionedSecret>();
     public DbSet<EhrEndpoint> EhrEndpoints => Set<EhrEndpoint>();
+
+    // CDS Hooks: configured service instances, the EHRs trusted to call them, and the PHI-free call log.
+    public DbSet<CdsServiceInstance> CdsServiceInstances => Set<CdsServiceInstance>();
+    public DbSet<CdsTrustedIssuer> CdsTrustedIssuers => Set<CdsTrustedIssuer>();
+    public DbSet<CdsCallLog> CdsCallLogs => Set<CdsCallLog>();
     public DbSet<AllowedCorsOrigin> AllowedCorsOrigins => Set<AllowedCorsOrigin>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<BrandConfiguration> BrandConfigurations => Set<BrandConfiguration>();
@@ -263,6 +268,10 @@ public sealed class FHIRBridgeDbContext : DbContext
                 .HasIndex(x => x.OriginUrl).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<EhrEndpoint>()
                 .HasIndex(x => new { x.Vendor, x.VendorEndpointId }).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<CdsTrustedIssuer>()
+                .HasIndex(x => x.Issuer).IsUnique().HasFilter("\"IsDeleted\" = false");
+            modelBuilder.Entity<CdsServiceInstance>()
+                .HasIndex(x => x.ServiceId).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<SystemSetting>()
                 .HasIndex(x => x.Key).IsUnique().HasFilter("\"IsDeleted\" = false");
             modelBuilder.Entity<ResourceTypeCriteria>()

@@ -1,0 +1,90 @@
+@use '../../cds' as *;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.table-scroll { overflow-x: auto; }
+
+.mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th {
+    padding: 4px 6px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-ink-2);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 4px 6px;
+    vertical-align: middle;
+    min-width: 120px;
+  }
+
+  input,
+  select {
+    width: 100%;
+    box-sizing: border-box;
+    height: 34px;
+    padding: 0 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-base);
+    background: var(--color-surface);
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--color-ink);
+
+    &:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-soft);
+    }
+
+    &:disabled {
+      background: var(--color-side);
+      color: var(--color-muted);
+    }
+  }
+
+  input.cds-mono { font-family: var(--font-mono); font-size: 12.5px; }
+
+  .cell--error {
+    input,
+    select { border-color: var(--color-error); }
+  }
+
+  .col-remove {
+    width: 36px;
+    min-width: 36px;
+  }
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-base);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+
+  mat-icon { width: 18px; height: 18px; font-size: 18px; }
+
+  &:hover { background: var(--color-side); color: var(--color-error-strong); }
+}
+
+.add {
+  align-self: flex-start;
+
+  mat-icon { width: 16px; height: 16px; font-size: 16px; }
+}

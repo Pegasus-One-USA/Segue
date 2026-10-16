@@ -1,0 +1,90 @@
+<section class="cds-panel">
+  <div class="cds-panel__head">
+    <div>
+      <h2 class="cds-panel__title">Trusted issuers</h2>
+      <p class="cds-panel__sub">Each EHR signs its calls. Segue answers only calls signed by an issuer listed here and turned on.</p>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" data-testid="cds-issuer-add" *appHideWithoutPermission="'cdshooks.create'" (click)="openAdd()">
+      Add issuer
+    </button>
+  </div>
+
+  @if (issuers().length === 0) {
+    <p class="empty">No trusted issuers yet, so every EHR call is refused. Add the issuer your EHR team gives you.</p>
+  } @else {
+    <div class="table-scroll">
+      <table class="issuer-table">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Issuer (iss)</th>
+            <th scope="col">Keys</th>
+            <th scope="col">Audience</th>
+            <th scope="col">Missing data</th>
+            <th scope="col">Status</th>
+            <th scope="col">Last changed</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (i of issuers(); track i.id) {
+            <tr data-testid="cds-issuer-row">
+              <td>
+                <span class="name">{{ i.name }}</span>
+                <span class="vendor">{{ i.vendor }}</span>
+              </td>
+              <td><code class="iss">{{ i.issuer }}</code></td>
+              <td>
+                <span class="muted" [matTooltip]="i.jwksUrl ?? ''">{{ keySourceLabel(i) }}</span>
+              </td>
+              <td>
+                @if (i.audience) {
+                  <code class="iss">{{ i.audience }}</code>
+                } @else {
+                  <span class="muted">Service URL</span>
+                }
+                @if (i.expectedSubject) {
+                  <span class="vendor" [matTooltip]="'Tokens must have sub ' + i.expectedSubject">Client id checked</span>
+                }
+              </td>
+              <td>
+                @if (i.allowCallback) {
+                  <span class="muted" [matTooltip]="i.effectiveFhirBaseUrl">Fetched from the EHR</span>
+                } @else {
+                  <span class="muted">Not fetched</span>
+                }
+              </td>
+              <td>
+                <span class="cds-badge" [class.cds-badge--success]="i.isEnabled">{{ i.isEnabled ? 'On' : 'Off' }}</span>
+              </td>
+              <td>
+                <span class="muted">{{ (i.modifiedOnUtc || i.createdOnUtc) | date:'MMM d, y' }}</span>
+              </td>
+              <td class="col-actions">
+                @if (hasRowMenu()) {
+                  <button mat-icon-button class="btn-more" matTooltip="More actions" [attr.aria-label]="'Actions for ' + i.name" [matMenuTriggerFor]="rowMenu">
+                    <mat-icon>more_vert</mat-icon>
+                  </button>
+                  <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+                    <button mat-menu-item *appHideWithoutPermission="'cdshooks.edit'" (click)="openEdit(i)">
+                      <mat-icon>edit</mat-icon>
+                      Edit
+                    </button>
+                    <button mat-menu-item data-testid="cds-issuer-test-callback" *appHideWithoutPermission="'cdshooks.test'" (click)="openCallbackTest(i)">
+                      <mat-icon>cloud_sync</mat-icon>
+                      Test callback
+                    </button>
+                    <button mat-menu-item class="menu-item-danger" *appHideWithoutPermission="'cdshooks.delete'" (click)="confirmDelete(i)">
+                      <mat-icon>delete_outline</mat-icon>
+                      Delete
+                    </button>
+                  </mat-menu>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

@@ -1,0 +1,66 @@
+@use '../../cds' as *;
+
+.test-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.page-header { display: flex; flex-direction: column; gap: 4px; }
+.page-title  { margin: 0; font-size: 20px; font-weight: 700; color: var(--color-ink); }
+.page-sub    { margin: 0; font-size: 14px; color: var(--color-muted); }
+
+.none {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-muted);
+
+  a { color: var(--color-primary); font-weight: 600; }
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+
+  @media (max-width: 1100px) { grid-template-columns: minmax(0, 1fr); }
+}
+
+.request__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cds-field textarea.request__json {
+  min-height: 420px;
+  font-size: 12px;
+  white-space: pre;
+  overflow: auto;
+}
+
+.response {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.placeholder {
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--color-muted);
+  text-align: center;
+
+  mat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 32px;
+    color: var(--color-border);
+  }
+
+  p { margin: 0; font-size: 13.5px; }
+}

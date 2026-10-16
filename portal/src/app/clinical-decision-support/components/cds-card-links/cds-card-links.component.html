@@ -1,0 +1,19 @@
+<ul class="card__links">
+  @for (link of links(); track $index) {
+    <li>
+      @if (isSafeUrl(link.url)) {
+        <a class="link" [href]="link.url" target="_blank" rel="noopener noreferrer" data-testid="cds-card-link">
+          {{ link.label }}
+          <mat-icon>open_in_new</mat-icon>
+        </a>
+      } @else {
+        <span class="link link--plain">{{ link.label }}</span>
+      }
+      @if (link.type === 'smart') {
+        <span class="card__link-type">
+          SMART app, opens inside the EHR{{ link.autolaunchable ? ' and may open on its own' : '' }}
+        </span>
+      }
+    </li>
+  }
+</ul>

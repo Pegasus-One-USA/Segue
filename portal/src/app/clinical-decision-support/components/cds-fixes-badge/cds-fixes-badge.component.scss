@@ -1,0 +1,6 @@
+@use '../../cds' as *;
+
+:host {
+  display: inline-flex;
+  align-self: flex-start;
+}

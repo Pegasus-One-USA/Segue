@@ -56,6 +56,8 @@ They coexist — know which one you're touching:
 | [08 — Governance Logging Status](08-governance-logging-status.md) | Phase-by-phase completion status of the audit/governance logging rebuild — what's done, what's dormant, what's not started, and what to pick up next |
 | [20 — EHR Write-Back](20-epic-r4-write-back.md) | Writing records back into Epic, eClinicalWorks, athenahealth or a FHIR server: verified vendor facts, write profiles, phases 0–7, test runs |
 | [21 — Source / Destination Consistency](21-source-destination-consistency.md) | Sources only read, destinations write: CSV / SQL per-type queries and Check, write connections under Destination Connections, resource types chosen on the source, one connection list per page, per-EHR tiles with one Connection dropdown (live or test server), Dry run option, live-write confirmation, SQL database / CSV file tiles, compatibility, verification |
+| [22 — CDS Hooks](22-cds-hooks.md) | HL7 CDS Hooks 2.0 service: public `/cds-services` endpoints, EHR JWT trust (JWKS, aud, jti), CORS / CSRF / rate limit, handler registry and the five sample handlers, audit / PHI rules, metrics, config keys, v1 limits, EHR notes |
+| [Admin guide: Clinical Decision Support](../user-guide/clinical-decision-support.md) | Plain-language guide: the five screens, trying it with the Test screen and the public CDS Hooks sandbox, connecting a real EHR |
 | [Admin guide: EHR write-back](../user-guide/ehr-write-back.md) | Plain-language, click-by-click guide for admins: connections, sources, EHR and database destinations, live and test runs, reading the report, troubleshooting |
 
 ## Maturity flags (as of this review)

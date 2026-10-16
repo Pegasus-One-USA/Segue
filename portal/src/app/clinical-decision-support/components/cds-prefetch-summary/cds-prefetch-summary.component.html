@@ -1,0 +1,13 @@
+@if (entries().length === 0) {
+  <p class="none">This service only uses the details the EHR sends about the current action.</p>
+} @else {
+  <p class="intro">The EHR sends this data with each call. Segue reads it only to build the cards and never stores it.</p>
+  <dl class="prefetch">
+    @for (e of entries(); track e.key) {
+      <div class="prefetch__row">
+        <dt>{{ e.key }}</dt>
+        <dd>{{ e.query }}</dd>
+      </div>
+    }
+  </dl>
+}

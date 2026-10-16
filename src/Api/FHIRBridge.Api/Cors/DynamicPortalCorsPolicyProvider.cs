@@ -12,6 +12,21 @@ public sealed class DynamicPortalCorsPolicyProvider : ICorsPolicyProvider
 {
     public const string PortalPolicyName = "Portal";
 
+    /// <summary>
+    /// The public CDS Hooks endpoints (/cds-services), selected by [EnableCors] on CdsHooksController. Any
+    /// origin may call them because browser-based CDS clients (e.g. the public CDS Hooks sandbox) call straight
+    /// from the page; credentials are never allowed, so no portal cookie can ride along. The caller is
+    /// authenticated by its CDS JWT instead. The Portal policy above is unaffected.
+    /// </summary>
+    public const string CdsHooksPolicyName = "CdsHooks";
+
+    private static readonly CorsPolicy CdsHooksPolicy = new CorsPolicyBuilder()
+        .AllowAnyOrigin()
+        .WithMethods("GET", "POST", "OPTIONS")
+        .WithHeaders("Authorization", "Content-Type", "Accept", "X-Requested-With")
+        .SetPreflightMaxAge(TimeSpan.FromMinutes(10))
+        .Build();
+
     private readonly IAllowedCorsOriginsCache _cache;
 
     public DynamicPortalCorsPolicyProvider(IAllowedCorsOriginsCache cache)
@@ -21,6 +36,11 @@ public sealed class DynamicPortalCorsPolicyProvider : ICorsPolicyProvider
 
     public async Task<CorsPolicy?> GetPolicyAsync(HttpContext context, string? policyName)
     {
+        if (string.Equals(policyName, CdsHooksPolicyName, StringComparison.Ordinal))
+        {
+            return CdsHooksPolicy;
+        }
+
         if (!string.Equals(policyName, PortalPolicyName, StringComparison.Ordinal))
         {
             return null;

@@ -1,0 +1,45 @@
+<article
+  class="card"
+  [class.card--warning]="indicator().key === 'warning'"
+  [class.card--critical]="indicator().key === 'critical'"
+  data-testid="cds-card"
+>
+  <header class="card__head">
+    <mat-icon class="card__icon">{{ indicator().icon }}</mat-icon>
+    <span class="card__indicator">{{ indicator().label }}</span>
+    <h3 class="card__summary">{{ card().summary }}</h3>
+  </header>
+
+  @if (card().detail) {
+    <p class="card__detail">{{ card().detail }}</p>
+  }
+
+  @if (card().suggestions?.length) {
+    <app-cds-card-suggestions [suggestions]="card().suggestions ?? []" />
+  }
+
+  @if (card().links?.length) {
+    <app-cds-card-links [links]="card().links ?? []" />
+  }
+
+  @if (card().overrideReasons?.length) {
+    <div class="card__overrides">
+      <span class="card__overrides-label">Override reasons offered:</span>
+      @for (reason of card().overrideReasons; track $index) {
+        <span class="card__chip">{{ reason.display || reason.code }}</span>
+      }
+    </div>
+  }
+
+  <footer class="card__source">
+    Source:
+    @if (isSafeUrl(card().source.url)) {
+      <a [href]="card().source.url" target="_blank" rel="noopener noreferrer">{{ card().source.label }}</a>
+    } @else {
+      <span>{{ card().source.label }}</span>
+    }
+    @if (card().source.topic; as topic) {
+      <span class="card__topic">· {{ topic.display || topic.code }}</span>
+    }
+  </footer>
+</article>

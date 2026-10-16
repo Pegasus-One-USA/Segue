@@ -1,0 +1,52 @@
+@use '../../cds' as *;
+
+.setup-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1040px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+
+  mat-icon { width: 16px; height: 16px; font-size: 16px; }
+
+  &:hover { text-decoration: underline; }
+}
+
+.page-header { display: flex; flex-direction: column; gap: 4px; }
+.page-title  { margin: 0; font-size: 20px; font-weight: 700; color: var(--color-ink); }
+.page-sub    { margin: 0; font-size: 14px; color: var(--color-muted); }
+
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.setup-sheet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+
+  mat-icon { width: 16px; height: 16px; font-size: 16px; }
+
+  &:hover { text-decoration: underline; }
+}
+
+.cds-notice a {
+  color: inherit;
+  font-weight: 600;
+}

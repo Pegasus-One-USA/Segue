@@ -1,0 +1,279 @@
+<div class="setup-page">
+
+  <a class="back-link" routerLink="/clinical-decision-support/services">
+    <mat-icon>arrow_back</mat-icon>
+    All services
+  </a>
+
+  <div class="page-header">
+    <h1 class="page-title">
+      @if (isNew) { Add a service } @else { {{ instance()?.title ?? 'Service' }} }
+    </h1>
+    <p class="page-sub">
+      @if (isNew) {
+        Set up a check your EHR can call. Nothing is live until an EHR is pointed at it.
+      } @else {
+        @if (instance(); as s) {
+          Last changed {{ (s.modifiedOnUtc || s.createdOnUtc) | date:'MMM d, y, h:mm a' }}
+          @if (s.modifiedBy || s.createdBy; as by) { by {{ by }} }
+        }
+      }
+    </p>
+  </div>
+
+  @if (loadError(); as message) {
+    <div class="cds-notice cds-notice--error" role="alert">
+      <mat-icon>error_outline</mat-icon>
+      <p>{{ message }} <a routerLink="/clinical-decision-support/services">Back to the list</a></p>
+    </div>
+  } @else if (!loading()) {
+
+    @if (!canSave()) {
+      <div class="cds-notice">
+        <mat-icon>lock</mat-icon>
+        <p>You can view this service but not change it.</p>
+      </div>
+    }
+
+    @if (handlerMissing()) {
+      <div class="cds-notice cds-notice--warning" role="alert">
+        <mat-icon>warning_amber</mat-icon>
+        <p>The check "{{ form.controls.handlerKey.value }}" is no longer available, so this service can't run or be saved. Delete it, or add a new service with another check.</p>
+      </div>
+    }
+
+    <form class="setup-form" [formGroup]="form" novalidate (ngSubmit)="save()">
+
+      <!-- Basics -->
+      <section class="cds-panel">
+        <div class="cds-panel__head">
+          <div>
+            <h2 class="cds-panel__title">Basics</h2>
+            <p class="cds-panel__sub">What the service is called and when the EHR calls it.</p>
+          </div>
+        </div>
+
+        <div class="cds-form-grid">
+          <div class="cds-field" [class.cds-field--error]="hasError('handlerKey')">
+            <label for="cds-handler">Check <span class="cds-req">*</span></label>
+            <select id="cds-handler" formControlName="handlerKey">
+              @for (h of handlers(); track h.key) {
+                <option [value]="h.key">{{ h.displayName }}</option>
+              }
+              @if (handlerMissing()) {
+                <option [value]="form.controls.handlerKey.value">{{ form.controls.handlerKey.value }} (unavailable)</option>
+              }
+            </select>
+            @if (!isNew) {
+              <p class="cds-field__help">The check can't be changed after the service is created.</p>
+            }
+          </div>
+
+          <div class="cds-field" [class.cds-field--error]="hasError('hook')">
+            <label for="cds-hook">Runs when <span class="cds-req">*</span></label>
+            <select id="cds-hook" formControlName="hook">
+              @for (hook of handler()?.supportedHooks ?? []; track hook) {
+                <option [value]="hook">{{ hookLabel(hook) }} ({{ hook }})</option>
+              }
+            </select>
+          </div>
+
+          <div class="cds-field" [class.cds-field--error]="hasError('title')">
+            <label for="cds-title">Name <span class="cds-req">*</span></label>
+            <input id="cds-title" formControlName="title" autocomplete="off" maxlength="200" />
+            @if (hasError('title', 'required')) {
+              <p class="cds-field__error">Enter a name.</p>
+            }
+          </div>
+
+          <div class="cds-field" [class.cds-field--error]="hasError('serviceId')">
+            <label for="cds-service-id">Service id <span class="cds-req">*</span></label>
+            <input
+              id="cds-service-id"
+              class="cds-mono"
+              formControlName="serviceId"
+              autocomplete="off"
+              maxlength="100"
+              (input)="onServiceIdInput()"
+              (blur)="normalizeServiceId()"
+            />
+            @if (hasError('serviceId', 'required')) {
+              <p class="cds-field__error">Enter a service id.</p>
+            } @else if (hasError('serviceId', 'minlength')) {
+              <p class="cds-field__error">Use at least 3 characters.</p>
+            } @else if (hasError('serviceId', 'pattern')) {
+              <p class="cds-field__error">Use lower-case letters and numbers, with single hyphens between words.</p>
+            } @else {
+              <p class="cds-field__help">Part of the web address the EHR calls. Changing it later breaks EHRs already set up.</p>
+            }
+          </div>
+
+          @if (serviceUrl(); as url) {
+            <div class="cds-field cds-field--full">
+              <span class="cds-field__label">Service URL</span>
+              <div class="cds-url-row">
+                <code class="cds-url">{{ url }}</code>
+                <app-cds-copy-button [value]="url" what="service URL" />
+              </div>
+            </div>
+          }
+
+          <div class="cds-field cds-field--full" [class.cds-field--error]="hasError('description')">
+            <label for="cds-description">Description</label>
+            <textarea
+              id="cds-description"
+              formControlName="description"
+              rows="3"
+              maxlength="2000"
+              [placeholder]="handler()?.description ?? ''"
+            ></textarea>
+            <p class="cds-field__help">Shown to the EHR in the service list. Leave blank to use the check's own description.</p>
+          </div>
+
+          <div class="cds-field cds-field--full">
+            <label class="cds-check" for="cds-enabled">
+              <input id="cds-enabled" type="checkbox" formControlName="isEnabled" />
+              On (EHRs can call this service)
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section class="cds-panel">
+        <div class="cds-panel__head">
+          <div>
+            <h2 class="cds-panel__title">Settings</h2>
+            <p class="cds-panel__sub">{{ handler()?.description }}</p>
+          </div>
+        </div>
+        <div class="cds-notice cds-notice--warning">
+          <mat-icon>health_and_safety</mat-icon>
+          <p>The clinical rules behind this check are sample data. Have your clinical team review them before you use the service with real patients.</p>
+        </div>
+        <app-cds-settings-form
+          [descriptors]="handler()?.settings ?? []"
+          [group]="settingsGroup()"
+          [showAllErrors]="submitted()"
+        />
+      </section>
+
+      <!-- Card source -->
+      <section class="cds-panel">
+        <div class="cds-panel__head">
+          <div>
+            <h2 class="cds-panel__title">Card source</h2>
+            <p class="cds-panel__sub">Every card shows where its advice comes from.</p>
+          </div>
+        </div>
+        <div class="cds-form-grid">
+          <div class="cds-field" [class.cds-field--error]="hasError('cardSourceLabel')">
+            <label for="cds-source-label">Source name</label>
+            <input
+              id="cds-source-label"
+              formControlName="cardSourceLabel"
+              autocomplete="off"
+              maxlength="200"
+              [placeholder]="form.controls.title.value"
+            />
+            <p class="cds-field__help">Leave blank to use the service name.</p>
+          </div>
+          <div class="cds-field" [class.cds-field--error]="hasError('cardSourceUrl')">
+            <label for="cds-source-url">Source link</label>
+            <input id="cds-source-url" formControlName="cardSourceUrl" autocomplete="off" placeholder="https://" maxlength="1000" />
+            @if (hasError('cardSourceUrl', 'url')) {
+              <p class="cds-field__error">Enter a full web address starting with http:// or https://.</p>
+            } @else {
+              <p class="cds-field__help">Optional page clinicians can open to learn more.</p>
+            }
+          </div>
+        </div>
+      </section>
+
+      <!-- Allowed issuers -->
+      <section class="cds-panel">
+        <div class="cds-panel__head">
+          <div>
+            <h2 class="cds-panel__title">Who can call it</h2>
+            <p class="cds-panel__sub">EHR calls are signed. Only calls from trusted issuers are answered.</p>
+          </div>
+        </div>
+        <app-cds-allowed-issuers [issuers]="issuers()" [control]="form.controls.allowedIssuerIds" />
+      </section>
+
+      <!-- Prefetch -->
+      <section class="cds-panel">
+        <div class="cds-panel__head">
+          <div>
+            <h2 class="cds-panel__title">Data the EHR sends</h2>
+          </div>
+          @if (!isNew && instance(); as s) {
+            <a
+              class="setup-sheet-link"
+              routerLink="/clinical-decision-support/connect"
+              [queryParams]="{ service: s.id }"
+              data-testid="cds-setup-sheet-link"
+            >
+              <mat-icon>description</mat-icon>
+              Epic setup sheet
+            </a>
+          }
+        </div>
+        <app-cds-prefetch-summary [prefetch]="prefetch()" />
+        <app-cds-fetch-missing-data [control]="form.controls.fetchMissingData" />
+      </section>
+
+      <!-- One-click fixes -->
+      <section class="cds-panel" data-testid="cds-fixes-panel">
+        <div class="cds-panel__head">
+          <div>
+            <h2 class="cds-panel__title">One-click fixes</h2>
+            <p class="cds-panel__sub">Buttons on a card that change the clinician's draft orders or problem list in one click.</p>
+          </div>
+          <app-cds-fixes-badge [enabled]="fixesGroup().controls.enabled.value" />
+        </div>
+        <app-cds-fixes-editor [descriptors]="fixTypes()" [group]="fixesGroup()" [showAllErrors]="submitted()" />
+      </section>
+
+      <!-- Dismiss reasons -->
+      <section class="cds-panel">
+        <div class="cds-panel__head">
+          <div>
+            <h2 class="cds-panel__title">Dismiss reasons</h2>
+            <p class="cds-panel__sub">The reasons a clinician can pick when they dismiss a card. Up to 10.</p>
+          </div>
+        </div>
+        <app-cds-override-reasons-editor [reasons]="reasonsArray()" [defaults]="defaultReasons()" [showAllErrors]="submitted()" />
+      </section>
+
+      <!-- Links -->
+      <section class="cds-panel">
+        <div class="cds-panel__head">
+          <div>
+            <h2 class="cds-panel__title">Card links</h2>
+            <p class="cds-panel__sub">Buttons on every card that open a web page or a SMART app. Up to 10.</p>
+          </div>
+        </div>
+        <app-cds-links-editor [links]="linksArray()" [showAllErrors]="submitted()" />
+      </section>
+
+      @if (errorMessage(); as message) {
+        <div class="cds-notice cds-notice--error" role="alert" data-testid="cds-setup-error">
+          <mat-icon>error_outline</mat-icon>
+          <p>{{ message }}</p>
+        </div>
+      }
+
+      <div class="cds-actions">
+        <button type="button" class="btn btn-secondary" (click)="cancel()">
+          {{ canSave() ? 'Cancel' : 'Back' }}
+        </button>
+        @if (canSave()) {
+          <button type="submit" class="btn btn-primary" data-testid="cds-setup-save" [disabled]="saving() || handlerMissing()">
+            {{ saving() ? 'Saving...' : (isNew ? 'Add service' : 'Save changes') }}
+          </button>
+        }
+      </div>
+    </form>
+  }
+</div>

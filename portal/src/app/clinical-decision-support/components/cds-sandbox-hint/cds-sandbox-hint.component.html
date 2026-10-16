@@ -1,0 +1,56 @@
+<section class="hint">
+  <div class="hint__head">
+    <mat-icon>lightbulb</mat-icon>
+    <div>
+      <h2 class="hint__title">Try it with the public CDS Hooks sandbox</h2>
+      <p class="hint__sub">
+        The sandbox at <a [href]="sandbox.url" target="_blank" rel="noopener noreferrer">{{ sandbox.url }}</a> is a free test EHR.
+        It calls Segue from your browser, so Segue must be reachable from this computer. Use made-up patients only.
+      </p>
+    </div>
+  </div>
+
+  <dl class="values">
+    <div class="values__row">
+      <dt>Issuer (iss)</dt>
+      <dd>
+        <code>{{ sandbox.issuer }}</code>
+        <app-cds-copy-button [value]="sandbox.issuer" what="sandbox issuer" />
+      </dd>
+    </div>
+    <div class="values__row">
+      <dt>JWKS URL</dt>
+      <dd>
+        <code>{{ sandbox.jwksUrl }}</code>
+        <app-cds-copy-button [value]="sandbox.jwksUrl" what="sandbox JWKS URL" />
+      </dd>
+    </div>
+    @if (discoveryUrl(); as url) {
+      <div class="values__row">
+        <dt>Paste into the sandbox</dt>
+        <dd>
+          <code>{{ url }}</code>
+          <app-cds-copy-button [value]="url" what="discovery URL" />
+        </dd>
+      </div>
+    }
+  </dl>
+
+  <ol class="steps">
+    <li>Add the sandbox as a trusted issuer.</li>
+    <li>In the sandbox, open the settings menu, choose "Add CDS Services" and paste the discovery URL.</li>
+    <li>Pick a patient or write an order. Cards from Segue appear on the right.</li>
+  </ol>
+
+  @if (canAdd()) {
+    <div>
+      @if (alreadyAdded()) {
+        <span class="cds-badge cds-badge--success"><mat-icon>check</mat-icon> Sandbox already trusted</span>
+      } @else {
+        <button type="button" class="btn btn-ghost btn-sm" data-testid="cds-add-sandbox" (click)="addSandbox.emit()">
+          Add sandbox as trusted issuer
+        </button>
+      }
+    </div>
+  }
+</section>

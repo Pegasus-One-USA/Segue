@@ -38,6 +38,11 @@ public static class ObservabilityServiceCollectionExtensions
         services.AddSingleton<IApiMetrics>(apiMetrics);
         services.AddSingleton<IApiMetricsSnapshotProvider>(apiMetrics);
 
+        // CDS Hooks calls (the public /cds-services endpoints): OpenTelemetry export only.
+        var cdsMetrics = new FhirBridgeCdsMetrics();
+        services.AddSingleton(cdsMetrics);
+        services.AddSingleton<ICdsMetrics>(cdsMetrics);
+
         // Live CPU/memory for the current process — backs System Health's "this process" row. No OTel export of
         // its own; it's a point-in-time diagnostic read, not a time-series metric worth shipping to a backend.
         services.AddSingleton<IProcessHealthProvider, ProcessHealthProvider>();
@@ -61,8 +66,11 @@ public static class ObservabilityServiceCollectionExtensions
                 tracing
                     .SetResourceBuilder(resourceBuilder)
                     .AddAspNetCoreInstrumentation()
-                    .AddHttpClientInstrumentation()
+                    // A request flagged as untraced (the CDS FHIR callback) carries patient ids in its URL.
+                    .AddHttpClientInstrumentation(http => http.FilterHttpRequestMessage = request =>
+                        !request.Options.TryGetValue(FhirBridgeCdsMetrics.UntracedRequest, out var untraced) || !untraced)
                     .AddSource(FhirBridgeActivitySource.Name)
+                    .AddSource(FhirBridgeCdsMetrics.ActivitySourceName)
                     // Best-effort: the Azure.Messaging.ServiceBus SDK has built-in Activity sources for
                     // send/process that populate W3C trace headers on the wire once something is listening — a
                     // no-op for hosts not using the Azure Service Bus transport. RabbitMQ / in-memory
@@ -94,7 +102,8 @@ public static class ObservabilityServiceCollectionExtensions
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation()
                     .AddMeter(FhirBridgeMetrics.MeterName)
-                    .AddMeter(FhirBridgeApiMetrics.MeterName);
+                    .AddMeter(FhirBridgeApiMetrics.MeterName)
+                    .AddMeter(FhirBridgeCdsMetrics.MeterName);
 
                 if (!string.IsNullOrWhiteSpace(options.OtlpEndpoint))
                 {

@@ -25,6 +25,10 @@ public static class FhirBridgeAuthenticationExtensions
     public const string EntraScheme = "Entra";
     public const string SelectorScheme = "FhirBridgeSelector";
 
+    /// <summary>The public CDS Hooks endpoints (see <see cref="CdsHooksAuthenticationHandler"/>).</summary>
+    public const string CdsHooksScheme = "CdsHooks";
+    public const string CdsHooksPathPrefix = "/cds-services";
+
     /// <summary>Path prefix for every SignalR hub — browsers cannot set an Authorization header on the WebSocket/
     /// SSE handshake a hub connection negotiates, so the client instead appends the access token as
     /// <c>?access_token=...</c> on the connection URL. Only requests under this prefix are allowed to authenticate
@@ -57,8 +61,13 @@ public static class FhirBridgeAuthenticationExtensions
         builder.AddPolicyScheme(SelectorScheme, "Local or Entra bearer", options =>
         {
             options.ForwardDefaultSelector = context =>
-                entra.Enabled && LooksLikeEntraToken(context, entra) ? EntraScheme : LocalScheme;
+                context.Request.Path.StartsWithSegments(CdsHooksPathPrefix) ? CdsHooksScheme
+                : entra.Enabled && LooksLikeEntraToken(context, entra) ? EntraScheme
+                : LocalScheme;
         });
+
+        // EHR-signed CDS Hooks JWTs are never portal credentials; this scheme keeps them away from Local/Entra.
+        builder.AddScheme<AuthenticationSchemeOptions, CdsHooksAuthenticationHandler>(CdsHooksScheme, _ => { });
 
         builder.AddJwtBearer(LocalScheme, _ => { });
         // The signing key is resolved from IAppSecretAccessor (a DI-registered singleton), so it's configured

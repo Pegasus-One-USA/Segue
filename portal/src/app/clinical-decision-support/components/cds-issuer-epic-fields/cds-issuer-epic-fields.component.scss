@@ -1,0 +1,12 @@
+@use '../../cds' as *;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}

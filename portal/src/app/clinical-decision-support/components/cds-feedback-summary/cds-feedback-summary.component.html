@@ -1,0 +1,16 @@
+@if (hasAny()) {
+  <div class="summary" data-testid="cds-feedback-summary">
+    <span class="summary__title">On this page:</span>
+    @if (fixesOffered() > 0) {
+      <span class="summary__item">{{ fixesOffered() }} {{ fixesOffered() === 1 ? 'fix' : 'fixes' }} offered</span>
+    }
+    @if (fixesAccepted() > 0) {
+      <span class="summary__item">{{ fixesAccepted() }} {{ fixesAccepted() === 1 ? 'fix' : 'fixes' }} accepted</span>
+    }
+    @for (r of reasonCounts(); track r.code) {
+      <span class="summary__item" title="Times clinicians picked this dismiss reason">
+        <code>{{ r.code }}</code> &times; {{ r.count }}
+      </span>
+    }
+  </div>
+}

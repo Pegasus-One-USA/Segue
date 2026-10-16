@@ -239,6 +239,22 @@ export const MATRIX_SECTIONS: MatrixSection[] = [
     ],
   },
   {
+    id: 'clinical-decision-support',
+    label: 'Clinical Decision Support',
+    rows: [
+      {
+        id: 'cds-hooks', label: 'CDS Hooks',
+        actions: [
+          { label: 'View', code: 'cdshooks.view' },
+          { label: 'Create', code: 'cdshooks.create' },
+          { label: 'Edit', code: 'cdshooks.edit' },
+          { label: 'Delete', code: 'cdshooks.delete' },
+          { label: 'Test', code: 'cdshooks.test' },
+        ],
+      },
+    ],
+  },
+  {
     id: 'logs-compliance',
     label: 'Logs & Compliance',
     rows: [

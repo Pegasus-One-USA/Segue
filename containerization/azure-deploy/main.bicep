@@ -978,6 +978,9 @@ resource segueApp 'Microsoft.App/containerApps@2024-03-01' = {
             // (SystemSettingsSeeder) — an operator can later correct it live from Settings > System
             // Settings > OAuth (e.g. after moving to a new custom domain) with no redeploy needed.
             { name: 'OAuth__PublicBaseUrl', value: 'https://${segueAppCustomDomain}' }
+            // CDS Hooks: the base of the service URLs registered with EHRs and of the JWT aud each call must
+            // carry. Without it CDS calls are refused (the audience is never taken from the Host header).
+            { name: 'Cds__PublicBaseUrl', value: 'https://${segueAppCustomDomain}' }
           ] : [], !useAzureCacheForRedis ? [
             { name: 'Redis__TrustedCertificateThumbprint', value: redisTrustedCertificateThumbprint }
           ] : [], enableTenantSecretsKeyVault ? [

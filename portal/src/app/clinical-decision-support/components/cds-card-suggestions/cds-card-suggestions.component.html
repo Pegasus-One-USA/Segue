@@ -1,0 +1,57 @@
+<div class="fixes">
+  <span class="fixes__label">One-click fixes. Tick one to see what the EHR would do. Nothing is sent from here.</span>
+  <div class="fixes__buttons">
+    @for (s of suggestions(); track $index; let i = $index) {
+      <button
+        type="button"
+        class="fix-btn"
+        [class.fix-btn--on]="isTicked(i)"
+        [attr.aria-pressed]="isTicked(i)"
+        data-testid="cds-suggestion"
+        (click)="toggle(i)"
+      >
+        <mat-icon>{{ isTicked(i) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+        {{ s.label }}
+        @if (s.isRecommended) {
+          <span class="fix-btn__tag">Recommended</span>
+        }
+      </button>
+    }
+  </div>
+
+  @for (s of suggestions(); track $index; let i = $index) {
+    @if (isTicked(i)) {
+      <div class="preview" data-testid="cds-suggestion-preview">
+        <span class="preview__title">{{ s.label }}</span>
+        @for (a of actionsOf(s); track $index) {
+          @if (isDelete(a)) {
+            <p class="preview__line">
+              <mat-icon>remove_circle_outline</mat-icon>
+              The EHR would remove the draft {{ deleteTarget(a) }}.
+            </p>
+          } @else {
+            @let p = createPreview(a);
+            <p class="preview__line">
+              <mat-icon>add_circle_outline</mat-icon>
+              <span>
+                The EHR would add a {{ p.status === 'draft' ? 'draft ' : '' }}{{ p.what }}:
+                <strong>{{ p.display ?? p.code ?? 'no code' }}</strong>
+                @if (p.code) { <code>{{ p.code }}</code> }
+                @if (p.system) { <span class="preview__system">{{ p.system }}</span> }
+              </span>
+            </p>
+            <details class="preview__json">
+              <summary>Resource sent to the EHR</summary>
+              <pre>{{ p.json }}</pre>
+            </details>
+          }
+          @if (a.description) {
+            <p class="preview__desc">{{ a.description }}</p>
+          }
+        } @empty {
+          <p class="preview__desc">This fix has no action.</p>
+        }
+      </div>
+    }
+  }
+</div>

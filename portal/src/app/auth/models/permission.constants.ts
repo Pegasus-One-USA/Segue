@@ -48,6 +48,7 @@ export enum PermissionGroup {
   AzureFhirService = 'azurefhirservice',
   EhrWriteBack = 'ehrwriteback',
   TabularSources = 'tabularsources',
+  CdsHooks = 'cdshooks',
 }
 
 export enum PermissionAction {

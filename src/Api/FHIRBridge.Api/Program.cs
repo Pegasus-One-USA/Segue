@@ -405,7 +405,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 // Rate limiting (HIPAA/SOC2 CC6.2): throttle unauthenticated credential + ingestion endpoints
 // to blunt brute-force and abuse. Partitioned per client IP; sensitive endpoints opt in via
-// [EnableRateLimiting("auth")] / ("oauth") / ("webhook"). Limits are configurable under "RateLimiting:*",
+// [EnableRateLimiting("auth")] / ("oauth") / ("webhook") / ("cds"). Limits are configurable under "RateLimiting:*",
 // with a SystemSettings DB row (same key) overriding the appsettings value if present. The .NET rate
 // limiter builds its partitioned limiters once at startup, so a DB override here takes effect on the
 // next process restart, not live — see ISystemSettingsCache for knobs that apply without a restart.
@@ -426,6 +426,12 @@ using (var settingsBootstrapScope = builder.Services.BuildServiceProvider().Crea
         "RateLimiting:Webhook:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:PermitPerWindow") ?? 120, default).GetAwaiter().GetResult();
     var webhookWindowMinutes = settingsCache.GetIntAsync(
         "RateLimiting:Webhook:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:Webhook:WindowMinutes") ?? 1, default).GetAwaiter().GetResult();
+    // The public CDS Hooks endpoints: EHRs call from a handful of server IPs on every chart open/order, so the
+    // per-IP allowance is far higher than the credential endpoints'.
+    var cdsPermit = settingsCache.GetIntAsync(
+        "RateLimiting:Cds:PermitPerWindow", builder.Configuration.GetValue<int?>("RateLimiting:Cds:PermitPerWindow") ?? 600, default).GetAwaiter().GetResult();
+    var cdsWindowMinutes = settingsCache.GetIntAsync(
+        "RateLimiting:Cds:WindowMinutes", builder.Configuration.GetValue<int?>("RateLimiting:Cds:WindowMinutes") ?? 1, default).GetAwaiter().GetResult();
 
     builder.Services.AddRateLimiter(options =>
     {
@@ -458,6 +464,16 @@ using (var settingsBootstrapScope = builder.Services.BuildServiceProvider().Crea
             {
                 PermitLimit = webhookPermit,
                 Window = TimeSpan.FromMinutes(webhookWindowMinutes),
+                QueueLimit = 0
+            }));
+
+    options.AddPolicy("cds", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ClientPartitionKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = cdsPermit,
+                Window = TimeSpan.FromMinutes(cdsWindowMinutes),
                 QueueLimit = 0
             }));
 
@@ -836,6 +852,24 @@ app.Use(async (context, next) =>
             message = "Segue is locked: no active license is applied. An administrator must apply a valid license before this action is available.",
             licenseState = licenseGateService.Current.State.ToString(),
         });
+        return;
+    }
+
+    // The public CDS Hooks endpoints are a licensed feature too, though they sit outside /api/v1. EHRs get a
+    // plain 503 they understand (no cards), and invoke/feedback calls still leave their Activity row.
+    if (context.Request.Path.StartsWithSegments(FhirBridgeAuthenticationExtensions.CdsHooksPathPrefix, out var cdsRemainder) &&
+        (HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsPost(context.Request.Method)) &&
+        licenseGateService.Current.State != FHIRBridge.Application.Abstractions.Licensing.LicenseState.Active)
+    {
+        if (HttpMethods.IsPost(context.Request.Method))
+        {
+            var segments = cdsRemainder.Value?.Trim('/').Split('/') ?? [];
+            await context.RequestServices.GetRequiredService<FHIRBridge.Application.Abstractions.Cds.ICdsHooksService>()
+                .RecordUnlicensedAsync(segments[0], feedback: segments.Length > 1);
+        }
+
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new { error = "This CDS service is not available." });
         return;
     }
 

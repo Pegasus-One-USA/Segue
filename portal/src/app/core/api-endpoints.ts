@@ -103,6 +103,23 @@ export const EHR_ENDPOINTS_ENDPOINTS = {
   byId: (id: string) => `${API_V1_BASE}/ehr-endpoints/${id}`,
 };
 
+// ─── CDS Hooks admin (CdsServicesController, CdsTrustedIssuersController, CdsCatalogController — api/v1/cds) ─
+// Configuration only. The public endpoints EHRs call (/cds-services) live outside api/v1 and are never called
+// from the portal.
+export const CDS_ENDPOINTS = {
+  services:          `${API_V1_BASE}/cds/services`,
+  serviceById:       (id: string) => `${API_V1_BASE}/cds/services/${id}`,
+  sampleRequest:     (id: string) => `${API_V1_BASE}/cds/services/${id}/sample-request`,
+  test:              (id: string) => `${API_V1_BASE}/cds/services/${id}/test`,
+  setupSheet:        (id: string) => `${API_V1_BASE}/cds/services/${id}/setup-sheet`,
+  trustedIssuers:    `${API_V1_BASE}/cds/trusted-issuers`,
+  trustedIssuerById: (id: string) => `${API_V1_BASE}/cds/trusted-issuers/${id}`,
+  testCallback:      (id: string) => `${API_V1_BASE}/cds/trusted-issuers/${id}/test-callback`,
+  handlers:          `${API_V1_BASE}/cds/handlers`,
+  discoveryInfo:     `${API_V1_BASE}/cds/discovery-info`,
+  activity:          `${API_V1_BASE}/cds/activity`,
+};
+
 // ─── Source Connections (ConfigurationsController — api/v1/source-connections) ─
 export const SOURCE_CONNECTIONS_ENDPOINTS = {
   list: `${API_V1_BASE}/source-connections`,

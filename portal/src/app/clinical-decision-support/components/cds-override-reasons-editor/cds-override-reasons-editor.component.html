@@ -1,0 +1,55 @@
+@if (reasons().length === 0) {
+  <p class="hint">Cards offer the standard reasons:</p>
+  <ul class="defaults" data-testid="cds-reasons-defaults">
+    @for (r of defaults(); track r.code) {
+      <li><code>{{ r.code }}</code> {{ r.display }}</li>
+    }
+  </ul>
+  @if (!reasons().disabled) {
+    <button type="button" class="btn btn-secondary btn-sm" data-testid="cds-reasons-customize" (click)="customize()">
+      Change the reasons
+    </button>
+  }
+} @else {
+  <p class="hint">Cards offer these reasons. The EHR team maps each code to one of their own override reasons.</p>
+  <ul class="rows">
+    @for (row of reasons().controls; track row; let i = $index) {
+      <li class="row" [formGroup]="row" data-testid="cds-reason-row">
+        <div class="cds-field" [class.cds-field--error]="showError(row, 'code')">
+          <label [for]="'cds-reason-code-' + i">Code</label>
+          <input [id]="'cds-reason-code-' + i" class="cds-mono" formControlName="code" maxlength="50" autocomplete="off" />
+        </div>
+        <div class="cds-field" [class.cds-field--error]="showError(row, 'display')">
+          <label [for]="'cds-reason-display-' + i">Shown to the clinician</label>
+          <input [id]="'cds-reason-display-' + i" formControlName="display" maxlength="200" autocomplete="off" />
+        </div>
+        @if (!reasons().disabled && reasons().length > 1) {
+          <button type="button" class="btn-icon" matTooltip="Remove this reason" [attr.aria-label]="'Remove reason ' + (i + 1)" (click)="remove(i)">
+            <mat-icon>close</mat-icon>
+          </button>
+        }
+        @if (showError(row, 'code')) {
+          <p class="cds-field__error row__error">Use 1 to 50 letters, digits, hyphens or underscores, with no spaces.</p>
+        } @else if (showError(row, 'display')) {
+          <p class="cds-field__error row__error">Enter the text the clinician sees.</p>
+        }
+      </li>
+    }
+  </ul>
+
+  @if (reasons().getError('duplicateCode'); as code) {
+    <p class="cds-field__error" role="alert">The code "{{ code }}" is used twice. Each code must be different.</p>
+  }
+
+  @if (!reasons().disabled) {
+    <div class="actions">
+      @if (reasons().length < max) {
+        <button type="button" class="btn btn-ghost btn-sm" data-testid="cds-reason-add" (click)="add()">
+          <mat-icon>add</mat-icon>
+          Add a reason
+        </button>
+      }
+      <button type="button" class="btn btn-ghost btn-sm" (click)="useDefaults()">Go back to the standard reasons</button>
+    </div>
+  }
+}
