@@ -578,10 +578,16 @@ none and is skipped. athena splits Observations into vital signs and lab results
 eCW medical and surgical history are filed only on an open telephone encounter, which eCW will not create for us.
 `CreatesHolderEncounter` capabilities are skipped (`holder-encounter-not-enabled`) unless the destination turns on
 `dest_createHolderEncounter` (in the wizard, by ticking the Medical history or Surgical history kind under its type). Then the channel creates one telephone encounter
-per patient per run, **at send time**, after the ledger, the write cap and the live check — so a dry run, or a run
-whose history items are all already written, creates none. A failed create skips the items for this run
-(`holder-encounter-not-created`) without a ledger row, so the next run tries again. The content hash is taken before
-the encounter is bound, so it is the same on every run.
+per patient in each EHR, **at send time**, after the ledger, the write cap, the live check and the record's own ledger
+claim — so a dry run, a run whose history items are all already written, or a record another run claimed first,
+creates none. The encounter has its own ledger row (resource type `Encounter`, keyed by the target patient, not by any
+source record): once written, later runs file onto the same encounter. A refused create skips the items for this run
+(`holder-encounter-not-created`) and the next run tries again; a create with an unknown outcome (a timeout) is
+recorded as Unknown and the items wait (`holder-encounter-unknown`, then `holder-encounter-awaiting-review`) until a
+reviewer resolves that row on EHR Write Review, so an encounter that did land is never created twice. If the create
+stops the run (a cancel, a lost lease), the record's claim is settled as a refusal with no HTTP status, so it is
+retried rather than left waiting for review. The content hash is taken before the encounter is bound, so it is the
+same on every run.
 
 ### 13.5 eClinicalWorks specifics (from eCW's published Create API pages, 2026-08-07)
 

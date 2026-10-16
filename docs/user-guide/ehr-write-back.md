@@ -184,7 +184,9 @@ This list holds every destination and every **EHR write connection** (the login 
      unticking a type's last kind unticks the type. A type written only through such kinds (for example Epic
      BodyStructure → Radiotherapy volumes) ticks all its kinds when you tick the type.
    - Kinds that need the EHR's own ids are shown only when the source is a CSV / SQL Table source.
-   - eClinicalWorks Medical history and Surgical history are filed on a new telephone encounter. Ticking either turns
+   - eClinicalWorks Medical history and Surgical history are filed on a telephone encounter, created for the patient
+     the first time a history item is sent and reused by later runs. If eClinicalWorks did not answer when it was
+     created, its history items wait until you resolve that encounter on EHR Write Review. Ticking either turns
      that on; the note under it says so, and there is nothing to set later. One setting serves both, and the note under
      each says what clicking it does to the other: "Also ticks …", "Unticking also unticks …" (naming the type too
      when that was its only kind), or "Same setting as …".

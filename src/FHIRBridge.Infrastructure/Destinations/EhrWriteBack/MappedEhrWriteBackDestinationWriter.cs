@@ -415,9 +415,10 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 
     /// <summary>
     /// Files a record that the vendor takes only on an encounter the bridge creates (eClinicalWorks medical and
-    /// surgical history on a telephone encounter): one encounter per patient per run, created when the first such
-    /// record is actually sent, so a run whose records are all already written creates none. Returns why the record
-    /// cannot be sent, or null once it is bound to the encounter.
+    /// surgical history on a telephone encounter): one encounter per patient in each EHR, created when the first such
+    /// record is actually sent and recorded in the ledger like any other create (see
+    /// <see cref="HolderEncounterAsync"/>), so later runs file onto the same encounter and a run whose records are
+    /// all already written creates none. Returns why the record cannot be sent, or null once it is bound.
     /// </summary>
     private async Task<string?> BindHolderEncounterAsync(
         RunState run,
@@ -426,35 +427,124 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         string targetPatientId,
         CancellationToken cancellationToken)
     {
-        if (!run.HolderEncounters.TryGetValue(targetPatientId, out var encounterId))
+        if (!run.HolderEncounters.TryGetValue(targetPatientId, out var holder))
         {
-            EnsureLeaseHeld(run);
-            try
-            {
-                var outcome = await run.Channel.CreateHolderEncounterAsync(targetPatientId, cancellationToken);
-                encounterId = outcome.Kind == EhrCreateKind.Created ? outcome.ResourceId : null;
-                _logger.LogInformation(
-                    "EHR write-back holder encounter for {Vendor}: {Outcome} ({StatusCode}).",
-                    run.Vendor.Vendor, outcome.Kind, outcome.HttpStatus);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning("EHR write-back holder encounter for {Vendor} failed ({ExceptionType}).", run.Vendor.Vendor, ex.GetType().Name);
-                encounterId = null;
-            }
+            holder = await HolderEncounterAsync(run, targetPatientId, cancellationToken);
 
-            // Cached either way: a failed or uncertain create is not repeated for every record of the patient.
-            run.HolderEncounters[targetPatientId] = encounterId;
+            // Cached either way: a failed, uncertain or blocked create is not repeated for every record of the patient.
+            run.HolderEncounters[targetPatientId] = holder;
         }
 
-        if (encounterId is null)
+        if (holder.Id is null)
         {
-            return "holder-encounter-not-created";
+            return holder.Problem;
         }
 
-        profile.BindReferences(shaped, targetPatientId, encounterId);
+        profile.BindReferences(shaped, targetPatientId, holder.Id);
         return null;
     }
+
+    /// <summary>
+    /// The holder encounter for a target patient, through its own ledger row (keyed by the target patient, apart from
+    /// every source record): an encounter written before is reused; one whose create has an unknown outcome waits for
+    /// review, so a timeout that did file it never leads to a second; only a patient with none (or a refused or
+    /// released one) gets a new create, claimed first like any record. Every outcome of that create is settled on the
+    /// row, a cancel included.
+    /// </summary>
+    private async Task<HolderEncounter> HolderEncounterAsync(RunState run, string targetPatientId, CancellationToken cancellationToken)
+    {
+        EnsureLeaseHeld(run);
+
+        var sourceKey = EhrWriteKeys.SourceKey(HolderEncounterOrigin, HolderEncounterType, targetPatientId, run.CloneMode);
+        var contentHash = EhrWriteKeys.ContentHash(new JsonObject { ["holderEncounterFor"] = targetPatientId });
+        var existing = (await _ledger.FindAsync(run.TargetKey, HolderEncounterType, [sourceKey], cancellationToken))
+            .GetValueOrDefault(sourceKey);
+        if (existing is { State: EhrWriteLedgerState.Written or EhrWriteLedgerState.AlreadyAtTarget, TargetResourceId: { Length: > 0 } knownId })
+        {
+            return new HolderEncounter(knownId, null);
+        }
+
+        if (existing is not null && existing.State is not (EhrWriteLedgerState.Rejected or EhrWriteLedgerState.Released))
+        {
+            return new HolderEncounter(null, "holder-encounter-awaiting-review");
+        }
+
+        var now = DateTime.UtcNow;
+        var entry = existing;
+        if (entry is null)
+        {
+            entry = new EhrWriteLedgerEntry(
+                run.TargetKey, run.Channel.TargetConnectionId, HolderEncounterType, sourceKey, contentHash,
+                EhrWriteOperation.Create, run.Channel.DestinationId,
+                run.Context.PipelineRunId == Guid.Empty ? null : run.Context.PipelineRunId, now);
+            if (!await _ledger.TryAddAsync(entry, cancellationToken))
+            {
+                return new HolderEncounter(null, "holder-encounter-awaiting-review");
+            }
+        }
+
+        entry.MarkSending(contentHash, now);
+        if (!await _ledger.TryClaimAsync(entry, cancellationToken))
+        {
+            return new HolderEncounter(null, "holder-encounter-awaiting-review");
+        }
+
+        EhrCreateOutcome outcome;
+        try
+        {
+            outcome = await run.Channel.CreateHolderEncounterAsync(targetPatientId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // As for any create: the request may have landed, cancellation included, so it waits for review.
+            entry.MarkUnknown(null, ex is OperationCanceledException ? "cancelled" : "exception", DateTime.UtcNow);
+            await _ledger.SaveChangesAsync(CancellationToken.None);
+            _logger.LogWarning("EHR write-back holder encounter for {Vendor} failed ({ExceptionType}).", run.Vendor.Vendor, ex.GetType().Name);
+            if (ex is OperationCanceledException)
+            {
+                throw;
+            }
+
+            return new HolderEncounter(null, "holder-encounter-unknown");
+        }
+
+        _logger.LogInformation(
+            "EHR write-back holder encounter for {Vendor}: {Outcome} ({StatusCode}).",
+            run.Vendor.Vendor, outcome.Kind, outcome.HttpStatus);
+        var codes = string.Join(",", outcome.Issues.Select(i => i.VendorCode ?? i.Code).Where(c => c is not null).Distinct());
+        var settled = DateTime.UtcNow;
+        if (outcome is { Kind: EhrCreateKind.Created, ResourceId: { Length: > 0 } createdId })
+        {
+            entry.MarkWritten(createdId, outcome.HttpStatus ?? 201, settled);
+            await _ledger.SaveChangesAsync(CancellationToken.None);
+            return new HolderEncounter(createdId, null);
+        }
+
+        if (outcome.Kind == EhrCreateKind.Rejected && outcome.Issues.Any(i => i.VendorCode == EhrWriteOutcomeCodes.CancelledBeforeSend))
+        {
+            entry.MarkRejected(null, EhrWriteOutcomeCodes.CancelledBeforeSend, settled);
+            await _ledger.SaveChangesAsync(CancellationToken.None);
+            throw new OperationCanceledException(cancellationToken);
+        }
+
+        if (outcome.Kind == EhrCreateKind.Rejected)
+        {
+            entry.MarkRejected(outcome.HttpStatus, codes.Length > 0 ? codes : null, settled);
+            await _ledger.SaveChangesAsync(CancellationToken.None);
+            return new HolderEncounter(null, "holder-encounter-not-created");
+        }
+
+        // Unknown, or a success with no id: it may exist, so it waits for review rather than being created again.
+        entry.MarkUnknown(outcome.HttpStatus, codes.Length > 0 ? codes : null, settled);
+        await _ledger.SaveChangesAsync(CancellationToken.None);
+        return new HolderEncounter(null, "holder-encounter-unknown");
+    }
+
+    // A holder encounter is keyed by the target patient, not by any source record, under an origin no source has.
+    private const string HolderEncounterOrigin = "urn:fhirbridge:holder-encounter";
+    private const string HolderEncounterType = "Encounter";
+
+    private sealed record HolderEncounter(string? Id, string? Problem);
 
     /// <summary>A source patient is written only when the EHR has no such patient and the destination opted in (or
     /// clone mode asks for a clone); a patient the EHR already has is "already written", which is what the
@@ -608,17 +698,30 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
     /// updates, so it is never resent), or sent with an unknown outcome and awaiting review. Reported as
     /// "already-written" / "awaiting-review". A rejected or released row is not settled: the record goes on to be
     /// shaped and checked again at send time.
+    ///
+    /// <para>A written record the source changed since (its <c>meta.lastUpdated</c> is after the row was settled) is
+    /// not cut short either: it is shaped, and the send-time check compares its content and reports
+    /// "changed-after-write". Without a <c>meta.lastUpdated</c> (a CSV / SQL Table source) this cannot be told before
+    /// shaping, and the record is reported as already written. Both block a resend; only the reason differs.</para>
     /// </summary>
     private static string? LedgerShortCircuit(RunState run, ParsedRecord record)
     {
         var key = EhrWriteKeys.SourceKey(run.Context.SourceBaseUrl, record.ResourceType, record.SourceId!, run.CloneMode);
-        return run.KnownLedgerRows.GetValueOrDefault((record.ResourceType, key))?.State switch
+        var row = run.KnownLedgerRows.GetValueOrDefault((record.ResourceType, key));
+        return row?.State switch
         {
+            EhrWriteLedgerState.Written or EhrWriteLedgerState.AlreadyAtTarget when ChangedSince(record, row.UpdatedOnUtc) => null,
             EhrWriteLedgerState.Written or EhrWriteLedgerState.AlreadyAtTarget => "already-written",
             EhrWriteLedgerState.Unknown or EhrWriteLedgerState.Pending => "awaiting-review",
             _ => null,
         };
     }
+
+    private static bool ChangedSince(ParsedRecord record, DateTime settledUtc) =>
+        record.Resource["meta"]?["lastUpdated"] is JsonValue value
+        && value.TryGetValue<string>(out var text)
+        && DateTimeOffset.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var lastUpdated)
+        && lastUpdated.UtcDateTime > settledUtc;
 
     /// <summary>Why the ledger stops this record being sent again, or null when it may be sent.</summary>
     private static string? LedgerBlocks(EhrWriteLedgerEntry? existing, string contentHash)
@@ -712,8 +815,27 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         // Only once this run holds the record's claim, as the last step before the create: anything it creates in the
         // EHR (a holder encounter) exists only for a record this run really sends, never for one another run claimed
         // first. The content hash was taken before it, so it does not change from run to run. If it cannot bind the
-        // record, nothing was sent for it: the claim is settled as a refusal with no HTTP status, retried as is.
-        if (prepare is not null && await prepare(cancellationToken) is { } prepareProblem)
+        // record, nothing was sent for it: the claim is settled as a refusal with no HTTP status, retried as is. So is
+        // a claim the prepare step stopped by throwing (the lease lost, the run cancelled): the record itself was not
+        // sent, and a row left Pending would wait for review on every later run.
+        string? prepareProblem;
+        try
+        {
+            prepareProblem = prepare is null ? null : await prepare(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            entry.MarkRejected(null, ex switch
+            {
+                FHIRBridge.Runtime.Application.Workflows.WorkflowRunLeaseLostException => "lease-lost",
+                OperationCanceledException => EhrWriteOutcomeCodes.CancelledBeforeSend,
+                _ => "holder-encounter-not-created",
+            }, DateTime.UtcNow);
+            await _ledger.SaveChangesAsync(CancellationToken.None);
+            throw;
+        }
+
+        if (prepareProblem is not null)
         {
             entry.MarkRejected(null, prepareProblem, DateTime.UtcNow);
             await _ledger.SaveChangesAsync(CancellationToken.None);
@@ -924,9 +1046,8 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         public IReadOnlyDictionary<string, JsonObject> ExportedBinaries { get; init; } = new Dictionary<string, JsonObject>();
         public EhrReferenceResolver Resolver { get; set; } = default!;
 
-        /// <summary>Encounters created in this run to file records on, by target patient; null when the create
-        /// failed.</summary>
-        public Dictionary<string, string?> HolderEncounters { get; } = new(StringComparer.Ordinal);
+        /// <summary>The encounter to file records on, by target patient, or why there is none.</summary>
+        public Dictionary<string, HolderEncounter> HolderEncounters { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, Tally> Tallies { get; } = new(StringComparer.Ordinal);
         public List<string> RecordErrors { get; } = [];
         public List<string?> WrittenIds { get; } = [];

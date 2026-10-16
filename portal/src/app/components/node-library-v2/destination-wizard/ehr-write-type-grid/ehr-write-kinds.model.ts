@@ -68,7 +68,7 @@ export function includedWhenTickedNote(resourceType: string): string {
 }
 /** Shown under a ticked kind filed on a holder encounter: the prerequisite is turned on by ticking it. */
 export const HOLDER_ENCOUNTER_KIND_NOTE =
-  'Filed on a new telephone encounter, created per patient per run only when a history item is sent.';
+  'Filed on a telephone encounter created for the patient the first time a history item is sent; later runs file onto the same one.';
 /** A selected type with none of its kinds ticked (a destination saved before kinds were chosen here). */
 export const NO_KIND_CHOSEN_NOTE = 'Tick at least one, or untick the type.';
 

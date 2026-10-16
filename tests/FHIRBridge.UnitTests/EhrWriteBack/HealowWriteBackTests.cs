@@ -215,6 +215,82 @@ public sealed class HealowWriteBackTests
         Summary(result, "Condition").AlreadyWritten.Should().Be(1);
     }
 
+    // PR #244 re-review: the telephone encounter is a create like any other, recorded in the ledger.
+    [Fact]
+    public async Task A_telephone_encounter_written_before_is_reused_by_the_next_run()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var first = new HealowChannel(dryRun: false, activated: true, "Condition") { IdentifierHit = IdentifierHit, CreateHolderEncounter = true };
+        var second = new HealowChannel(dryRun: false, activated: true, "Condition") { IdentifierHit = IdentifierHit, CreateHolderEncounter = true };
+
+        await RunAsync(Writer(ledger: ledger), first, Patient, Condition("h1", "medical-history", "resolved"));
+        await RunAsync(Writer(ledger: ledger), second, Patient, Condition("h2", "medical-history", "resolved"));
+
+        first.HolderEncounters.Should().Be(1);
+        second.HolderEncounters.Should().Be(0);
+        second.Sent.Should().ContainSingle().Which["encounter"]!["reference"]!.GetValue<string>().Should().Be("Encounter/tel-1");
+    }
+
+    [Fact]
+    public async Task A_telephone_encounter_with_an_unknown_outcome_waits_for_review_and_is_never_created_twice()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var timedOut = new HealowChannel(dryRun: false, activated: true, "Condition")
+        {
+            IdentifierHit = IdentifierHit, CreateHolderEncounter = true, HolderEncounterUnknown = true,
+        };
+        var next = new HealowChannel(dryRun: false, activated: true, "Condition") { IdentifierHit = IdentifierHit, CreateHolderEncounter = true };
+
+        var firstRun = await RunAsync(Writer(ledger: ledger), timedOut, Patient, Condition("h1", "medical-history", "resolved"));
+        var nextRun = await RunAsync(Writer(ledger: ledger), next, Patient, Condition("h1", "medical-history", "resolved"));
+
+        Summary(firstRun, "Condition").Reasons.Should().ContainKey("holder-encounter-unknown");
+        Summary(nextRun, "Condition").Reasons.Should().ContainKey("holder-encounter-awaiting-review");
+        next.HolderEncounters.Should().Be(0, because: "the first may have been filed");
+        next.Sent.Should().BeEmpty();
+        var review = await ledger.ListNeedingReviewAsync("Encounter", DateTime.UtcNow, 0, 10, CancellationToken.None);
+        review.Items.Should().ContainSingle().Which.State.Should().Be(EhrWriteLedgerState.Unknown);
+    }
+
+    [Fact]
+    public async Task A_cancel_while_the_telephone_encounter_is_created_leaves_no_record_waiting_for_review()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = new HealowChannel(dryRun: false, activated: true, "Condition")
+        {
+            IdentifierHit = IdentifierHit, CreateHolderEncounter = true, HolderEncounterCancelled = true,
+        };
+
+        var act = () => RunAsync(Writer(ledger: ledger), channel, Patient, Condition("h1", "medical-history", "resolved"));
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        channel.Sent.Should().BeEmpty();
+        var conditions = await ledger.ListNeedingReviewAsync("Condition", DateTime.UtcNow, 0, 10, CancellationToken.None);
+        var condition = conditions.Items.Should().ContainSingle().Subject;
+        condition.State.Should().Be(EhrWriteLedgerState.Rejected, because: "nothing was sent for the record, so it is retried, not left Pending");
+        condition.HttpStatus.Should().BeNull();
+        condition.OutcomeCodes.Should().Be(EhrWriteOutcomeCodes.CancelledBeforeSend);
+        var encounters = await ledger.ListNeedingReviewAsync("Encounter", DateTime.UtcNow, 0, 10, CancellationToken.None);
+        encounters.Items.Should().ContainSingle().Which.State.Should().Be(EhrWriteLedgerState.Unknown, because: "the encounter create may have landed");
+    }
+
+    [Fact]
+    public async Task A_record_changed_in_the_source_after_it_was_written_is_reported_as_changed()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var first = new HealowChannel(dryRun: false, activated: true, "AllergyIntolerance") { IdentifierHit = IdentifierHit };
+        var second = new HealowChannel(dryRun: false, activated: true, "AllergyIntolerance") { IdentifierHit = IdentifierHit };
+        var edited = Allergy
+            .Replace("\"id\":\"a1\",", $"\"id\":\"a1\",\"meta\":{{\"lastUpdated\":\"{DateTime.UtcNow.AddHours(1):yyyy-MM-ddTHH:mm:ssZ}\"}},", StringComparison.Ordinal)
+            .Replace("\"Penicillin G\"", "\"Penicillin V\"", StringComparison.Ordinal);
+
+        await RunAsync(Writer(ledger: ledger), first, Patient, Allergy);
+        var result = await RunAsync(Writer(ledger: ledger), second, Patient, edited);
+
+        second.Sent.Should().BeEmpty(because: "no in-scope API updates a written record");
+        Summary(result, "AllergyIntolerance").Reasons.Should().ContainKey("changed-after-write");
+    }
+
     [Fact]
     public async Task A_dry_run_never_creates_a_telephone_encounter()
     {
@@ -318,11 +394,20 @@ public sealed class HealowWriteBackTests
             return Task.FromResult(new EhrCreateOutcome(EhrCreateKind.Created, 200, $"new-{Sent.Count}", []));
         }
 
+        public bool HolderEncounterUnknown { get; init; }
+        public bool HolderEncounterCancelled { get; init; }
+
         public Task<EhrCreateOutcome> CreateHolderEncounterAsync(string targetPatientId, CancellationToken cancellationToken)
         {
             HolderEncounters++;
-            return Task.FromResult(HolderEncounterFails
-                ? new EhrCreateOutcome(EhrCreateKind.Rejected, 400, null, [new EhrOutcomeIssue("error", "processing", "123", null)])
+            if (HolderEncounterCancelled)
+            {
+                throw new OperationCanceledException();
+            }
+
+            return Task.FromResult(
+                HolderEncounterFails ? new EhrCreateOutcome(EhrCreateKind.Rejected, 400, null, [new EhrOutcomeIssue("error", "processing", "123", null)])
+                : HolderEncounterUnknown ? new EhrCreateOutcome(EhrCreateKind.Unknown, 504, null, [])
                 : new EhrCreateOutcome(EhrCreateKind.Created, 200, $"tel-{HolderEncounters}", []));
         }
     }
