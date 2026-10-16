@@ -1,0 +1,535 @@
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_e2329fef2275f0::t_d1b2831b015d5c 611-621,1480-1481,1557,1573-1574
+  s_e2329fef2275f0::t_f878486fadf8e4 331-520,1479,1482-1485,1541-1556,1572
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261016062144_AddCdsCoverageRequirements.Designer.cs
+  s_e2329fef2275f0::t_f878486fadf8e4 1-7168
+src/Api/FHIRBridge.Api/Controllers/CdsHooksController.cs
+  s_e2329fef2275f0::t_64e15083cc6369 55-74
+src/FHIRBridge.Infrastructure/Persistence/FHIRBridgeDbContext.cs
+  s_e2329fef2275f0::t_a5af134b2a5ec7 65-66,277-280
+portal/src/app/clinical-decision-support/dialogs/cds-coverage-rule-dialog/cds-coverage-rule-dialog.component.scss
+  s_e2329fef2275f0::t_77be45f2a75854 1-72
+portal/src/app/clinical-decision-support/components/cds-chip-list-input/cds-chip-list-input.component.html
+  s_e2329fef2275f0::t_a6ec894015fa52 1-31
+tests/FHIRBridge.UnitTests/Licensing/LicenseServiceTests.cs
+  s_e2329fef2275f0::t_fa98336a779309 85-87
+portal/src/app/clinical-decision-support/dialogs/cds-coverage-import-dialog/cds-coverage-import-dialog.component.html
+  s_e2329fef2275f0::t_056f7e0b5383e6 1-39,42-73,80,86-97,100-127
+  s_e2329fef2275f0::t_6605f62da7fa50 40-41
+  s_e2329fef2275f0::t_06df6cf25b9081 74-79,81-85
+  s_e2329fef2275f0::t_ad20f5ed3fb403 98-99
+portal/src/app/clinical-decision-support/models/cds-coverage-rule-form.ts
+  s_e2329fef2275f0::t_cb3f85af5ca64d 1-121
+portal/src/app/clinical-decision-support/layout/cds-shell/cds-shell.component.spec.ts
+  s_e2329fef2275f0::t_e5f2cd918472b3 20,32
+portal/src/app/clinical-decision-support/pages/cds-coverage/cds-coverage.component.spec.ts
+  s_e2329fef2275f0::t_e4f7437205be50 1-78
+src/Api/FHIRBridge.Api/Controllers/V1/CdsCoverageController.cs
+  s_e2329fef2275f0::t_88fdac1584ba27 153,159,165,168-177
+  s_e2329fef2275f0::t_07c8982d2e2ce0 1-152,154-158,160-164,166-167,178-232
+portal/src/app/clinical-decision-support/dialogs/cds-relay-test-dialog/cds-relay-test-dialog.component.html
+  s_e2329fef2275f0::t_deea7edf799132 1-52
+docs/user-guide/clinical-decision-support.md
+  s_e2329fef2275f0::t_cc92d0387311a7 80-82,107-108,112-114,358-410,416-419,690-691
+  s_e2329fef2275f0::t_cc7f2e31e123ad 510-533,536-581,584-684
+  s_e2329fef2275f0::t_3b7ae68be25826 534-535
+  s_e2329fef2275f0::t_b3604d4c33be71 30,47-50,52,61,69,71,145-157,172-174,207
+  s_e2329fef2275f0::t_ca8b565fde1021 411-415
+  s_e2329fef2275f0::t_60fcf172dee365 582-583
+portal/src/app/clinical-decision-support/components/cds-system-actions/cds-system-actions.component.ts
+  s_e2329fef2275f0::t_d6c254911b473e 1-64
+src/FHIRBridge.Application/Services/Cds/CdsSetupSheetService.cs
+  s_e2329fef2275f0::t_cc27d2e454351f 146-147
+  s_e2329fef2275f0::t_981035bf1b830c 20-21,27-29,35-36,85-89,96-99,130-145,148-204
+src/FHIRBridge.Infrastructure/Cds/Coverage/CdsRelaySigningKeyProvider.cs
+  s_e2329fef2275f0::t_3dd49d23fcf444 62,72-92,94-95
+  s_e2329fef2275f0::t_73fd9acb9c8ea9 118-121,127-137
+  s_e2329fef2275f0::t_4ddc181a4119d7 1-20,22-61,63-71,93,96-117,122-126,138-161
+  s_e2329fef2275f0::t_a3bb29f15e988c 21
+tests/FHIRBridge.UnitTests/Cds/CdsCoverageRelayAndImportTests.cs
+  s_e2329fef2275f0::t_c90f8458199d0c 1-133,151-227,229-234,236-291,352-447,450-503
+  s_e2329fef2275f0::t_4d52a6d9ce04b7 134-150,292-351
+  s_e2329fef2275f0::t_13f8e7002624f2 448-449
+  s_e2329fef2275f0::t_6b97063077423c 228,235
+portal/src/app/clinical-decision-support/components/cds-readiness-panel/cds-readiness-panel.component.scss
+  s_e2329fef2275f0::t_bcd4ef0ad7b819 1-120
+src/FHIRBridge.Application/Services/Cds/CdsCatalogService.cs
+  s_e2329fef2275f0::t_4e69ffb21d3360 42-43
+  s_e2329fef2275f0::t_d400646b50b032 101-111
+src/FHIRBridge.Application/DTOs/Cds/CdsSetupSheetDtos.cs
+  s_e2329fef2275f0::t_981035bf1b830c 18-21,41-76
+portal/src/app/clinical-decision-support/components/cds-sign-off-badge/cds-sign-off-badge.component.ts
+  s_e2329fef2275f0::t_c3483883e233c9 1-18
+portal/src/app/clinical-decision-support/components/cds-epic-setup-sheet/cds-epic-setup-sheet.component.html
+  s_e2329fef2275f0::t_56056e31835d12 66-70
+  s_e2329fef2275f0::t_63c2bea30c0e78 229-232
+src/FHIRBridge.Infrastructure/Cds/Coverage/CdsCoverageMatcher.cs
+  s_e2329fef2275f0::t_7682f085f20a8f 109-110
+  s_e2329fef2275f0::t_a7da5bd04120a3 4
+  s_e2329fef2275f0::t_1630e2d6db7029 1-3,5-108,111-192
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261016052653_AddCdsClinicalSignOff.Designer.cs
+  s_e2329fef2275f0::t_22a222268323c9 1-6989
+src/FHIRBridge.Infrastructure/Cds/CdsOptions.cs
+  s_e2329fef2275f0::t_4fa538aed4aa34 53-64
+tests/FHIRBridge.Api.IntegrationTests/ApiFactory.cs
+  s_e2329fef2275f0::t_01548cfa2168b8 135-136
+portal/src/app/clinical-decision-support/components/cds-payer-list/cds-payer-list.component.ts
+  s_e2329fef2275f0::t_19c2a4d325dd37 1-39,42-43,45-113
+  s_e2329fef2275f0::t_f58d5f461832eb 40-41,44
+portal/src/app/clinical-decision-support/components/cds-payer-relay-fields/cds-payer-relay-fields.component.spec.ts
+  s_e2329fef2275f0::t_b17fa7524cbd75 1-87
+portal/src/app/clinical-decision-support/components/cds-payer-list/cds-payer-list.component.spec.ts
+  s_e2329fef2275f0::t_d85d528ab07aa5 1-133
+portal/src/app/clinical-decision-support/components/cds-coverage-rule-list/cds-coverage-rule-list.component.ts
+  s_e2329fef2275f0::t_b2c541b5195d40 1,78-87,108-115
+  s_e2329fef2275f0::t_10e6119f1e3043 2-77,88-107,116-266
+portal/src/app/clinical-decision-support/components/cds-setup-sheet-crd/cds-setup-sheet-crd.component.scss
+  s_e2329fef2275f0::t_dd14047c7c29ec 1-101
+src/FHIRBridge.Application/Abstractions/Persistence/ICdsCoverageRepositories.cs
+  s_e2329fef2275f0::t_0549b417573dc2 1-63
+portal/src/app/clinical-decision-support/dialogs/cds-payer-dialog/cds-payer-dialog.component.html
+  s_e2329fef2275f0::t_fbca5f63ecee9c 1-79
+portal/src/app/clinical-decision-support/components/cds-coverage-service-note/cds-coverage-service-note.component.spec.ts
+  s_e2329fef2275f0::t_08eeee7fc2f8d8 1-26
+portal/src/app/clinical-decision-support/dialogs/cds-relay-test-dialog/cds-relay-test-dialog.component.ts
+  s_e2329fef2275f0::t_994ec3cff00fdb 1-61
+src/FHIRBridge.Infrastructure/Cds/CdsEvaluator.cs
+  s_e2329fef2275f0::t_b98b4480229de9 8,57-59,570-578
+  s_e2329fef2275f0::t_cffab0a2453b9f 390-392,412-415,424,427
+  s_e2329fef2275f0::t_a94205caaf6fd2 300-302
+  s_e2329fef2275f0::t_b2b68b35fc0bca 336,339-340
+  s_e2329fef2275f0::t_7e73a1a14111b3 445,542-569
+  s_e2329fef2275f0::t_da34e20bc2d909 21-22,32-34,37-38,54-55,64,67,72-73,79,105-106,110,156,207-237,241,261-267,269-275,284,290-293,308,334,386-389,393-411,416-423,425-426,428-444
+  s_e2329fef2275f0::t_01f0ba23c86ba8 56
+  s_e2329fef2275f0::t_e115fcb3084095 446
+  s_e2329fef2275f0::t_3a44cc6835b5d2 579
+src/FHIRBridge.Application/Services/Cds/ICdsAdminServices.cs
+  s_e2329fef2275f0::t_3b78c0a0873ebc 21-40
+src/FHIRBridge.Application/Abstractions/Cds/ICdsServiceHandler.cs
+  s_e2329fef2275f0::t_b5113c3da799e4 52-64,91-93,102-107,210-221
+portal/src/app/clinical-decision-support/components/cds-sign-off/cds-sign-off.component.ts
+  s_e2329fef2275f0::t_807b52d3c11cc7 1-73,76-103,108-118
+  s_e2329fef2275f0::t_433fc32b182d89 104-107
+  s_e2329fef2275f0::t_db66878f6ac9d9 74-75
+src/FHIRBridge.Infrastructure/Cds/CdsReadinessService.cs
+  s_e2329fef2275f0::t_a8f61bc1558f49 34-35,47-48,82-83
+  s_e2329fef2275f0::t_7543502474589b 1-33,36-46,49-81,84-87
+portal/src/app/clinical-decision-support/components/cds-import-preview/cds-import-preview.component.html
+  s_e2329fef2275f0::t_1b2d8d80f0d43a 1-52,60-84
+  s_e2329fef2275f0::t_d07ad560e3c497 53-59
+src/FHIRBridge.Application/DTOs/Cds/CdsCoverageDtos.cs
+  s_e2329fef2275f0::t_5b52ebd65e6430 1-178
+portal/src/app/clinical-decision-support/testing/cds-test-data.ts
+  s_e2329fef2275f0::t_2cd4d7a47e66c6 5,20-25,263-265,318-419
+  s_e2329fef2275f0::t_b945763dfb2674 11-12,134-138,236-239,267-282,293,300
+  s_e2329fef2275f0::t_f2dd569d0feb0d 139
+  s_e2329fef2275f0::t_63c2bea30c0e78 14,240-261
+  s_e2329fef2275f0::t_daa347260d3ef6 262
+  s_e2329fef2275f0::t_c975b73aa812fc 266
+portal/src/app/clinical-decision-support/components/cds-readiness-panel/cds-readiness-panel.component.html
+  s_e2329fef2275f0::t_95e30b5fca701f 1-48
+src/FHIRBridge.Infrastructure/Persistence/Configurations/CdsConfigurations.cs
+  s_e2329fef2275f0::t_4c691eef781dc8 58
+  s_e2329fef2275f0::t_a5af134b2a5ec7 54-57,90-97,104-156
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261016062127_AddCdsCoverageRequirements.cs
+  s_e2329fef2275f0::t_f878486fadf8e4 1-191
+portal/src/app/clinical-decision-support/services/cds-coverage-api.service.spec.ts
+  s_e2329fef2275f0::t_bec0568bd9656c 125
+  s_e2329fef2275f0::t_04fc85af90946c 1-110,122-124,126-128
+  s_e2329fef2275f0::t_43364e6f8e73e8 111-121
+portal/src/app/clinical-decision-support/models/cds-coverage-rule-form.spec.ts
+  s_e2329fef2275f0::t_9b9717d2f94bee 1-40
+src/FHIRBridge.Infrastructure/Cds/CdsReplayGuard.cs
+  s_e2329fef2275f0::t_f97e726f4a7d47 26-31
+src/FHIRBridge.Infrastructure/DependencyInjection.cs
+  s_e2329fef2275f0::t_5f3d149fc38406 224,265-271,273-296,321-322,425-426
+  s_e2329fef2275f0::t_a3bb29f15e988c 272
+src/FHIRBridge.Application/Services/Cds/CdsCoverageRuleFile.cs
+  s_e2329fef2275f0::t_2f61ec03a4150f 1-288,291-429
+  s_e2329fef2275f0::t_66d7e345a0a709 289-290
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261016062127_AddCdsCoverageRequirements.Designer.cs
+  s_e2329fef2275f0::t_f878486fadf8e4 1-7208
+src/FHIRBridge.Application/Services/Cds/CdsReadinessRules.cs
+  s_e2329fef2275f0::t_3b61ca836d8916 290,293-295,298,300-301
+  s_e2329fef2275f0::t_7543502474589b 1-71,73-280,282-289,291-292,296-297,299,302-393
+  s_e2329fef2275f0::t_c902f78d49408c 281
+  s_e2329fef2275f0::t_65fff87922e5fd 72
+portal/src/app/clinical-decision-support/components/cds-setup-sheet-crd/cds-setup-sheet-crd.component.html
+  s_e2329fef2275f0::t_0691de861a0119 1-101
+portal/src/app/clinical-decision-support/pages/cds-service-setup/cds-service-setup.component.html
+  s_e2329fef2275f0::t_bdf515c7fa1b54 150-158,240-244
+  s_e2329fef2275f0::t_bbd9e88b29db7c 287-304
+src/FHIRBridge.Domain/ValueObjects/CdsCoverageCodes.cs
+  s_e2329fef2275f0::t_ff46eb3dfa47f1 57-60,69-72,74
+  s_e2329fef2275f0::t_9bc93b4a42c02a 1-56,61-68,73,75-76,113-121
+  s_e2329fef2275f0::t_f0031e4df6ff87 77-112
+portal/src/app/clinical-decision-support/components/cds-coverage-service-note/cds-coverage-service-note.component.scss
+  s_e2329fef2275f0::t_08eeee7fc2f8d8 1-13
+portal/src/app/clinical-decision-support/pages/cds-service-list/cds-service-list.component.scss
+  s_e2329fef2275f0::t_bf66d245527808 40-45
+portal/src/app/clinical-decision-support/components/cds-payer-relay-fields/cds-payer-relay-fields.component.ts
+  s_e2329fef2275f0::t_d3268dacda4649 1-46,52-75
+  s_e2329fef2275f0::t_76a431a089d810 47-51
+portal/src/app/clinical-decision-support/models/cds-coverage-labels.spec.ts
+  s_e2329fef2275f0::t_3a14182e109a40 1-31
+src/FHIRBridge.Application/Abstractions/Cds/ICdsHandlerPreparer.cs
+  s_e2329fef2275f0::t_c4d88b0d2a67e5 43
+  s_e2329fef2275f0::t_dbe22e85f24d5a 1-42,44-56
+src/FHIRBridge.Infrastructure/Cds/Coverage/CdsPayerRelayTestService.cs
+  s_e2329fef2275f0::t_9257f33a475a9f 1-139
+portal/src/app/clinical-decision-support/components/cds-payer-list/cds-payer-list.component.scss
+  s_e2329fef2275f0::t_f58d5f461832eb 1-93
+src/FHIRBridge.Infrastructure/Persistence/Migrations/20261016052653_AddCdsClinicalSignOff.cs
+  s_e2329fef2275f0::t_22a222268323c9 1-51
+portal/src/app/clinical-decision-support/services/cds-api.service.ts
+  s_e2329fef2275f0::t_b945763dfb2674 11,15,63-72,106-109
+  s_e2329fef2275f0::t_de3cf2b3cabd01 110
+portal/src/app/clinical-decision-support/pages/cds-service-setup/cds-service-setup.component.ts
+  s_e2329fef2275f0::t_bdf515c7fa1b54 45-46,76,135-139
+  s_e2329fef2275f0::t_bbd9e88b29db7c 44,75,161-163,299,302-304,314-316
+  s_e2329fef2275f0::t_de1e5cda70ccf7 317-318
+portal/src/app/clinical-decision-support/components/cds-chip-list-input/cds-chip-list-input.component.spec.ts
+  s_e2329fef2275f0::t_ff61a4d834d2f9 60
+  s_e2329fef2275f0::t_298c526e92af2d 1-5,7-12,14-36,46-59,61-84
+  s_e2329fef2275f0::t_c3280f912196cf 6
+  s_e2329fef2275f0::t_1a869c292886a4 13
+  s_e2329fef2275f0::t_ac1dc135bcc569 37-43,45
+  s_e2329fef2275f0::t_1c6430a94c0e79 44
+portal/src/app/clinical-decision-support/components/cds-setup-sheet-crd/cds-setup-sheet-crd.component.spec.ts
+  s_e2329fef2275f0::t_dd14047c7c29ec 1-48
+src/FHIRBridge.Application/Abstractions/Cds/CdsCoverageModels.cs
+  s_e2329fef2275f0::t_a3bb29f15e988c 110-118
+  s_e2329fef2275f0::t_fe08d816adcabb 1-109
+portal/src/app/core/api-endpoints.ts
+  s_e2329fef2275f0::t_a783c92d18fbfa 123-131
+  s_e2329fef2275f0::t_b945763dfb2674 115,122
+portal/src/app/clinical-decision-support/components/cds-readiness-panel/cds-readiness-panel.component.spec.ts
+  s_e2329fef2275f0::t_2648e04ff76e54 1-82,101
+  s_e2329fef2275f0::t_0c418b4c060ba5 83
+  s_e2329fef2275f0::t_19763e17bb35c4 84-100
+src/FHIRBridge.Infrastructure/Cds/Handlers/CoverageRequirementsCdsHandler.cs
+  s_e2329fef2275f0::t_c9e50d3af050a9 55
+  s_e2329fef2275f0::t_e1134359eff50e 250,274,394,538
+  s_e2329fef2275f0::t_29ee42a0660daa 38-42
+  s_e2329fef2275f0::t_163a6e8e9b0623 542-551
+  s_e2329fef2275f0::t_c0228fb6538306 1-37,43-54,56-157,165-170,172,175-180,182-185,198-199,216-217,219-223,225-227,313,317-393,395-537,539-541,552-643
+  s_e2329fef2275f0::t_e2207bc1610800 158-164,171,173-174,181,186-197,200-215,218,224,228-249,251-273,275-312,314-316
+src/FHIRBridge.Domain/Entities/CdsServiceInstance.cs
+  s_e2329fef2275f0::t_96f77d87974a24 2,25-26,120-136,153-176,193-195,210-222,256-273
+  s_e2329fef2275f0::t_3716e58fd8b3d5 137-144,146-152
+  s_e2329fef2275f0::t_4c691eef781dc8 145
+tests/FHIRBridge.UnitTests/Cds/CdsCoverageRequirementsTests.cs
+  s_e2329fef2275f0::t_ca8296eb703ce3 864-904
+  s_e2329fef2275f0::t_3a7001c0002278 905-922,924-925
+  s_e2329fef2275f0::t_4252b809737882 452-534,624-682
+  s_e2329fef2275f0::t_4c9979359a450f 923
+  s_e2329fef2275f0::t_3f766d07be26ad 550-551,554
+  s_e2329fef2275f0::t_68571698fb9219 1-451,535-549,552-553,555-623,683-822,824-863,926-933
+  s_e2329fef2275f0::t_d008712c64effd 823
+portal/src/app/clinical-decision-support/components/cds-coverage-rule-list/cds-coverage-rule-list.component.html
+  s_e2329fef2275f0::t_0a5305f39df00b 1-139
+portal/src/app/clinical-decision-support/components/cds-coverage-rule-list/cds-coverage-rule-list.component.spec.ts
+  s_e2329fef2275f0::t_8d3b76abbf72bd 170
+  s_e2329fef2275f0::t_18ad25385bd4c8 1-155,184-190
+  s_e2329fef2275f0::t_3844e4cd1d9843 156-169,171-183
+portal/src/app/clinical-decision-support/components/cds-sign-off-badge/cds-sign-off-badge.component.html
+  s_e2329fef2275f0::t_c3483883e233c9 1-13
+portal/src/app/clinical-decision-support/components/cds-chip-list-input/cds-chip-list-input.component.ts
+  s_e2329fef2275f0::t_0a03a013d38a5d 1,32-33,37-53,66,79,91
+  s_e2329fef2275f0::t_cd2da82453e00d 6
+  s_e2329fef2275f0::t_42002040e95c1d 5,7,9-12,56,67,74,76,92
+  s_e2329fef2275f0::t_f22692537a8bb0 2-4,8,13-31,34-36,54-55,57-65,68-73,75,77-78,80-90,93-108
+portal/src/app/core/http-error-sanitizer.interceptor.ts
+  s_e2329fef2275f0::t_d864474003bc3a 12
+src/Api/FHIRBridge.Api/Controllers/V1/CdsServicesController.cs
+  s_e2329fef2275f0::t_c26bab7d277cac 92-94,96-101,114-122
+  s_e2329fef2275f0::t_efafc83b736518 95,102-113
+portal/src/app/clinical-decision-support/dialogs/cds-relay-test-dialog/cds-relay-test-dialog.component.spec.ts
+  s_e2329fef2275f0::t_6f187a15cbfb34 1-80
+src/FHIRBridge.Application/Abstractions/Persistence/ISystemSettingRepository.cs
+  s_e2329fef2275f0::t_fa98336a779309 13-19
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261016062144_AddCdsCoverageRequirements.cs
+  s_e2329fef2275f0::t_f878486fadf8e4 1-192
+portal/src/app/clinical-decision-support/components/cds-sign-off/cds-sign-off.component.spec.ts
+  s_e2329fef2275f0::t_c29d1820725834 1-89,91-144,155
+  s_e2329fef2275f0::t_f2dd569d0feb0d 90
+  s_e2329fef2275f0::t_b7860d045e143d 145-154
+portal/src/app/clinical-decision-support/components/cds-payer-list/cds-payer-list.component.html
+  s_e2329fef2275f0::t_231a182411d704 1-68,70-97
+  s_e2329fef2275f0::t_f58d5f461832eb 69
+portal/src/app/clinical-decision-support/pages/cds-activity/cds-activity.component.ts
+  s_e2329fef2275f0::t_262eae73bdac6f 14,28
+portal/src/app/clinical-decision-support/components/cds-sign-off-badge/cds-sign-off-badge.component.spec.ts
+  s_e2329fef2275f0::t_c3483883e233c9 1-25
+portal/src/app/clinical-decision-support/dialogs/cds-coverage-import-dialog/cds-coverage-import-dialog.component.scss
+  s_e2329fef2275f0::t_6dcae07fde3155 1-77
+src/FHIRBridge.Infrastructure/Persistence/EfSystemSettingRepository.cs
+  s_e2329fef2275f0::t_cc3f61d4fcedcf 65-89
+src/FHIRBridge.Domain/Entities/CdsCoverageRule.cs
+  s_e2329fef2275f0::t_a7da5bd04120a3 88
+  s_e2329fef2275f0::t_e1da9f75bbbfa6 1-87,89-114,116-253
+  s_e2329fef2275f0::t_4e0ccf8b7b4ad0 115
+src/FHIRBridge.Application/DTOs/Cds/CdsReadinessDtos.cs
+  s_e2329fef2275f0::t_7543502474589b 1-51
+portal/src/app/clinical-decision-support/components/cds-sign-off-badge/cds-sign-off-badge.component.scss
+  s_e2329fef2275f0::t_c3483883e233c9 1-12
+tests/FHIRBridge.Api.IntegrationTests/Tests/CdsCoverageRequirementsTests.cs
+  s_e2329fef2275f0::t_38430659cce728 343-346,348-351
+  s_e2329fef2275f0::t_f743fba39ed6b7 347
+  s_e2329fef2275f0::t_fdc2e68b87db47 155-159
+  s_e2329fef2275f0::t_2e8c0b63de5fd6 1-154,160-242,245-342,352-520
+  s_e2329fef2275f0::t_1e3a6b8cf892b8 243-244
+portal/src/app/clinical-decision-support/pages/cds-connect-ehr/cds-connect-ehr.component.ts
+  s_e2329fef2275f0::t_ec97f43d572f36 6,12,16-19,29,48-49,59,71-76
+  s_e2329fef2275f0::t_c22d642b2e3600 77-79
+portal/src/app/clinical-decision-support/cds-nav.ts
+  s_e2329fef2275f0::t_9887aa70ba2413 17
+portal/src/app/clinical-decision-support/components/cds-test-result/cds-test-result.component.ts
+  s_e2329fef2275f0::t_c64126a9e432e4 6,8-11,15,25-26
+portal/src/app/clinical-decision-support/pages/cds-service-list/cds-service-list.component.spec.ts
+  s_e2329fef2275f0::t_efa3c3b6462d45 71-79
+src/FHIRBridge.Application/DependencyInjection.cs
+  s_e2329fef2275f0::t_5f3d149fc38406 100-101
+portal/src/app/clinical-decision-support/pages/cds-coverage/cds-coverage.component.scss
+  s_e2329fef2275f0::t_c05ed6102c7f3e 1-17
+src/FHIRBridge.Infrastructure/Persistence/Migrations/FHIRBridgeDbContextModelSnapshot.cs
+  s_e2329fef2275f0::t_22a222268323c9 617-627,1492,1497,1555,1585-1586
+  s_e2329fef2275f0::t_f878486fadf8e4 334-525,1491,1493-1496,1553-1554,1556-1569,1584
+portal/src/app/clinical-decision-support/models/cds-coverage.models.ts
+  s_e2329fef2275f0::t_ad20f5ed3fb403 7-9
+  s_e2329fef2275f0::t_78eff5e271acd2 14-16,23-24
+  s_e2329fef2275f0::t_2508556469c148 1-6,10-13,17-22,25-213
+portal/src/app/clinical-decision-support/components/cds-import-preview/cds-import-preview.component.spec.ts
+  s_e2329fef2275f0::t_6ecba9768bac6c 1-58
+portal/src/app/clinical-decision-support/dialogs/cds-coverage-rule-dialog/cds-coverage-rule-dialog.component.html
+  s_e2329fef2275f0::t_4cdaff7cbf38c9 1-114,116-127,129-212
+  s_e2329fef2275f0::t_80943cc3d3e42c 115,128
+portal/src/app/clinical-decision-support/pages/cds-coverage/cds-coverage.component.html
+  s_e2329fef2275f0::t_777f5c7c4f8f3e 16
+  s_e2329fef2275f0::t_ca620c72aba307 1-15,17-25
+src/FHIRBridge.Domain/Entities/Governance/CdsCallLog.cs
+  s_e2329fef2275f0::t_d8c25369c9239c 23-25,74-81,140-166,181-189
+portal/src/app/clinical-decision-support/components/cds-call-coverage/cds-call-coverage.component.scss
+  s_e2329fef2275f0::t_e911074c631e83 1-47
+portal/src/app/clinical-decision-support/dialogs/cds-payer-dialog/cds-payer-dialog.component.ts
+  s_e2329fef2275f0::t_8f1b6bf5365989 97-112
+  s_e2329fef2275f0::t_53616a01dc53b4 31-35,72,94-96
+  s_e2329fef2275f0::t_ccd7b47ac94848 1-30,36-71,73-93,113-168
+portal/src/app/clinical-decision-support/pages/cds-activity/cds-activity.component.html
+  s_e2329fef2275f0::t_262eae73bdac6f 138
+portal/src/app/clinical-decision-support/components/cds-call-coverage/cds-call-coverage.component.html
+  s_e2329fef2275f0::t_5353474d3a692c 1-21
+portal/src/app/clinical-decision-support/models/cds-coverage-labels.ts
+  s_e2329fef2275f0::t_a5f528bba11f82 1-14,16-30,32-37,40-93
+  s_e2329fef2275f0::t_eb0cd9e9429a1a 15
+  s_e2329fef2275f0::t_78eff5e271acd2 31,38-39
+portal/src/app/clinical-decision-support/components/cds-epic-setup-sheet/cds-epic-setup-sheet.component.scss
+  s_e2329fef2275f0::t_44697b812e1896 60-65
+portal/src/app/clinical-decision-support/components/cds-test-result/cds-test-result.component.spec.ts
+  s_e2329fef2275f0::t_cdc0ec8ee8c902 33-45
+portal/src/app/clinical-decision-support/dialogs/cds-coverage-import-dialog/cds-coverage-import-dialog.component.ts
+  s_e2329fef2275f0::t_e4671a572c4ec9 9,49,54-55,134-135
+  s_e2329fef2275f0::t_9747ab1f29b3c3 1-8,10-48,50-53,56-133,136-203
+portal/src/app/clinical-decision-support/components/cds-sign-off/cds-sign-off.component.html
+  s_e2329fef2275f0::t_2fb8230afaf42f 1-88
+portal/src/app/clinical-decision-support/pages/cds-connect-ehr/cds-connect-ehr.component.spec.ts
+  s_e2329fef2275f0::t_7d45e52591e9f2 11-12,54-83
+portal/src/app/clinical-decision-support/dialogs/cds-coverage-rule-dialog/cds-coverage-rule-dialog.component.spec.ts
+  s_e2329fef2275f0::t_b2b6613f43ad38 1-187
+portal/src/app/clinical-decision-support/components/cds-chip-list-input/cds-chip-list-input.component.scss
+  s_e2329fef2275f0::t_d375c4d56a609b 1-78
+portal/src/app/clinical-decision-support/components/cds-system-actions/cds-system-actions.component.scss
+  s_e2329fef2275f0::t_6deb6b86872357 1-59
+portal/src/app/clinical-decision-support/components/cds-coverage-service-note/cds-coverage-service-note.component.html
+  s_e2329fef2275f0::t_08eeee7fc2f8d8 1-18
+portal/src/app/clinical-decision-support/pages/cds-service-list/cds-service-list.component.ts
+  s_e2329fef2275f0::t_bbd9e88b29db7c 25,43
+portal/src/app/clinical-decision-support/pages/cds-activity/cds-activity.component.spec.ts
+  s_e2329fef2275f0::t_47e49537924c3a 85-98,101
+src/FHIRBridge.Infrastructure/Cds/Handlers/CdsServiceHandlerBase.cs
+  s_e2329fef2275f0::t_c9e50d3af050a9 30-35
+portal/src/app/clinical-decision-support/components/cds-sign-off/cds-sign-off.component.scss
+  s_e2329fef2275f0::t_092ca220ccb710 1-37
+portal/src/app/clinical-decision-support/pages/cds-service-setup/cds-service-setup.component.spec.ts
+  s_e2329fef2275f0::t_0c77f57e797a36 45-55,62,123-139,236-262,264-280
+  s_e2329fef2275f0::t_f2dd569d0feb0d 263
+src/FHIRBridge.Infrastructure/Cds/Handlers/CdsCrdItems.cs
+  s_e2329fef2275f0::t_36bcf1787e6a35 1-173
+src/FHIRBridge.Application/Services/Cds/CdsServiceInstanceService.cs
+  s_e2329fef2275f0::t_3b78c0a0873ebc 95-98,109-125,274-278,298
+  s_e2329fef2275f0::t_40359273a499b7 99-108,279-280,287-297
+portal/src/app/clinical-decision-support/models/cds.models.ts
+  s_e2329fef2275f0::t_b945763dfb2674 158-165,168,170-175,309-312,315-316,348-366
+  s_e2329fef2275f0::t_a975c8b33dc117 39-40,313-314,317-347,445-458,540,571-572
+  s_e2329fef2275f0::t_f64f057a13c038 166-167,176-177
+  s_e2329fef2275f0::t_d96a0d6e734e41 169
+  s_e2329fef2275f0::t_7ceb659b91de18 367
+tests/FHIRBridge.UnitTests/Cds/CdsReadinessAndSignOffTests.cs
+  s_e2329fef2275f0::t_3f766d07be26ad 137,151-156
+  s_e2329fef2275f0::t_82122cafcece24 72-75
+  s_e2329fef2275f0::t_19a62d95bce826 1-71,76-136,138-150,157-497
+tests/FHIRBridge.Api.IntegrationTests/Tests/CdsGoLiveReadinessTests.cs
+  s_e2329fef2275f0::t_1e4c8589325bab 102,113,139-144,151,164,168,192-194
+  s_e2329fef2275f0::t_c9625e1f8fcac9 1-101,103-112,114-138,145-150,152-163,165-167,169-191,195
+portal/src/app/clinical-decision-support/pages/cds-service-list/cds-service-list.component.html
+  s_e2329fef2275f0::t_bbd9e88b29db7c 72-75
+src/FHIRBridge.Application/DTOs/Cds/CdsHooksWireModels.cs
+  s_e2329fef2275f0::t_b5113c3da799e4 77-86,213-216,222-225
+src/FHIRBridge.Infrastructure/Cds/Coverage/CdsCoverageRuleCache.cs
+  s_e2329fef2275f0::t_9659dae3f0d1bd 1-61
+portal/src/app/clinical-decision-support/components/cds-coverage-rule-list/cds-coverage-rule-list.component.scss
+  s_e2329fef2275f0::t_d4bb9af5a88834 1-114
+portal/src/app/clinical-decision-support/dialogs/cds-payer-dialog/cds-payer-dialog.component.scss
+  s_e2329fef2275f0::t_7d81ba4d1f05ab 1-54
+portal/src/app/clinical-decision-support/services/cds-coverage-api.service.ts
+  s_e2329fef2275f0::t_55c08a1d3231aa 2-3,5
+  s_e2329fef2275f0::t_85d3257622a602 1,4,6-123,125-126,155
+  s_e2329fef2275f0::t_b154aa54aa4b50 124,127-154
+portal/src/app/clinical-decision-support/pages/cds-connect-ehr/cds-connect-ehr.component.html
+  s_e2329fef2275f0::t_ec97f43d572f36 8-9
+portal/src/app/clinical-decision-support/components/cds-import-preview/cds-import-preview.component.ts
+  s_e2329fef2275f0::t_7448eb5685e8b3 1-48
+portal/src/app/clinical-decision-support/components/cds-call-coverage/cds-call-coverage.component.spec.ts
+  s_e2329fef2275f0::t_a7e51fe12540d9 1-52
+portal/src/app/clinical-decision-support/components/cds-setup-sheet-crd/cds-setup-sheet-crd.component.ts
+  s_e2329fef2275f0::t_beef08e0972af6 1-35
+portal/src/app/clinical-decision-support/components/cds-code-checkboxes/cds-code-checkboxes.component.scss
+  s_e2329fef2275f0::t_b8d911acfa923d 1-9
+src/FHIRBridge.Infrastructure/Cds/Handlers/CdsCoverageInformation.cs
+  s_e2329fef2275f0::t_13f8e7002624f2 87
+  s_e2329fef2275f0::t_a9f0754d708bec 167-168,174-323
+  s_e2329fef2275f0::t_6a35f71325ea78 119
+  s_e2329fef2275f0::t_ecfa97da9a4e58 1-86,88-118,120-166,169-173,324-326
+src/FHIRBridge.Application/Services/Cds/CdsCoverageAdminServices.cs
+  s_e2329fef2275f0::t_a4db35888df0be 318,333,438-441
+  s_e2329fef2275f0::t_3336bb94dfd4dc 243
+  s_e2329fef2275f0::t_f75283f4521a7e 64,70-71,77
+  s_e2329fef2275f0::t_8e670a07859580 234
+  s_e2329fef2275f0::t_b2ac48454f4709 537-556
+  s_e2329fef2275f0::t_51bceda15a6830 112
+  s_e2329fef2275f0::t_a2f00e3f52a1ac 1-63,65-69,72-76,78-97,99-111,113-121,123-177,179-183,186-190,192-216,218-233,235-242,244-317,319-332,334-356,358-359,361-380,385-437,442-536
+  s_e2329fef2275f0::t_c5398d8d16afd7 178,184-185,191
+  s_e2329fef2275f0::t_a02f201af5612f 357,360
+  s_e2329fef2275f0::t_a39c5f0dc4cee5 381-384
+  s_e2329fef2275f0::t_d704a09f9c8b51 217
+  s_e2329fef2275f0::t_cd348c15253dc4 98
+  s_e2329fef2275f0::t_33e643748d530c 122
+portal/src/app/clinical-decision-support/components/cds-test-result/cds-test-result.component.html
+  s_e2329fef2275f0::t_c64126a9e432e4 16-18,39
+  s_e2329fef2275f0::t_cdc0ec8ee8c902 35
+  s_e2329fef2275f0::t_b23ab4d51950ca 40
+portal/src/app/clinical-decision-support/components/cds-coverage-service-note/cds-coverage-service-note.component.ts
+  s_e2329fef2275f0::t_08eeee7fc2f8d8 1-18
+portal/src/app/clinical-decision-support/components/cds-payer-relay-fields/cds-payer-relay-fields.component.scss
+  s_e2329fef2275f0::t_150e88a566268b 1-26
+portal/src/app/clinical-decision-support/pages/cds-coverage/cds-coverage.component.ts
+  s_e2329fef2275f0::t_4bf95e9f0eb924 7
+  s_e2329fef2275f0::t_1845779f031131 1-6,8-64
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261016052726_AddCdsClinicalSignOff.Designer.cs
+  s_e2329fef2275f0::t_d1b2831b015d5c 1-6951
+portal/src/app/clinical-decision-support/components/cds-system-actions/cds-system-actions.component.spec.ts
+  s_e2329fef2275f0::t_870b1120c3776f 1-48
+portal/src/app/clinical-decision-support/dialogs/cds-coverage-rule-dialog/cds-coverage-rule-dialog.component.ts
+  s_e2329fef2275f0::t_6670928bd6585b 1-221
+portal/src/app/clinical-decision-support/components/cds-code-checkboxes/cds-code-checkboxes.component.ts
+  s_e2329fef2275f0::t_b8d911acfa923d 1-62
+portal/src/app/clinical-decision-support/components/cds-import-preview/cds-import-preview.component.scss
+  s_e2329fef2275f0::t_a91b9854e7ec90 1-115
+src/FHIRBridge.Application/DTOs/Cds/CdsAdminDtos.cs
+  s_e2329fef2275f0::t_38d30c30341e43 30-33,64-65,73-77
+  s_e2329fef2275f0::t_4e69ffb21d3360 146,154-155
+  s_e2329fef2275f0::t_d400646b50b032 25-29,59-63,66-72,188-195,223-231
+portal/src/app/clinical-decision-support/components/cds-system-actions/cds-system-actions.component.html
+  s_e2329fef2275f0::t_db6d8d2b259101 1-17
+portal/src/app/clinical-decision-support/components/cds-code-checkboxes/cds-code-checkboxes.component.spec.ts
+  s_e2329fef2275f0::t_b8d911acfa923d 1-49
+src/FHIRBridge.Application/Abstractions/Cds/ICdsPublicBaseUrlResolver.cs
+  s_e2329fef2275f0::t_33c3b2c38a3b0c 27-32
+portal/src/app/clinical-decision-support/components/cds-payer-relay-fields/cds-payer-relay-fields.component.html
+  s_e2329fef2275f0::t_14bba6a284e1da 1-23,25-41,44-54,56-76,78-92
+  s_e2329fef2275f0::t_ddf51d99e66aef 24,42-43,55
+  s_e2329fef2275f0::t_76a431a089d810 77
+src/FHIRBridge.Infrastructure/Persistence/CdsCoverageRepositories.cs
+  s_e2329fef2275f0::t_5dbea8df67044e 1-259
+src/Api/FHIRBridge.Api/Controllers/V1/CdsCatalogController.cs
+  s_e2329fef2275f0::t_c26bab7d277cac 36-46
+src/FHIRBridge.Infrastructure.Migrations.PostgreSql/Migrations/20261016052726_AddCdsClinicalSignOff.cs
+  s_e2329fef2275f0::t_d1b2831b015d5c 1-51
+tests/FHIRBridge.Api.IntegrationTests/TestHelpers/CdsTestHttpEndpoints.cs
+  s_e2329fef2275f0::t_01548cfa2168b8 29-30,38-39
+portal/src/app/clinical-decision-support/cds.routes.ts
+  s_e2329fef2275f0::t_9887aa70ba2413 51-58
+  s_e2329fef2275f0::t_0e1210728dcf76 50
+portal/src/app/clinical-decision-support/components/cds-readiness-panel/cds-readiness-panel.component.ts
+  s_e2329fef2275f0::t_af367a2b9a0472 1-58
+docs/backend/22-cds-hooks.md
+  s_e2329fef2275f0::t_b9246d1bcbe790 934-935
+  s_e2329fef2275f0::t_b2753818679cc2 705-707
+  s_e2329fef2275f0::t_06dce8f8ccf7c6 850-867
+  s_e2329fef2275f0::t_c1c747f5f67a20 214-215
+  s_e2329fef2275f0::t_cbd094b8cc9234 953-954
+  s_e2329fef2275f0::t_f54d0a05ad0560 6,51,63,66,73-74,319-321,538-539,550-551,553,657-693,700-704,708-740
+  s_e2329fef2275f0::t_b7fb15762c1860 800-804
+  s_e2329fef2275f0::t_ca5a4a1eab040e 228-230
+  s_e2329fef2275f0::t_36a155d0e05454 694-699
+  s_e2329fef2275f0::t_0bd035e3a33c3b 986-987
+  s_e2329fef2275f0::t_156a17d5a1acad 929
+  s_e2329fef2275f0::t_77f2703ca71db0 253
+  s_e2329fef2275f0::t_5957c855734311 641-642
+  s_e2329fef2275f0::t_3638e0b7058bad 774-778
+  s_e2329fef2275f0::t_cbd25a9e6f8d62 795
+  s_e2329fef2275f0::t_2d75754f4a8e6e 897-901
+  s_e2329fef2275f0::t_77247276c4dd64 978-979
+  s_e2329fef2275f0::t_3692fc34b975a4 882-883
+  s_e2329fef2275f0::t_78f35b97931093 7-8,64,223-227,231-238,276,592,636-640,741-773,779-794,796-799,805-849,868-881,884-896,902-928,930-933,936-952,955-977,980-985,988-992
+src/FHIRBridge.Application/Abstractions/Cds/CdsHandlerContext.cs
+  s_e2329fef2275f0::t_075b5f1621b2d3 41,46,49-53
+  s_e2329fef2275f0::t_72407a26568cb4 54
+src/FHIRBridge.Infrastructure/Cds/Coverage/CdsPayerRelayClient.cs
+  s_e2329fef2275f0::t_3bfe4f6df62377 1-198
+src/FHIRBridge.Infrastructure/Persistence/InMemorySystemSettingRepository.cs
+  s_e2329fef2275f0::t_cc3f61d4fcedcf 36-39
+portal/src/app/clinical-decision-support/components/cds-code-checkboxes/cds-code-checkboxes.component.html
+  s_e2329fef2275f0::t_b8d911acfa923d 1-14
+portal/src/app/clinical-decision-support/components/cds-epic-setup-sheet/cds-epic-setup-sheet.component.spec.ts
+  s_e2329fef2275f0::t_b0d8d96c8130fd 3,10,31-36,69-100
+portal/src/app/clinical-decision-support/components/cds-epic-setup-sheet/cds-epic-setup-sheet.component.ts
+  s_e2329fef2275f0::t_63c2bea30c0e78 11,22
+  s_e2329fef2275f0::t_295c95104bbf94 10
+src/FHIRBridge.Domain/Entities/CdsPayer.cs
+  s_e2329fef2275f0::t_21376b38c7a4a0 1-200
+portal/src/app/clinical-decision-support/dialogs/cds-coverage-import-dialog/cds-coverage-import-dialog.component.spec.ts
+  s_e2329fef2275f0::t_5a38a15784fb5b 187
+  s_e2329fef2275f0::t_a604f854692cf5 1-179,186,188-194
+  s_e2329fef2275f0::t_370a2805c5c935 180-185
+portal/src/app/clinical-decision-support/components/cds-call-coverage/cds-call-coverage.component.ts
+  s_e2329fef2275f0::t_8782c087181155 1-3,5-26,28-29,36-68
+  s_e2329fef2275f0::t_a7e51fe12540d9 4,27,30-31
+  s_e2329fef2275f0::t_e911074c631e83 32-35
+src/FHIRBridge.Infrastructure/Cds/Coverage/CdsCoverageEngine.cs
+  s_e2329fef2275f0::t_4fd97db8b3958d 1-161
+src/FHIRBridge.Infrastructure/Cds/CdsHooksService.cs
+  s_e2329fef2275f0::t_d400646b50b032 116-118,321-329,414-420
+  s_e2329fef2275f0::t_edde6cff642689 421
+portal/src/app/clinical-decision-support/dialogs/cds-payer-dialog/cds-payer-dialog.component.spec.ts
+  s_e2329fef2275f0::t_89b7bc8e0bc3fa 1-91,114-172
+  s_e2329fef2275f0::t_14986934ca678e 92-113
+portal/src/app/clinical-decision-support/dialogs/cds-relay-test-dialog/cds-relay-test-dialog.component.scss
+  s_e2329fef2275f0::t_9316b83bbb431e 1-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b0b5f95cfa916b9cb9258c2ad9efcf3623bdcf4f",
+  "prompts": {},
+  "sessions": {
+    "s_e2329fef2275f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26c43641-c0f6-45d6-bd2a-e22c57204249",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
