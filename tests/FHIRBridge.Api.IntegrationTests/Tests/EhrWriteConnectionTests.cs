@@ -15,7 +15,8 @@ namespace FHIRBridge.Api.IntegrationTests.Tests;
 [Collection("ApiTests")]
 public sealed class EhrWriteConnectionTests(ApiFixture f)
 {
-    private static object EpicBody(string name, string? access, bool? activated = null, string? departmentId = null) => new
+    private static object EpicBody(
+        string name, string? access, bool? activated = null, string? departmentId = null, string secretName = "test-secret") => new
     {
         Name = name,
         SourceSystemType = "Epic",
@@ -32,7 +33,7 @@ public sealed class EhrWriteConnectionTests(ApiFixture f)
             Scopes = new[] { "system/*.read" },
             KeyId = "test-key-id",
             PrivateKeyKeyVaultName = "test-vault",
-            PrivateKeySecretName = "test-secret",
+            PrivateKeySecretName = secretName,
         },
     };
 
@@ -278,6 +279,84 @@ public sealed class EhrWriteConnectionTests(ApiFixture f)
 
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await f.AdminClient.GetAsync($"/api/v1/source-connections/{connectionId}")).StatusCode);
+    }
+
+    // PR #244 review: turning write access off stops every write-back over the connection, as deleting it does.
+    [Fact]
+    public async Task Write_access_cannot_be_turned_off_on_a_connection_a_workflow_still_writes_through()
+    {
+        var usedName = NewName("rw");
+        var used = (await CreateAsAdminAsync(EpicBody(usedName, "ReadWrite"))).GetProperty("id").GetGuid();
+        var unusedName = NewName("rw");
+        var unused = (await CreateAsAdminAsync(EpicBody(unusedName, "ReadWrite"))).GetProperty("id").GetGuid();
+        var workflow = await f.AdminClient.PostAsJsonAsync("/api/v1/workflows", new
+        {
+            Name = NewName("write-usage-access"),
+            IsEnabled = false,
+            Nodes = new[]
+            {
+                UsageNode("n-src", "EpicSourceNode", "Source", 0, new() { ["Resources"] = "AllergyIntolerance" }),
+                UsageNode("n-ewb", "EhrWriteBackDestinationNode", "Destination", 70, new()
+                {
+                    ["dest_dryRun"] = "true",
+                    ["dest_resources"] = "AllergyIntolerance",
+                    ["dest_sourceConnectionId"] = used.ToString(),
+                }),
+            },
+            Edges = new[] { new { FromNodeId = "n-src", ToNodeId = "n-ewb" } },
+        });
+        await ApiFixture.EnsureOkAsync(workflow);
+        using var withWriteBack = await ClientWithAsync("epic.edit", "ehrwriteback.edit");
+
+        var refused = await withWriteBack.PutAsJsonAsync($"/api/v1/source-connections/{used}", EpicBody(usedName, "Read"));
+        var kept = await withWriteBack.PutAsJsonAsync($"/api/v1/source-connections/{used}", EpicBody(usedName, "Write"));
+        var allowed = await withWriteBack.PutAsJsonAsync($"/api/v1/source-connections/{unused}", EpicBody(unusedName, "Read"));
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, kept.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        Assert.Equal("Write", (await GetConnectionAsync(used)).GetProperty("access").GetString());
+        Assert.Equal("Read", (await GetConnectionAsync(unused)).GetProperty("access").GetString());
+    }
+
+    // PR #244 review: the private key of a connection that can write is the key the vendor's write app trusts.
+    [Fact]
+    public async Task Downloading_the_private_key_of_a_connection_that_can_write_needs_the_ehr_write_back_edit_right()
+    {
+        var write = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        // A key of its own: the shared "test-secret" reference is also the key of other tests' write connections.
+        var read = (await CreateAsAdminAsync(EpicBody(NewName("r"), null, secretName: NewName("read-key")))).GetProperty("id").GetGuid();
+        using var vendorOnly = await ClientWithAsync("sourceconnections.export", "epic.edit");
+        using var withWriteBack = await ClientWithAsync("sourceconnections.export", "epic.edit", "ehrwriteback.edit");
+
+        var refused = await vendorOnly.GetAsync($"/api/v1/source-connections/{write}/signing-key/private.pem");
+        var readKey = await vendorOnly.GetAsync($"/api/v1/source-connections/{read}/signing-key/private.pem");
+        var allowed = await withWriteBack.GetAsync($"/api/v1/source-connections/{write}/signing-key/private.pem");
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        // Past every permission check: the test secret store holds no such key, so the lookup answers 404.
+        Assert.NotEqual(HttpStatusCode.Forbidden, readKey.StatusCode);
+        Assert.NotEqual(HttpStatusCode.Forbidden, allowed.StatusCode);
+    }
+
+    // PR #244 review: the gate is on the key. A read connection saved with a write connection's key reference
+    // would otherwise export the write app's key without the EHR Write-Back right.
+    [Fact]
+    public async Task Downloading_a_read_connections_private_key_that_a_write_connection_also_uses_needs_the_ehr_write_back_edit_right()
+    {
+        var sharedSecret = NewName("shared-key");
+        await CreateAsAdminAsync(EpicBody(NewName("w"), "Write", secretName: sharedSecret));
+        // Same reference, spelled with different case: Key Vault names are case-insensitive.
+        var read = (await CreateAsAdminAsync(EpicBody(NewName("r"), "Read", secretName: sharedSecret.ToUpperInvariant())))
+            .GetProperty("id").GetGuid();
+        using var vendorOnly = await ClientWithAsync("sourceconnections.export", "epic.edit");
+        using var withWriteBack = await ClientWithAsync("sourceconnections.export", "epic.edit", "ehrwriteback.edit");
+
+        var refused = await vendorOnly.GetAsync($"/api/v1/source-connections/{read}/signing-key/private.pem");
+        var allowed = await withWriteBack.GetAsync($"/api/v1/source-connections/{read}/signing-key/private.pem");
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.NotEqual(HttpStatusCode.Forbidden, allowed.StatusCode);
     }
 
     [Fact]

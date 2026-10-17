@@ -82,9 +82,11 @@ public sealed class ConfigurationsController : ControllerBase
     [HttpPut("source-connections/{sourceConnectionId:guid}")]
     [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Edit, description: "Add or edit a source connection.")]
     [ProducesResponseType(typeof(SourceConnectionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpdateSourceConnection(
         Guid sourceConnectionId,
         [FromBody] CreateSourceConnectionRequest request,
+        [FromServices] FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore workflowStore,
         CancellationToken cancellationToken)
     {
         var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
@@ -116,6 +118,22 @@ public sealed class ConfigurationsController : ControllerBase
             {
                 denied = await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, PermissionActionCode.Edit);
                 if (denied is not null) return denied;
+            }
+
+            // Dropping write access stops every write-back over the connection, as deleting it does, so the same
+            // in-use rule as DELETE applies: a stale screen or a direct call can't pull it from under a workflow.
+            if (saved.Access.AllowsWrite() && request.Access is { } access && !access.AllowsWrite())
+            {
+                var inUse = await FHIRBridge.Api.Workflows.WorkflowEndpoints.FindEhrWriteConnectionUsageAsync(
+                    workflowStore, _configurationRepository, cancellationToken);
+                if (inUse.Contains(sourceConnectionId))
+                {
+                    return Conflict(new
+                    {
+                        message = "This connection is still used by an EHR Write-Back destination or workflow. Point those at " +
+                                  "another connection, or remove them, before turning off its write access.",
+                    });
+                }
             }
         }
 

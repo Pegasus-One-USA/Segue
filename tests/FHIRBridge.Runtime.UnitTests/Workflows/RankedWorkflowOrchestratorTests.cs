@@ -537,6 +537,140 @@ public sealed class RankedWorkflowOrchestratorTests
         audit.Events.Should().NotContain(e => e.EventType == WorkflowAuditEventType.WorkflowRunFailed);
     }
 
+    // PR #244 review: the cancel and failure branches notify the status another instance recorded, not their own.
+    [Fact]
+    public async Task A_failure_on_a_run_another_instance_closed_notifies_the_recorded_status()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("fail-closed-elsewhere");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new InvalidOperationException("boom"))),
+            runStore: new ClosedElsewhereRunStore(nameof(WorkflowRunStatus.Cancelled)),
+            runStatusNotifier: notifier);
+
+        var act = () => orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("boom");
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Cancelled));
+        terminal.ErrorMessage.Should().BeNull();
+        notifier.Events.Should().NotContain(e => e.Status == nameof(WorkflowRunStatus.Failed));
+    }
+
+    [Fact]
+    public async Task A_cancel_on_a_run_another_instance_closed_notifies_the_recorded_status()
+    {
+        // The lease heartbeat cancels a run another instance already failed as interrupted.
+        var workflow = BuildValidSourceToSqlWorkflow("cancel-closed-elsewhere");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new OperationCanceledException())),
+            runStore: new ClosedElsewhereRunStore(nameof(WorkflowRunStatus.Failed)),
+            runStatusNotifier: notifier);
+
+        await orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Failed));
+        terminal.ErrorMessage.Should().BeNull("'Cancelled by user request.' is not what happened to this run");
+        notifier.Events.Should().NotContain(e => e.Status == nameof(WorkflowRunStatus.Cancelled));
+    }
+
+    // PR #244 review: a run another instance closed with the SAME status this branch reached still holds that
+    // instance's reason, so the push must not carry this branch's message or reference id.
+    [Fact]
+    public async Task A_failure_on_a_run_another_instance_already_failed_pushes_no_message_or_reference()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("fail-failed-elsewhere");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new InvalidOperationException("boom"))),
+            runStore: new ClosedElsewhereRunStore(nameof(WorkflowRunStatus.Failed)),
+            exceptionManager: new RecordingExceptionManager(),
+            runStatusNotifier: notifier);
+
+        var act = () => orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("boom");
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Failed));
+        terminal.ErrorMessage.Should().BeNull("the row holds the other instance's interrupted reason, not 'boom'");
+        terminal.ErrorReferenceId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_cancel_on_a_run_another_instance_already_cancelled_pushes_no_message_or_reference()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("cancel-cancelled-elsewhere");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new OperationCanceledException())),
+            runStore: new ClosedElsewhereRunStore(nameof(WorkflowRunStatus.Cancelled)),
+            exceptionManager: new RecordingExceptionManager(),
+            runStatusNotifier: notifier);
+
+        await orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Cancelled));
+        terminal.ErrorMessage.Should().BeNull("the run was cancelled as abandoned elsewhere, not by user request");
+        terminal.ErrorReferenceId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_failure_that_saves_pushes_its_message_and_reference()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("fail-saved");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new InvalidOperationException("boom"))),
+            runStore: new InMemoryWorkflowRunStore(),
+            exceptionManager: new RecordingExceptionManager(),
+            runStatusNotifier: notifier);
+
+        var act = () => orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Failed));
+        terminal.ErrorMessage.Should().Be("boom");
+        terminal.ErrorReferenceId.Should().Be("ERR-TEST-000001");
+    }
+
+    [Fact]
+    public async Task A_cancel_that_saves_notifies_cancelled_with_its_reason()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("cancel-saved");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new OperationCanceledException())),
+            runStore: new InMemoryWorkflowRunStore(),
+            runStatusNotifier: notifier);
+
+        await orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Cancelled));
+        terminal.ErrorMessage.Should().Be("Cancelled by user request.");
+    }
+
+    private sealed class RecordingRunStatusNotifier : IRunStatusNotifier
+    {
+        public List<RunStatusChangedEvent> Events { get; } = [];
+
+        public Task NotifyAsync(RunStatusChangedEvent statusEvent, CancellationToken cancellationToken)
+        {
+            Events.Add(statusEvent);
+            return Task.CompletedTask;
+        }
+    }
+
     [Fact]
     public async Task A_resumed_run_is_running_again_under_this_processs_lease()
     {
@@ -634,10 +768,16 @@ public sealed class RankedWorkflowOrchestratorTests
     private sealed class ClosedElsewhereRunStore : IWorkflowRunStore
     {
         private readonly InMemoryWorkflowRunStore _inner = new();
+        private readonly string _recordedStatus;
+
+        public ClosedElsewhereRunStore(string recordedStatus = nameof(WorkflowRunStatus.Failed))
+        {
+            _recordedStatus = recordedStatus;
+        }
 
         public Task SaveAsync(WorkflowRun workflowRun, CancellationToken cancellationToken) =>
             WorkflowRunStatuses.IsTerminal(workflowRun.Status)
-                ? throw new WorkflowRunAlreadyClosedException(workflowRun.Id, nameof(WorkflowRunStatus.Failed))
+                ? throw new WorkflowRunAlreadyClosedException(workflowRun.Id, _recordedStatus)
                 : _inner.SaveAsync(workflowRun, cancellationToken);
 
         public Task<WorkflowRun?> GetAsync(Guid workflowRunId, CancellationToken cancellationToken) => _inner.GetAsync(workflowRunId, cancellationToken);

@@ -130,6 +130,58 @@ public sealed class SourceNodeExecutorDestinationRestrictionTests
         output.Metadata["resourceType"].Should().Be("Condition");
     }
 
+    [Theory]
+    [InlineData("search-rest")]
+    [InlineData("bulk-export")]
+    public async Task A_declared_source_none_of_whose_types_a_destination_chose_is_skipped_without_any_fetch(string retrievalMethod)
+    {
+        // PR #244 review: source A (declared: Patient) feeds destination D (Observation) alongside another source that
+        // supplies Observation. Narrowing A leaves nothing; an empty list must not become a _type-less System/Group
+        // $export of every authorized type, nor a silent empty search reported as success.
+        var sourceConnectionId = Guid.NewGuid();
+        var source = new FhirSourceConfiguration(
+            RuntimeSourceType.Epic, "Epic Sandbox", "https://fhir.example.com", null, "client-1", null, null, [],
+            SourceConnectionId: sourceConnectionId);
+
+        var resolver = new Mock<ISourceConnectionRuntimeResolver>();
+        resolver
+            .Setup(x => x.ResolveAsync(sourceConnectionId, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(source);
+
+        var client = new Mock<IFhirSourceClient>(MockBehavior.Strict);
+        var clientFactory = new Mock<IFhirSourceClientFactory>();
+        clientFactory.Setup(x => x.Create(It.IsAny<RuntimeSourceType>())).Returns(client.Object);
+        var bulkClient = new Mock<IFhirBulkExportClient>(MockBehavior.Strict);
+
+        var workflowStore = new InMemoryWorkflowDefinitionStore(TestHelpers.LicenseTestScopeFactory.Create());
+        var workflow = new WorkflowDefinition(Guid.NewGuid(), "declared-source-no-overlap-test", 1);
+        var sourceNode = workflow.AddNode(
+            WorkflowNodeTypes.EpicSource,
+            WorkflowNodeCategory.Source,
+            rank: 0,
+            configurationJson: $$"""{"sourceConnectionId":"{{sourceConnectionId}}","Resources":"Patient","Resource types declared":"true","Retrieval method key":"{{retrievalMethod}}","Export scope":"group","Group ID":"g-1"}""");
+        var destinationNode = workflow.AddNode(
+            WorkflowNodeTypes.SqlServerDestination,
+            WorkflowNodeCategory.Destination,
+            rank: 1,
+            configurationJson: """{"dest_resources":"Observation"}""");
+        workflow.AddEdge(sourceNode.Id, destinationNode.Id);
+        await workflowStore.SaveAsync(workflow, CancellationToken.None);
+
+        var executor = new EpicSourceNodeExecutor(
+            clientFactory.Object, resolver.Object, workflowDefinitionStore: workflowStore, bulkExportClient: bulkClient.Object);
+        var context = new WorkflowExecutionContext(Guid.NewGuid(), "corr");
+
+        var output = await executor.ExecuteAsync(context, sourceNode, [], CancellationToken.None);
+
+        bulkClient.VerifyNoOtherCalls();
+        client.VerifyNoOtherCalls();
+        output.Payload.Should().BeOfType<ResourceBatch>().Which.Resources.Should().BeEmpty();
+        output.Metadata.Should().NotContainKey(WorkflowNodeOutputMetadataKeys.BulkExportDeferredJobId);
+        output.Metadata["skippedResourceTypes"].Should().BeOfType<string[]>()
+            .Which.Should().ContainSingle(skip => skip.Contains("Patient") && skip.Contains("Observation"));
+    }
+
     [Fact]
     public async Task Non_compartment_type_referenced_by_a_selected_resource_is_excluded_when_not_itself_selected()
     {

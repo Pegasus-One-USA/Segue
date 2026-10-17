@@ -396,10 +396,10 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
         workflowRun.SetErrorReference(failureReferenceId);
 
-        var status = workflowRun.Status.ToString();
+        var outcome = new PersistedOutcome(workflowRun.Status.ToString(), ClosedElsewhere: false);
         try
         {
-            status = await PersistOutcomeAsync(workflowRun, CancellationToken.None);
+            outcome = await PersistOutcomeAsync(workflowRun, CancellationToken.None);
         }
         catch (Exception persistException)
         {
@@ -408,8 +408,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 workflowRun.Id, workflowDefinition.Id);
         }
 
+        // A run another instance already closed keeps that instance's reason; this failure's message and reference id
+        // are not on the row, so they are not pushed.
         await NotifyRunStatusAsync(
-            workflowRun.Id, workflowDefinition.Id, status, DateTimeOffset.UtcNow, exception.Message, CancellationToken.None, failureReferenceId);
+            workflowRun.Id, workflowDefinition.Id, outcome.Status, DateTimeOffset.UtcNow,
+            outcome.ClosedElsewhere ? null : exception.Message, CancellationToken.None,
+            outcome.ClosedElsewhere ? null : failureReferenceId);
     }
 
     /// <summary>Runs <paramref name="nodesToRun"/> in order against <paramref name="workflowRun"/>, shared by both a
@@ -559,9 +563,9 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                             inputContract,
                             WorkflowDataContract.None,
                             DateTimeOffset.UtcNow), cancellationToken);
-                        var pausedStatus = await PersistOutcomeAsync(workflowRun, cancellationToken);
+                        var pausedOutcome = await PersistOutcomeAsync(workflowRun, cancellationToken);
                         await NotifyRunStatusAsync(
-                            workflowRun.Id, workflowDefinition.Id, pausedStatus, DateTimeOffset.UtcNow, null, cancellationToken);
+                            workflowRun.Id, workflowDefinition.Id, pausedOutcome.Status, DateTimeOffset.UtcNow, null, cancellationToken);
 
                         return new WorkflowRunResult(workflowRun, outputsByNodeId);
                     }
@@ -754,8 +758,9 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             var standing = await PersistOutcomeAsync(workflowRun, cancellationToken);
             await NotifyRunStatusAsync(
-                workflowRun.Id, workflowDefinition.Id, standing, DateTimeOffset.UtcNow,
-                standing == workflowRun.Status.ToString() ? workflowRun.ErrorMessage : null, cancellationToken, workflowRun.ErrorReferenceId);
+                workflowRun.Id, workflowDefinition.Id, standing.Status, DateTimeOffset.UtcNow,
+                standing.ClosedElsewhere ? null : workflowRun.ErrorMessage, cancellationToken,
+                standing.ClosedElsewhere ? null : workflowRun.ErrorReferenceId);
         }
         catch (FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException cancelException)
         {
@@ -794,22 +799,13 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             workflowRun.SetErrorReference(cancelReferenceId);
 
-            try
-            {
-                await PersistRunAsync(workflowRun, CancellationToken.None);
-            }
-            catch (Exception persistException)
-            {
-                // Not rethrown by design — see the matching remark in the generic failure branch below — but must
-                // still be logged: this is the terminal write for the run's history, so a silent failure here means
-                // the run is stuck showing "Running" in the DB with no trace of why anywhere, not even Seq.
-                _logger.LogError(persistException,
-                    "Failed to persist cancelled workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
-                    workflowRun.Id, workflowDefinition.Id);
-            }
+            // Not rethrown on a store failure by design — see the matching remark in the generic failure branch below.
+            var cancelledOutcome = await PersistTerminalOutcomeAsync(workflowRun, workflowDefinition.Id);
+            var cancelStands = !cancelledOutcome.ClosedElsewhere;
 
             await NotifyRunStatusAsync(
-                workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, cancelException.Message, CancellationToken.None, cancelReferenceId);
+                workflowRun.Id, workflowDefinition.Id, cancelledOutcome.Status, DateTimeOffset.UtcNow,
+                cancelStands ? cancelException.Message : null, CancellationToken.None, cancelStands ? cancelReferenceId : null);
 
             throw;
         }
@@ -853,19 +849,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             workflowRun.SetErrorReference(cancelReferenceId);
 
-            try
-            {
-                await PersistRunAsync(workflowRun, CancellationToken.None);
-            }
-            catch (Exception persistException)
-            {
-                _logger.LogError(persistException,
-                    "Failed to persist cancelled workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
-                    workflowRun.Id, workflowDefinition.Id);
-            }
+            // A cancel signalled because another instance closed this run (the lease service's renewal found it
+            // closed) lands here too; the status recorded there is the one notified.
+            var userCancelledOutcome = await PersistTerminalOutcomeAsync(workflowRun, workflowDefinition.Id);
+            var userCancelStands = !userCancelledOutcome.ClosedElsewhere;
 
             await NotifyRunStatusAsync(
-                workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, reason, CancellationToken.None, cancelReferenceId);
+                workflowRun.Id, workflowDefinition.Id, userCancelledOutcome.Status, DateTimeOffset.UtcNow,
+                userCancelStands ? reason : null, CancellationToken.None, userCancelStands ? cancelReferenceId : null);
 
             return new WorkflowRunResult(workflowRun, outputsByNodeId);
         }
@@ -923,23 +914,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             // Persist the failed run with its partial node-run timeline. Use None so the history is captured
             // even when the caller's token is the reason the run aborted. Best-effort: a store failure here
             // (e.g. a transient DB error) must not also suppress the "Failed" SignalR notify below, or the run
-            // would be stuck showing "Running" both in the DB and to any live client.
-            try
-            {
-                await PersistRunAsync(workflowRun, CancellationToken.None);
-            }
-            catch (Exception persistException)
-            {
-                // Not rethrown by design — see the remark above; NotifyRunStatusAsync still runs regardless — but
-                // must still be logged: this is the terminal write for the run's history, so a silent failure here
-                // means the run is stuck showing "Running" in the DB with no trace of why anywhere, not even Seq.
-                _logger.LogError(persistException,
-                    "Failed to persist failed workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
-                    workflowRun.Id, workflowDefinition.Id);
-            }
+            // would be stuck showing "Running" both in the DB and to any live client. A run another instance already
+            // closed notifies the status recorded there, not "Failed".
+            var failedOutcome = await PersistTerminalOutcomeAsync(workflowRun, workflowDefinition.Id);
+            var failureStands = !failedOutcome.ClosedElsewhere;
 
             await NotifyRunStatusAsync(
-                workflowRun.Id, workflowDefinition.Id, "Failed", DateTimeOffset.UtcNow, exception.Message, CancellationToken.None, failureReferenceId);
+                workflowRun.Id, workflowDefinition.Id, failedOutcome.Status, DateTimeOffset.UtcNow,
+                failureStands ? exception.Message : null, CancellationToken.None, failureStands ? failureReferenceId : null);
 
             throw;
         }
@@ -967,12 +949,12 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     /// keeps the outcome recorded there: logged, not treated as a failure of this run, which would call Fail on an
     /// aggregate that succeeded, record a second audit event and notify twice.
     /// </summary>
-    private async Task<string> PersistOutcomeAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
+    private async Task<PersistedOutcome> PersistOutcomeAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
     {
         try
         {
             await PersistRunAsync(workflowRun, cancellationToken);
-            return workflowRun.Status.ToString();
+            return new PersistedOutcome(workflowRun.Status.ToString(), ClosedElsewhere: false);
         }
         catch (WorkflowRunAlreadyClosedException closed)
         {
@@ -980,7 +962,36 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 "Workflow run {WorkflowRunId} reached {Outcome} here, but another instance had already closed it as " +
                 "{RecordedStatus}; the recorded status stands.",
                 workflowRun.Id, workflowRun.Status, closed.RecordedStatus);
-            return closed.RecordedStatus;
+            return new PersistedOutcome(closed.RecordedStatus, ClosedElsewhere: true);
+        }
+    }
+
+    /// <summary>
+    /// The status that stands after a save, and whether the save was refused because another instance had already
+    /// closed the run. When it was, the push carries no message or reference id from this instance, even if the
+    /// recorded status happens to equal the one reached here: the row holds the other instance's reason, not ours.
+    /// </summary>
+    private readonly record struct PersistedOutcome(string Status, bool ClosedElsewhere);
+
+    /// <summary>
+    /// The cancel and failure branches' terminal save: the same step as <see cref="PersistOutcomeAsync"/>, so a run
+    /// another instance already closed keeps (and notifies) the status recorded there rather than this branch's own.
+    /// Any other store failure is logged and not rethrown — the branch still notifies — and its own status is returned.
+    /// </summary>
+    private async Task<PersistedOutcome> PersistTerminalOutcomeAsync(WorkflowRun workflowRun, Guid workflowDefinitionId)
+    {
+        try
+        {
+            return await PersistOutcomeAsync(workflowRun, CancellationToken.None);
+        }
+        catch (Exception persistException)
+        {
+            // This is the terminal write for the run's history, so a silent failure here would leave the run showing
+            // "Running" in the DB with no trace of why anywhere, not even Seq.
+            _logger.LogError(persistException,
+                "Failed to persist {Outcome} workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
+                workflowRun.Status, workflowRun.Id, workflowDefinitionId);
+            return new PersistedOutcome(workflowRun.Status.ToString(), ClosedElsewhere: false);
         }
     }
 

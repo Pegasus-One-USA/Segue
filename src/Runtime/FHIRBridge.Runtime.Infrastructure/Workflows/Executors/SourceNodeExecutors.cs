@@ -501,6 +501,35 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             ? RestrictToDestinationResourceTypes(readable, destinationResourceTypes)
             : destinationResourceTypes;
 
+        // A declared source none of whose types a reachable destination chose (it feeds a destination alongside another
+        // source that supplies those types) has nothing to read. An empty list must never reach the fetch: a
+        // System/Group $export with no _type exports every type the client is authorized for, and a search silently
+        // fetches nothing. The node is skipped instead, with the reason reported on the run.
+        if (resourceTypes.Count == 0)
+        {
+            var skipReason =
+                $"{node.NodeType}: nothing read — none of this source's resource types ({string.Join(", ", readable)}) " +
+                $"is selected by a destination it feeds ({string.Join(", ", destinationResourceTypes)}).";
+            _logger.LogWarning(
+                LogEvents.ResourceTypeSkipped,
+                "Source node {NodeId} read nothing from {SourceName}: none of its resource types [{ResourceTypes}] is " +
+                "selected by a destination it feeds [{DestinationResourceTypes}].",
+                node.Id, source.Name, string.Join(", ", readable), string.Join(", ", destinationResourceTypes));
+
+            return new WorkflowNodeOutput(
+                node.Id,
+                node.NodeType,
+                new ResourceBatch([]),
+                WorkflowDataContract.ResourceBatch,
+                new Dictionary<string, object?>
+                {
+                    ["executor"] = GetType().Name,
+                    ["resourceType"] = string.Empty,
+                    ["count"] = 0,
+                    ["skippedResourceTypes"] = new[] { skipReason },
+                });
+        }
+
         var useBulkExport = string.Equals(source.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase)
             && _bulkExportClient is not null;
 

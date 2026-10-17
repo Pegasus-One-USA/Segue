@@ -138,14 +138,19 @@ public sealed class SourceConnectionsController : ControllerBase
     /// hands real secret material back out of the secret store, so it carries its own dedicated
     /// <c>sourceconnections.export</c> permission (deliberately NOT implied by Edit, which provisions keys) on top
     /// of the connection's vendor-specific Edit permission, and every download is written to the security event log
-    /// with the exporting user. 404 when the connection doesn't exist or has no asymmetric signing key configured.
+    /// with the exporting user. A connection that can write, or one whose key reference a write connection also uses,
+    /// also needs the EHR Write-Back edit right. 404 when the
+    /// connection doesn't exist or has no asymmetric signing key configured.
     /// </summary>
     [HttpGet("{sourceConnectionId:guid}/signing-key/private.pem")]
     [StandardPermission(PermissionGroupCode.SourceConnections, PermissionActionCode.Export, description: "Download the private key PEM of a source connection's SMART Backend Services signing key.")]
     [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Edit, description: "Add or edit a source connection for this vendor.")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DownloadPrivateKeyPem(Guid sourceConnectionId, CancellationToken cancellationToken)
+    public async Task<IActionResult> DownloadPrivateKeyPem(
+        Guid sourceConnectionId,
+        [FromServices] FHIRBridge.Application.Abstractions.Persistence.IConfigurationRepository configurationRepository,
+        CancellationToken cancellationToken)
     {
         var sourceConnection = await _configurationService.GetSourceConnectionByIdAsync(sourceConnectionId, cancellationToken);
         if (sourceConnection is null)
@@ -155,6 +160,18 @@ public sealed class SourceConnectionsController : ControllerBase
 
         var denied = await this.AuthorizePermissionAsync(_authorizationService, sourceConnection.SourceSystemType, PermissionActionCode.Edit);
         if (denied is not null) return denied;
+
+        // The key of a connection that can write is the key the vendor's write app trusts: whoever holds it can write
+        // into the EHR outside FHIRBridge (no dry run, no execute right, no write ledger). So exporting it needs the
+        // EHR Write-Back edit right as well, the right that changing that connection's credentials needs. The gate is
+        // on the key, not on this row: a read connection saved with a write connection's key reference exports the
+        // write app's key just the same.
+        if (sourceConnection.Access.AllowsWrite()
+            || await SharesPrivateKeyWithWriteConnectionAsync(sourceConnection, configurationRepository, cancellationToken))
+        {
+            denied = await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, PermissionActionCode.Edit);
+            if (denied is not null) return denied;
+        }
 
         var pem = await _signingKeyExportService.GetPrivateKeyPemAsync(sourceConnectionId, cancellationToken);
         if (pem is null)
@@ -171,6 +188,32 @@ public sealed class SourceConnectionsController : ControllerBase
             cancellationToken);
 
         return PemFile(pem, $"{FileNameStem(sourceConnection.Name)}-private.pem");
+    }
+
+    /// <summary>
+    /// Whether any connection that can write signs with the same private-key secret (Key Vault name and secret name)
+    /// as <paramref name="sourceConnection"/>. Compared ignoring case and surrounding spaces, as Key Vault names are,
+    /// so a near-identical spelling of the same reference cannot slip past.
+    /// </summary>
+    private static async Task<bool> SharesPrivateKeyWithWriteConnectionAsync(
+        SourceConnectionDto sourceConnection,
+        FHIRBridge.Application.Abstractions.Persistence.IConfigurationRepository configurationRepository,
+        CancellationToken cancellationToken)
+    {
+        var vaultName = sourceConnection.Authentication.PrivateKeyKeyVaultName?.Trim();
+        var secretName = sourceConnection.Authentication.PrivateKeySecretName?.Trim();
+        if (string.IsNullOrEmpty(vaultName) || string.IsNullOrEmpty(secretName))
+        {
+            return false;
+        }
+
+        var connections = await configurationRepository.GetSourceConnectionsAsync(cancellationToken);
+        return connections.Any(other =>
+            other.Id != sourceConnection.Id
+            && other.Access.AllowsWrite()
+            && other.Authentication.PrivateKey is { } key
+            && string.Equals(key.KeyVaultName?.Trim(), vaultName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(key.SecretName?.Trim(), secretName, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
