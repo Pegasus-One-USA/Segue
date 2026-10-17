@@ -128,38 +128,55 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
         }
 
         string? department = null;
-        if (request[R.Department] is JsonValue flag && flag.TryGetValue<bool>(out var needsDepartment) && needsDepartment)
-        {
-            department = patientId is null ? Options.TargetDepartmentId : await DepartmentAsync(patientId, cancellationToken);
-            if (department is null)
-            {
-                return RefusedUnlessCancelled("athena-department-unknown", cancellationToken);
-            }
-        }
-
-        // Each lookup's id replaces a value that is its placeholder exactly, never text inside another value: a field
-        // carrying clinical free text or a name that happens to contain the placeholder is sent as written.
         var fieldsSource = (request[R.Fields] as JsonObject ?? new JsonObject()).DeepClone().AsObject();
         var jsonFieldsSource = (request[R.JsonFields] as JsonObject ?? new JsonObject()).DeepClone().AsObject();
-        foreach (var lookup in (request[R.Lookups] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+        var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
         {
-            var kind = Text(lookup, R.LookupKind) ?? string.Empty;
-            var name = Text(lookup, R.LookupName) ?? string.Empty;
-            var token = Text(lookup, R.LookupToken) ?? string.Empty;
-            if (token.Length == 0 || !HasPlaceholder(fieldsSource, token) && !HasPlaceholder(jsonFieldsSource, token))
+            if (request[R.Department] is JsonValue flag && flag.TryGetValue<bool>(out var needsDepartment) && needsDepartment)
             {
-                // Nowhere to put the id: the request was built without a placeholder for it.
-                return Refused($"athena-{kind}-no-placeholder");
+                department = patientId is null ? Options.TargetDepartmentId : await DepartmentAsync(patientId, cancellationToken);
+                if (department is null)
+                {
+                    return RefusedUnlessCancelled("athena-department-unknown", cancellationToken);
+                }
             }
 
-            var id = await LookupAsync(kind, name, cancellationToken);
-            if (id is null)
+            // Each lookup's id replaces a value that is its placeholder exactly, never text inside another value: a
+            // field carrying clinical free text or a name that happens to contain the placeholder is sent as written.
+            foreach (var lookup in (request[R.Lookups] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
             {
-                return RefusedUnlessCancelled($"athena-{kind}-not-found", cancellationToken);
+                var kind = Text(lookup, R.LookupKind) ?? string.Empty;
+                var name = Text(lookup, R.LookupName) ?? string.Empty;
+                var token = Text(lookup, R.LookupToken) ?? string.Empty;
+                if (token.Length == 0 || !HasPlaceholder(fieldsSource, token) && !HasPlaceholder(jsonFieldsSource, token))
+                {
+                    // Nowhere to put the id: the request was built without a placeholder for it.
+                    return Refused($"athena-{kind}-no-placeholder");
+                }
+
+                var id = await LookupAsync(kind, name, cancellationToken);
+                if (id is null)
+                {
+                    return RefusedUnlessCancelled($"athena-{kind}-not-found", cancellationToken);
+                }
+
+                resolved[token] = id;
+                ReplacePlaceholder(fieldsSource, token, id);
+                ReplacePlaceholder(jsonFieldsSource, token, id);
             }
 
-            ReplacePlaceholder(fieldsSource, token, id);
-            ReplacePlaceholder(jsonFieldsSource, token, id);
+            if (request[R.Existing] is JsonObject existing
+                && await ExistingCheckAsync(existing, patientId, department, resolved, cancellationToken) is { } stop)
+            {
+                return stop;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The department, reference and chart reads are GETs, which the send loop lets a cancel escape from. The
+            // write itself was not sent: the record is retried next run, not left for review as an unknown outcome.
+            return Refused(EhrWriteOutcomeCodes.CancelledBeforeSend);
         }
 
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -498,6 +515,70 @@ public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
         }
 
         return id;
+    }
+
+    /// <summary>
+    /// Reads the patient's chart list before an upsert (the allergy PUT replaces an entry with the same allergenid,
+    /// clinician-entered reactions and note included). An entry whose match field holds the resolved value means the
+    /// record is on the chart already: reported as <see cref="R.AlreadyOnChartCode"/>, which the writer records as
+    /// already at target, and nothing is sent. A read that fails refuses the record (retried next run) rather than
+    /// risk the overwrite. Null when the write may go ahead.
+    /// </summary>
+    private async Task<EhrCreateOutcome?> ExistingCheckAsync(
+        JsonObject existing,
+        string? patientId,
+        string? department,
+        IReadOnlyDictionary<string, string> resolved,
+        CancellationToken cancellationToken)
+    {
+        var path = Text(existing, R.ExistingPath) ?? string.Empty;
+        var list = Text(existing, R.ExistingList);
+        var match = Text(existing, R.ExistingMatch);
+        var value = Text(existing, R.ExistingValue);
+        if (path.Contains(R.PatientIdToken, StringComparison.Ordinal))
+        {
+            if (patientId is null)
+            {
+                return Refused("athena-patient-id-unrecognised");
+            }
+
+            path = path.Replace(R.PatientIdToken, patientId, StringComparison.Ordinal);
+        }
+
+        if (path.Length == 0 || match is null || value is null)
+        {
+            return Refused("athena-existing-check-invalid");
+        }
+
+        value = resolved.GetValueOrDefault(value, value);
+        if (department is not null)
+        {
+            path += $"{(path.Contains('?') ? '&' : '?')}departmentid={Uri.EscapeDataString(department)}";
+        }
+
+        var result = await GetAsync(path, cancellationToken);
+        if (result.Kind != FhirWriteOutcomeKind.Created)
+        {
+            return RefusedUnlessCancelled("athena-existing-check-failed", cancellationToken);
+        }
+
+        JsonNode? root;
+        try
+        {
+            root = string.IsNullOrWhiteSpace(result.Body) ? null : JsonNode.Parse(result.Body);
+        }
+        catch (JsonException)
+        {
+            return Refused("athena-existing-check-failed");
+        }
+
+        var entries = list is not null && root is JsonObject obj ? obj[list] as JsonArray : root as JsonArray;
+        var present = (entries ?? new JsonArray())
+            .OfType<JsonObject>()
+            .Any(entry => string.Equals(IdOf(entry[match]), value, StringComparison.Ordinal));
+        return present
+            ? new EhrCreateOutcome(EhrCreateKind.Rejected, null, null, [new EhrOutcomeIssue("information", "duplicate", R.AlreadyOnChartCode, null)])
+            : null;
     }
 
     private Task<FhirRawWriteResult> GetAsync(string relativePath, CancellationToken cancellationToken) =>

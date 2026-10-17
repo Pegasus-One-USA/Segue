@@ -60,6 +60,25 @@ public sealed class FhirWriteClientTests
         FhirSourceConnectorBase.ParseLocation(uri, "Observation").Should().Be((id, version));
     }
 
+    // PR #244 review: athenaOne puts the patient's chart id in the path, so a logged raw-request URL has its ids
+    // replaced, not only its query dropped.
+    [Theory]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/chart/12345/problems", "https://api.platform.athenahealth.com/v1/{id}/chart/{patientid}/problems")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/patients/12345", "https://api.platform.athenahealth.com/v1/{id}/patients/{patientid}")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/patients/abc/documents/labresult", "https://api.platform.athenahealth.com/v1/{id}/patients/{patientid}/documents/labresult")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/chart/12345/encounters?departmentid=1&showallstatuses=true", "https://api.platform.athenahealth.com/v1/{id}/chart/{patientid}/encounters?[redacted]")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/chart/encounter/678/vitals", "https://api.platform.athenahealth.com/v1/{id}/chart/encounter/{encounterid}/vitals")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/reference/allergies?searchvalue=Penicillin", "https://api.platform.athenahealth.com/v1/{id}/reference/allergies?[redacted]")]
+    [InlineData("https://fhir.example.com/R4/Patient/eXyz-1.a", "https://fhir.example.com/R4/Patient/{id}")]
+    [InlineData("https://fhir.example.com/R4/Patient/$match", "https://fhir.example.com/R4/Patient/$match")]
+    [InlineData("https://host/api/FHIR/R4/Observation", "https://host/api/FHIR/R4/Observation")]
+    [InlineData("https://host/api/FHIR/R4/Observation/eAbc123", "https://host/api/FHIR/R4/Observation/{id}")]
+    [InlineData("https://host/api/FHIR/STU3/Observation", "https://host/api/FHIR/STU3/Observation")]
+    [InlineData("https://host/api/FHIR/DSTU2/Patient/eAbc", "https://host/api/FHIR/DSTU2/Patient/{id}")]
+    [InlineData("https://host/fhir/R4B/Patient/1", "https://host/fhir/R4B/Patient/{id}")]
+    public void A_logged_raw_request_url_carries_no_ids(string url, string logged) =>
+        FhirSourceConnectorBase.LoggedRequestUrl(url).Should().Be(logged);
+
     [Theory]
     [InlineData(HttpStatusCode.InternalServerError)]
     [InlineData(HttpStatusCode.BadGateway)]

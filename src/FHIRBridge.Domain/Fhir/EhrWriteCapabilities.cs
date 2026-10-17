@@ -120,8 +120,9 @@ public static class EhrWriteCapabilities
         ],
         supportsPatientMatch: false,
         requestsScopeOnTokenRequest: true,
-        // athenaOne 409: "a conflict ... e.g. duplicate data where none is allowed".
-        alreadyAtTargetOutcomeCodes: new HashSet<string>(StringComparer.Ordinal) { "athena-409" },
+        // athenaOne 409: "a conflict ... e.g. duplicate data where none is allowed". athena-already-on-chart: the
+        // channel read the chart first and found the entry (the allergy PUT upserts, so it never answers 409).
+        alreadyAtTargetOutcomeCodes: new HashSet<string>(StringComparer.Ordinal) { "athena-409", "athena-already-on-chart" },
         proprietaryApiScope: "athena/service/Athenanet.MDP.*");
 
     /// <summary>Resource types a Generic FHIR R4 server takes as plain creates.</summary>

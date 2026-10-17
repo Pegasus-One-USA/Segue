@@ -71,20 +71,43 @@ public abstract class AthenaOneWriteProfile : IEhrWriteProfile
         request[R.JsonFields] = jsonFields;
     }
 
-    /// <summary>athenaOne's date format, MM/DD/YYYY; null unless the FHIR date has a day.</summary>
+    /// <summary>athenaOne's date format, MM/DD/YYYY; null unless the FHIR date has a day. A dateTime is taken in UTC
+    /// (see <see cref="InUtc"/>).</summary>
     protected static string? AthenaDate(string? fhirDate) =>
-        DateParts(fhirDate) is { Month: { } month, Day: { } day } parts
+        DateParts(InUtc(fhirDate)) is { Month: { } month, Day: { } day } parts
             ? $"{month:D2}/{day:D2}/{parts.Year:D4}"
             : null;
 
-    /// <summary>The time part of a FHIR dateTime as HH:mm, or null.</summary>
+    /// <summary>The time part of a FHIR dateTime as HH:mm in UTC (see <see cref="InUtc"/>), or null.</summary>
     protected static string? AthenaTime(string? fhirDateTime) =>
-        fhirDateTime is { Length: >= 16 } && fhirDateTime[10] == 'T' ? fhirDateTime.Substring(11, 5) : null;
+        InUtc(fhirDateTime) is { Length: >= 16 } utc && utc[10] == 'T' ? utc.Substring(11, 5) : null;
+
+    /// <summary>
+    /// A FHIR dateTime with a time, moved to UTC before its date and time are taken, so the two always describe the
+    /// same instant: <c>2024-03-01T02:30:00Z</c> and <c>2024-02-29T21:30:00-05:00</c> both become 03/01/2024 02:30. No
+    /// practice time zone is configured anywhere yet, so athena is sent UTC. This applies to every athena date taken
+    /// from a dateTime, not only lab result and note times: problem and allergy onset, medication start and stop, and
+    /// the vaccine administered date can each move to the next or previous day near midnight (the destination's help
+    /// text says so). A time without a zone, which FHIR does not allow, is taken as written; a date alone is returned
+    /// unchanged.
+    /// </summary>
+    internal static string? InUtc(string? fhirDateTime)
+    {
+        if (fhirDateTime is not { Length: >= 16 } || fhirDateTime[10] != 'T')
+        {
+            return fhirDateTime;
+        }
+
+        return DateTimeOffset.TryParse(fhirDateTime, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var instant)
+            ? instant.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
+            : fhirDateTime;
+    }
 }
 
 /// <summary>athenaOne <c>PUT /chart/{patientid}/allergies</c>: upserts by allergenid, never deletes. The allergen is
 /// looked up by exact name in athena's allergen list (<c>/reference/allergies</c>); reactions carry their name, SNOMED
-/// code and severity. No id comes back. Inactive allergies are not sent.</summary>
+/// code and severity. No id comes back. Inactive allergies are not sent, and an allergen already on the patient's
+/// chart is reported as already in the EHR instead of being overwritten.</summary>
 public sealed class AthenaOneAllergyWriteProfile : AthenaOneWriteProfile
 {
     private const string AllergenToken = "{{allergenid}}";
@@ -168,6 +191,18 @@ public sealed class AthenaOneAllergyWriteProfile : AthenaOneWriteProfile
         var request = Request("allergy", "PUT", $"chart/{R.PatientIdToken}/allergies", department: true, idField: null);
         JsonField(request, "allergies", new JsonArray(allergy));
         Lookup(request, R.AllergenLookup, name, AllergenToken);
+
+        // The PUT upserts by allergenid, so an allergen already on the chart would have its clinician-entered
+        // reactions, note and onset replaced: the channel reads the chart first and reports it as already there.
+        // athena lists only active allergies unless asked for inactive ones too, and one a clinician deactivated
+        // would otherwise be overwritten (and possibly reactivated) by the PUT.
+        request[R.Existing] = new JsonObject
+        {
+            [R.ExistingPath] = $"chart/{R.PatientIdToken}/allergies?showinactive=true",
+            [R.ExistingList] = "allergies",
+            [R.ExistingMatch] = "allergenid",
+            [R.ExistingValue] = AllergenToken,
+        };
         return EhrShapeResult.Shaped(request, patient);
     }
 }
@@ -375,7 +410,16 @@ public sealed class AthenaOneLabResultWriteProfile : AthenaOneWriteProfile
 
         if (Object(source, "valueQuantity") is { } quantity && (quantity["value"] as JsonValue)?.TryGetValue<decimal>(out var number) == true)
         {
-            analyte["value"] = number.ToString(CultureInfo.InvariantCulture);
+            // A censored result ("<0.01", ">500") keeps its comparator: the value is text in athena (a valueString
+            // goes in the same field), and the number alone would read as a measured result. Any other comparator
+            // (R4's "ad") has no lab-result meaning athena could show, so the record is not sent at all.
+            var comparator = String(quantity, "comparator");
+            if (comparator is not (null or "<" or "<=" or ">=" or ">"))
+            {
+                return EhrShapeResult.Skip("comparator-not-supported");
+            }
+
+            analyte["value"] = comparator + number.ToString(CultureInfo.InvariantCulture);
             if ((String(quantity, "unit") ?? String(quantity, "code")) is { } unit)
             {
                 analyte["units"] = unit;
@@ -398,7 +442,14 @@ public sealed class AthenaOneLabResultWriteProfile : AthenaOneWriteProfile
         {
             var low = (Object(range, "low")?["value"] as JsonValue)?.ToString();
             var high = (Object(range, "high")?["value"] as JsonValue)?.ToString();
-            var rangeText = String(range, "text") ?? (low is not null || high is not null ? $"{low}-{high}" : null);
+            // One bound alone is written as a bound: "-100" would read as negative 100, and "60-" as a broken range.
+            var rangeText = String(range, "text") ?? (low, high) switch
+            {
+                ({ } l, { } h) => $"{l}-{h}",
+                ({ } l, null) => $">={l}",
+                (null, { } h) => $"<={h}",
+                _ => null,
+            };
             if (rangeText is not null)
             {
                 analyte["referencerange"] = rangeText;
@@ -480,15 +531,31 @@ public abstract class AthenaOneMedicationWriteProfile : AthenaOneWriteProfile
         var request = Request("medication", "POST", $"chart/{R.PatientIdToken}/medications", department: true, idField: "medicationentryid");
         var fields = Fields(request);
         fields["medicationid"] = MedicationToken;
-        var period = Object(source, "effectivePeriod") ?? Object(Object(source, "dispenseRequest"), "validityPeriod");
-        if (AthenaDate(String(period, "start") ?? String(source, "effectiveDateTime") ?? String(source, "authoredOn")) is { } start)
+        var effective = Object(source, "effectivePeriod");
+        var validity = Object(Object(source, "dispenseRequest"), "validityPeriod");
+        if (AthenaDate(String(effective ?? validity, "start") ?? String(source, "effectiveDateTime") ?? String(source, "authoredOn")) is { } start)
         {
             fields["startdate"] = start;
         }
 
-        if (AthenaDate(String(period, "end")) is { } stop)
+        // athena has no status here: a medication with no stopdate is listed as current. When the patient stopped
+        // taking it is the period it was taken over (MedicationStatement.effectivePeriod). A prescription's validity
+        // window is only when the order expires, so for an order that did stop the date its status was set comes
+        // first (an order stopped early has a validity end months later); the validity end only when there is none
+        // and it has already passed. R4 has no statusChanged, so a stopped R4 order whose validity end is still to come
+        // would otherwise be listed as current until then. A stopped or completed one with no date at all is not sent.
+        var ended = status is "stopped" or "completed";
+        var stopDate = AthenaDate(String(effective, "end"))
+            ?? (ended
+                ? AthenaDate(String(source, "statusChanged")) ?? AthenaDate(NotLaterThanToday(String(validity, "end"))) ?? AthenaDate(String(source, "dateAsserted"))
+                : null);
+        if (stopDate is not null)
         {
-            fields["stopdate"] = stop;
+            fields["stopdate"] = stopDate;
+        }
+        else if (ended)
+        {
+            return EhrShapeResult.Skip("stopped-no-stop-date");
         }
 
         var dosage = Objects(source, "dosage").FirstOrDefault() ?? Objects(source, "dosageInstruction").FirstOrDefault();
@@ -500,6 +567,15 @@ public abstract class AthenaOneMedicationWriteProfile : AthenaOneWriteProfile
         Lookup(request, R.MedicationLookup, name, MedicationToken);
         return EhrShapeResult.Shaped(request, subject);
     }
+
+    /// <summary>The FHIR date when its day (in UTC, see <see cref="AthenaOneWriteProfile.InUtc"/>) is not after
+    /// today's UTC date; otherwise, or when it has no day, null.</summary>
+    private static string? NotLaterThanToday(string? fhirDate) =>
+        InUtc(fhirDate) is { Length: >= 10 } utc
+        && DateOnly.TryParseExact(utc[..10], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day)
+        && day <= DateOnly.FromDateTime(DateTime.UtcNow)
+            ? fhirDate
+            : null;
 }
 
 public sealed class AthenaOneMedicationRequestWriteProfile : AthenaOneMedicationWriteProfile
@@ -653,8 +729,15 @@ public sealed class AthenaOnePatientWriteProfile : AthenaOneWriteProfile
             fields["ssn"] = String(ssn, "value");
         }
 
-        foreach (var telecom in Objects(patient, "telecom"))
+        // From the source, not the Epic shaping, which drops every use but home, mobile and work: an 'old' or 'temp'
+        // number would arrive with no use and become the home phone ahead of the real one. Those are not sent.
+        foreach (var telecom in Objects(source, "telecom"))
         {
+            if (string.IsNullOrWhiteSpace(String(telecom, "value")) || String(telecom, "use") is "old" or "temp")
+            {
+                continue;
+            }
+
             var target = (String(telecom, "system"), String(telecom, "use")) switch
             {
                 ("email", _) => "email",

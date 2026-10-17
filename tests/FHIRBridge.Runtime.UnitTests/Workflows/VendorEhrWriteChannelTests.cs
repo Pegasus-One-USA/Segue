@@ -369,6 +369,104 @@ public sealed class VendorEhrWriteChannelTests
         client.Verify(c => c.SendAsync(It.Is<FhirRawWriteRequest>(r => r.Method == "POST"), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // PR #244 review: the department and reference reads are idempotent GETs, which the send loop lets a cancel escape
+    // from as an exception; the write itself was never sent, so it is reported as cancelled before send, not thrown
+    // (which the writer would record as an unknown outcome for review).
+    [Fact]
+    public async Task Athena_reports_a_cancel_thrown_by_a_lookup_as_cancelled_before_send()
+    {
+        using var cancelled = new CancellationTokenSource();
+        var client = new Mock<IFhirWriteClient>();
+        client.Setup(c => c.SendAsync(It.IsAny<FhirRawWriteRequest>(), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .Returns(async (FhirRawWriteRequest _, FhirSourceConfiguration _, CancellationToken token) =>
+            {
+                await cancelled.CancelAsync();
+                token.ThrowIfCancellationRequested();
+                return Ok("[]");
+            });
+        var channel = new AthenaOneEhrWriteChannel(Fhir(client, AthenaFhirBase, SourceSystemType.Athenahealth), "195900");
+        var request = """
+            {"resourceType":"AthenaOneRequest","operation":"medication","method":"POST","path":"chart/{patientid}/medications",
+             "department":true,"fields":{"medicationid":"{{medicationid}}"},
+             "lookups":[{"kind":"medication","name":"metformin 500 mg tablet","token":"{{medicationid}}"}],
+             "patient":"a-195900.E-12"}
+            """;
+
+        var outcome = await channel.CreateAsync("MedicationRequest", request, cancelled.Token);
+
+        outcome.Kind.Should().Be(EhrCreateKind.Rejected);
+        outcome.HttpStatus.Should().BeNull();
+        outcome.Issues.Single().VendorCode.Should().Be(EhrWriteOutcomeCodes.CancelledBeforeSend);
+        client.Verify(c => c.SendAsync(It.Is<FhirRawWriteRequest>(r => r.Method == "POST"), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    private const string AllergyWithChartCheck = """
+        {"resourceType":"AthenaOneRequest","operation":"allergy","method":"PUT","path":"chart/{patientid}/allergies",
+         "department":true,"fields":{},
+         "jsonFields":{"allergies":[{"allergenid":"{{allergenid}}","allergenname":"Penicillin"}]},
+         "lookups":[{"kind":"allergen","name":"Penicillin","token":"{{allergenid}}"}],
+         "existing":{"path":"chart/{patientid}/allergies?showinactive=true","list":"allergies","match":"allergenid","value":"{{allergenid}}"},
+         "patient":"a-195900.E-12"}
+        """;
+
+    private static Mock<IFhirWriteClient> AthenaWithChart(List<FhirRawWriteRequest> sent, Func<FhirRawWriteResult> chart)
+    {
+        var client = new Mock<IFhirWriteClient>();
+        client.Setup(c => c.SendAsync(Capture.In(sent), It.IsAny<FhirSourceConfiguration>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((FhirRawWriteRequest r, FhirSourceConfiguration _, CancellationToken _) => r switch
+            {
+                { Method: "GET" } when r.Url.Contains("/reference/allergies", StringComparison.Ordinal) =>
+                    Ok("""[{"allergenid":"11","allergenname":"Penicillin"}]"""),
+                { Method: "GET" } when r.Url.Contains("/chart/12/allergies", StringComparison.Ordinal) => chart(),
+                _ => Ok("""{"success":true}"""),
+            });
+        return client;
+    }
+
+    // PR #244 review: the allergy PUT upserts by allergenid, so an allergen already on the chart would have its
+    // clinician-entered reactions and note replaced; it is reported as already in the EHR instead.
+    [Fact]
+    public async Task Athena_does_not_put_an_allergen_that_is_already_on_the_chart()
+    {
+        var sent = new List<FhirRawWriteRequest>();
+        var client = AthenaWithChart(sent, () => Ok("""{"allergies":[{"allergenid":11,"allergenname":"Penicillin"}],"nkda":false}"""));
+        var channel = new AthenaOneEhrWriteChannel(
+            Fhir(client, AthenaFhirBase, SourceSystemType.Athenahealth, Options with { TargetDepartmentId = "1" }), "195900");
+
+        var outcome = await channel.CreateAsync("AllergyIntolerance", AllergyWithChartCheck, CancellationToken.None);
+
+        outcome.Kind.Should().Be(EhrCreateKind.Rejected);
+        outcome.Issues.Single().VendorCode.Should().Be(AthenaOneWriteRequest.AlreadyOnChartCode);
+        FHIRBridge.Domain.Fhir.EhrWriteCapabilities.VendorProfile(SourceSystemType.Athenahealth)!
+            .IsAlreadyAtTarget(AthenaOneWriteRequest.AlreadyOnChartCode, null).Should().BeTrue();
+        sent.Should().OnlyContain(r => r.Method == "GET");
+        sent[^1].Url.Should().Be("https://api.preview.platform.athenahealth.com/v1/195900/chart/12/allergies?showinactive=true&departmentid=1",
+            because: "a deactivated allergy on the chart must be found too");
+    }
+
+    [Fact]
+    public async Task Athena_puts_an_allergen_the_chart_does_not_hold_and_refuses_when_the_chart_cannot_be_read()
+    {
+        var sent = new List<FhirRawWriteRequest>();
+        var client = AthenaWithChart(sent, () => Ok("""{"allergies":[{"allergenid":"99","allergenname":"Latex"}]}"""));
+        var channel = new AthenaOneEhrWriteChannel(
+            Fhir(client, AthenaFhirBase, SourceSystemType.Athenahealth, Options with { TargetDepartmentId = "1" }), "195900");
+        var failingSent = new List<FhirRawWriteRequest>();
+        var failing = AthenaWithChart(failingSent, () => new FhirRawWriteResult(FhirWriteOutcomeKind.OutcomeUnknown, 503, null, []));
+        var failingChannel = new AthenaOneEhrWriteChannel(
+            Fhir(failing, AthenaFhirBase, SourceSystemType.Athenahealth, Options with { TargetDepartmentId = "1" }), "195900");
+
+        var written = await channel.CreateAsync("AllergyIntolerance", AllergyWithChartCheck, CancellationToken.None);
+        var refused = await failingChannel.CreateAsync("AllergyIntolerance", AllergyWithChartCheck, CancellationToken.None);
+
+        written.Kind.Should().Be(EhrCreateKind.Created);
+        sent.Select(r => r.Method).Should().Equal("GET", "GET", "PUT");
+        refused.Kind.Should().Be(EhrCreateKind.Rejected);
+        refused.HttpStatus.Should().BeNull(because: "nothing was sent, so the next run tries again");
+        refused.Issues.Single().VendorCode.Should().Be("athena-existing-check-failed");
+        failingSent.Should().OnlyContain(r => r.Method == "GET");
+    }
+
     [Fact]
     public async Task Athena_asks_again_for_a_department_after_a_transient_failure_but_not_after_an_answer()
     {

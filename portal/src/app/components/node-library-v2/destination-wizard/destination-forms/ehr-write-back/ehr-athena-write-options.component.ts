@@ -17,6 +17,9 @@ import { EhrRunMode } from './ehr-write-back.model';
         <label class="dw-label" for="dw-ewb-provider">Provider id (athena)</label>
         <input id="dw-ewb-provider" class="dw-input" [formControl]="providerId()" placeholder="e.g. 71" />
         <span class="dw-hint">Optional: the provider athena files lab results and notes under.</span>
+        <span class="dw-hint" data-testid="ewb-athena-utc-hint">Dates and times are sent in UTC: no practice time
+          zone is configured. This covers lab result and note times, problem and allergy onset, medication start and
+          stop, and vaccine dates, so a record dated near midnight may show the next or previous day.</span>
       </div>
 
       <div class="dw-field" [class.dw-field--error]="departmentId().invalid">

@@ -159,13 +159,13 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
         {
             if (exchange.RefusedBeforeSend)
             {
-                _logger.LogWarning("{Source} {Method} {Url} not sent ({Reason}).", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), exchange.FailureReason);
+                _logger.LogWarning("{Source} {Method} {Url} not sent ({Reason}).", SourceDisplayName, request.Method, LoggedRequestUrl(requestUrl), exchange.FailureReason);
                 return new FhirRawWriteResult(
                     FhirWriteOutcomeKind.Rejected, null, null,
                     [exchange.FailureReason == CancelledBeforeSendReason ? CancelledBeforeSendIssue() : NotSentIssue()]);
             }
 
-            _logger.LogWarning("{Source} {Method} {Url}: outcome unknown ({Reason}).", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), exchange.FailureReason);
+            _logger.LogWarning("{Source} {Method} {Url}: outcome unknown ({Reason}).", SourceDisplayName, request.Method, LoggedRequestUrl(requestUrl), exchange.FailureReason);
             return new FhirRawWriteResult(FhirWriteOutcomeKind.OutcomeUnknown, null, null, []);
         }
 
@@ -176,7 +176,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
             var issues = ParseIssues(body);
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogInformation("{Source} {Method} {Url} returned {StatusCode}.", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), status);
+                _logger.LogInformation("{Source} {Method} {Url} returned {StatusCode}.", SourceDisplayName, request.Method, LoggedRequestUrl(requestUrl), status);
                 return new FhirRawWriteResult(FhirWriteOutcomeKind.Created, status, body, issues);
             }
 
@@ -190,7 +190,7 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
             var kind = !request.Idempotent && !refusedBeforeWork && status >= 500
                 ? FhirWriteOutcomeKind.OutcomeUnknown
                 : FhirWriteOutcomeKind.Rejected;
-            _logger.LogWarning("{Source} {Method} {Url} {Outcome} ({StatusCode}).", SourceDisplayName, request.Method, RedactRequestUrl(requestUrl), kind, status);
+            _logger.LogWarning("{Source} {Method} {Url} {Outcome} ({StatusCode}).", SourceDisplayName, request.Method, LoggedRequestUrl(requestUrl), kind, status);
             return new FhirRawWriteResult(kind, status, body, issues);
         }
     }
@@ -216,6 +216,79 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
         return request.Body is null
             ? null
             : new StringContent(request.Body, Encoding.UTF8, request.ContentType ?? FhirJsonMediaType);
+    }
+
+    /// <summary>
+    /// A raw request's URL as it may be logged: scheme, host and path with every id segment replaced by a placeholder,
+    /// and the query redacted. athenaOne carries the patient's chart id in the path (<c>chart/12345/problems</c>), so
+    /// the path carries PHI as much as the query does. The segment after <c>chart</c> or <c>patients</c> is
+    /// <c>{patientid}</c> (unless it is the next word of the path, as in <c>chart/encounter/...</c>), the one after
+    /// <c>encounter</c> is <c>{encounterid}</c>, the one after a FHIR resource type is <c>{id}</c> (an operation such as
+    /// <c>$match</c> apart), and any other segment holding a digit, version segments (<c>v1</c>, <c>r4</c>) apart, is
+    /// <c>{id}</c>.
+    /// </summary>
+    internal static string LoggedRequestUrl(string requestUrl)
+    {
+        if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var uri))
+        {
+            return "[unparsed url]";
+        }
+
+        var segments = uri.AbsolutePath.Split('/');
+        var previous = string.Empty;
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = Uri.UnescapeDataString(segments[i]);
+            if (segment.Length == 0)
+            {
+                continue;
+            }
+
+            segments[i] = previous switch
+            {
+                "chart" or "patients" when !NonIdPathWords.Contains(segment) => "{patientid}",
+                "encounter" => "{encounterid}",
+                _ when IsResourceTypeSegment(previous) && segment[0] is not ('$' or '_') => "{id}",
+                _ when segment.Any(char.IsAsciiDigit) && !IsVersionSegment(segment) => "{id}",
+                _ => segments[i],
+            };
+            previous = segment;
+        }
+
+        return $"{uri.GetLeftPart(UriPartial.Authority)}{string.Join('/', segments)}{(uri.Query.Length > 1 ? "?[redacted]" : string.Empty)}";
+    }
+
+    /// <summary>athenaOne path words that follow <c>chart</c> or <c>patients</c> and are not an id.</summary>
+    private static readonly HashSet<string> NonIdPathWords = new(StringComparer.Ordinal) { "encounter", "configuration" };
+
+    /// <summary>A PascalCase word of letters (<c>Patient</c>, <c>Observation</c>). An all-capitals word such as
+    /// <c>FHIR</c> in Epic's <c>/api/FHIR/R4/</c> base is not a resource type, so the version after it is kept.</summary>
+    private static bool IsResourceTypeSegment(string segment) =>
+        segment.Length > 1
+        && char.IsAsciiLetterUpper(segment[0])
+        && segment.All(char.IsAsciiLetter)
+        && segment.Any(char.IsAsciiLetterLower);
+
+    /// <summary>An API or FHIR version segment: <c>v1</c>, <c>R4</c>, <c>R4B</c>, <c>STU3</c>, <c>DSTU2</c>.</summary>
+    private static bool IsVersionSegment(string segment)
+    {
+        var upper = segment.ToUpperInvariant();
+        var prefix = upper.StartsWith("DSTU", StringComparison.Ordinal) ? 4
+            : upper.StartsWith("STU", StringComparison.Ordinal) ? 3
+            : upper.Length > 0 && upper[0] is 'V' or 'R' ? 1
+            : 0;
+        if (prefix == 0 || upper.Length <= prefix)
+        {
+            return false;
+        }
+
+        var version = upper[prefix..];
+        if (version.EndsWith('B') && upper[0] == 'R')
+        {
+            version = version[..^1];
+        }
+
+        return version.Length > 0 && version.All(char.IsAsciiDigit);
     }
 
     public Task<FhirSearchPage> SearchByIdentifierAsync(

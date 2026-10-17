@@ -20,7 +20,8 @@ namespace FHIRBridge.Runtime.Infrastructure.Workflows.EhrWrite;
 /// every id field athena's write APIs return.</item>
 /// <item><c>GET patients/{id}</c> reads the patient from the test server (department <see cref="TestDepartmentId"/>);
 /// <c>GET chart/{id}/encounters</c> turns the test server's Encounters into athena's shape; an allergen or medication
-/// lookup always finds exactly the name asked for, with an id derived from it.</item>
+/// lookup always finds exactly the name asked for, with an id derived from it; <c>GET chart/{id}/allergies</c> (the
+/// check before the allergy PUT) answers with an empty chart, so every allergy is filed.</item>
 /// </list>
 /// FHIR calls (identifier search, encounter search, QuestionnaireResponse) go to the test server as they are. What a
 /// test therefore does not prove: athena's own validation of each call, and that its reference lists hold the names.
@@ -78,6 +79,7 @@ public sealed class AthenaOneTestServer : IFhirWriteClient
             {
                 ["patients", var id] => await ReadPatientAsync(id, source, cancellationToken),
                 ["chart", var id, "encounters"] => await EncountersAsync(id, source, cancellationToken),
+                ["chart", _, "allergies"] => Ok(new JsonObject { ["allergies"] = new JsonArray() }),
                 ["reference", "allergies"] => Lookup(parameters, "allergenname", "allergenid"),
                 ["reference", "medications"] => Lookup(parameters, "medication", "medicationid"),
                 _ => NotFound(),

@@ -123,8 +123,176 @@ public sealed class AthenaOneWriteProfileTests
         Field(result, "medicationid").Should().Be(result.Resource!["lookups"]![0]!["token"]!.GetValue<string>());
         result.Resource["lookups"]![0]!["kind"]!.GetValue<string>().Should().Be("medication");
         Field(result, "startdate").Should().Be("01/02/2024");
-        Field(result, "stopdate").Should().Be("07/02/2024");
+        result.Resource["fields"]!.AsObject().ContainsKey("stopdate").Should().BeFalse(
+            because: "an active order's validity window is when the prescription expires, not when the patient stops");
         Field(result, "unstructuredsig").Should().Be("1 tab twice daily");
+    }
+
+    // PR #244 review: athena has no medication status, so a stopped or completed medication without a stop date
+    // would be listed as current.
+    [Fact]
+    public void A_stopped_medication_gets_a_stop_date_or_is_not_sent()
+    {
+        var request = new AthenaOneMedicationRequestWriteProfile();
+        var statement = new AthenaOneMedicationStatementWriteProfile();
+
+        var noDate = request.Shape(Json("""
+            {"resourceType":"MedicationRequest","status":"stopped","intent":"order","subject":{"reference":"Patient/p"},
+             "authoredOn":"2023-01-05","medicationCodeableConcept":{"text":"warfarin 5 mg tablet"}}
+            """), Options);
+        var validityEnd = request.Shape(Json("""
+            {"resourceType":"MedicationRequest","status":"completed","intent":"order","subject":{"reference":"Patient/p"},
+             "medicationCodeableConcept":{"text":"warfarin 5 mg tablet"},
+             "dispenseRequest":{"validityPeriod":{"start":"2023-01-05","end":"2023-04-05"}}}
+            """), Options);
+        var statusChanged = request.Shape(Json("""
+            {"resourceType":"MedicationRequest","status":"stopped","intent":"order","subject":{"reference":"Patient/p"},
+             "authoredOn":"2023-01-05","statusChanged":"2023-02-10","medicationCodeableConcept":{"text":"warfarin 5 mg tablet"}}
+            """), Options);
+        var stoppedEarly = request.Shape(Json("""
+            {"resourceType":"MedicationRequest","status":"stopped","intent":"order","subject":{"reference":"Patient/p"},
+             "statusChanged":"2023-02-10","medicationCodeableConcept":{"text":"warfarin 5 mg tablet"},
+             "dispenseRequest":{"validityPeriod":{"start":"2023-01-05","end":"2023-12-31"}}}
+            """), Options);
+        var periodEnd = statement.Shape(Json("""
+            {"resourceType":"MedicationStatement","status":"completed","subject":{"reference":"Patient/p"},
+             "effectivePeriod":{"start":"2023-01-05","end":"2023-03-01"},"medicationCodeableConcept":{"text":"warfarin 5 mg tablet"}}
+            """), Options);
+
+        noDate.Outcome.Should().Be(EhrShapeOutcome.Skipped);
+        noDate.Reason.Should().Be("stopped-no-stop-date");
+        Field(validityEnd, "stopdate").Should().Be("04/05/2023");
+        Field(statusChanged, "stopdate").Should().Be("02/10/2023");
+        Field(stoppedEarly, "stopdate").Should().Be("02/10/2023", because: "the validity end is when the order would have expired, not when it stopped");
+        Field(periodEnd, "stopdate").Should().Be("03/01/2023");
+    }
+
+    // PR #244 re-review: R4 MedicationRequest has no statusChanged, so an order stopped early would take its future
+    // validity end as the stop date and stay current in athena until then.
+    [Fact]
+    public void A_stopped_R4_order_with_a_future_validity_end_is_not_sent_with_that_date()
+    {
+        var request = new AthenaOneMedicationRequestWriteProfile();
+
+        var futureEnd = request.Shape(Json("""
+            {"resourceType":"MedicationRequest","status":"stopped","intent":"order","subject":{"reference":"Patient/p"},
+             "authoredOn":"2023-01-05","medicationCodeableConcept":{"text":"warfarin 5 mg tablet"},
+             "dispenseRequest":{"validityPeriod":{"start":"2023-01-05","end":"2099-12-31"}}}
+            """), Options);
+        var futureEndTime = request.Shape(Json("""
+            {"resourceType":"MedicationRequest","status":"completed","intent":"order","subject":{"reference":"Patient/p"},
+             "authoredOn":"2023-01-05","medicationCodeableConcept":{"text":"warfarin 5 mg tablet"},
+             "dispenseRequest":{"validityPeriod":{"end":"2099-12-31T10:00:00Z"}}}
+            """), Options);
+
+        futureEnd.Outcome.Should().Be(EhrShapeOutcome.Skipped);
+        futureEnd.Reason.Should().Be("stopped-no-stop-date");
+        futureEndTime.Outcome.Should().Be(EhrShapeOutcome.Skipped);
+        futureEndTime.Reason.Should().Be("stopped-no-stop-date");
+    }
+
+    // PR #244 review: a censored result keeps its comparator; a one-sided reference range is written as a bound.
+    [Fact]
+    public void A_lab_value_keeps_its_comparator_and_a_one_sided_range_is_a_bound()
+    {
+        var profile = new AthenaOneLabResultWriteProfile();
+        JsonObject Lab(string value, string range) => Json($$"""
+            {"resourceType":"Observation","status":"final","category":[{"coding":[{"code":"laboratory"}]}],"subject":{"reference":"Patient/p"},
+             "code":{"coding":[{"system":"http://loinc.org","code":"89579-7","display":"Troponin I"}]},
+             "valueQuantity":{{value}},"referenceRange":[{{range}}]}
+            """);
+
+        var below = profile.Shape(Lab("""{"comparator":"<","value":0.01,"unit":"ng/mL"}""", """{"high":{"value":0.04}}"""), Options);
+        var above = profile.Shape(Lab("""{"comparator":">=","value":60}""", """{"low":{"value":60}}"""), Options);
+        var ad = profile.Shape(Lab("""{"comparator":"ad","value":5}""", """{"low":{"value":1},"high":{"value":9}}"""), Options);
+
+        var belowAnalyte = below.Resource!["jsonFields"]!["analytes"]![0]!;
+        belowAnalyte["value"]!.GetValue<string>().Should().Be("<0.01");
+        belowAnalyte["referencerange"]!.GetValue<string>().Should().Be("<=0.04");
+        var aboveAnalyte = above.Resource!["jsonFields"]!["analytes"]![0]!;
+        aboveAnalyte["value"]!.GetValue<string>().Should().Be(">=60");
+        aboveAnalyte["referencerange"]!.GetValue<string>().Should().Be(">=60");
+        ad.Outcome.Should().Be(EhrShapeOutcome.Skipped);
+        ad.Reason.Should().Be("comparator-not-supported");
+    }
+
+    // PR #244 review: no practice time zone is configured, so a time with an offset is moved to UTC before its date
+    // and time are taken (both describe the same instant).
+    [Theory]
+    [InlineData("2024-02-29T21:30:00-05:00", "03/01/2024", "02:30")]
+    [InlineData("2024-03-01T02:30:00Z", "03/01/2024", "02:30")]
+    [InlineData("2024-03-01T09:15:00+05:30", "03/01/2024", "03:45")]
+    public void Lab_and_note_times_are_sent_in_utc(string effective, string date, string time)
+    {
+        var lab = new AthenaOneLabResultWriteProfile().Shape(Json($$$"""
+            {"resourceType":"Observation","status":"final","category":[{"coding":[{"code":"laboratory"}]}],"subject":{"reference":"Patient/p"},
+             "effectiveDateTime":"{{{effective}}}","code":{"coding":[{"system":"http://loinc.org","code":"4548-4","display":"HbA1c"}]},
+             "valueQuantity":{"value":7.2}}
+            """), Options);
+        var note = new AthenaOneClinicalNoteWriteProfile().Shape(Json($$$"""
+            {"resourceType":"DocumentReference","status":"current","subject":{"reference":"Patient/p"},"date":"{{{effective}}}",
+             "type":{"coding":[{"system":"http://loinc.org","code":"11488-4","display":"Consult note"}]},
+             "content":[{"attachment":{"contentType":"text/plain","data":"{{{Convert.ToBase64String(Encoding.UTF8.GetBytes("Seen."))}}}"}}]}
+            """), Options);
+
+        Field(lab, "observationdate").Should().Be(date);
+        Field(lab, "observationtime").Should().Be(time);
+        Field(note, "observationdate").Should().Be(date);
+        Field(note, "observationtime").Should().Be(time);
+    }
+
+    // PR #244 review: every athena date taken from a dateTime is the UTC date (the destination's help says so), not
+    // only lab and note times.
+    [Fact]
+    public void Onset_and_vaccine_dates_from_a_date_time_are_taken_in_utc()
+    {
+        var allergy = new AthenaOneAllergyWriteProfile().Shape(Json("""
+            {"resourceType":"AllergyIntolerance","patient":{"reference":"Patient/p"},"code":{"text":"Penicillin"},
+             "onsetDateTime":"2024-02-29T21:30:00-05:00"}
+            """), Options);
+        var vaccine = new AthenaOneImmunizationWriteProfile().Shape(Json("""
+            {"resourceType":"Immunization","status":"completed","patient":{"reference":"Patient/p"},
+             "vaccineCode":{"coding":[{"system":"http://hl7.org/fhir/sid/cvx","code":"140"}]},
+             "occurrenceDateTime":"2024-02-29T21:30:00-05:00"}
+            """), Options);
+
+        allergy.Resource!["jsonFields"]!["allergies"]![0]!["onsetdate"]!.GetValue<string>().Should().Be("03/01/2024");
+        Field(vaccine, "administerdate").Should().Be("03/01/2024");
+    }
+
+    [Fact]
+    public void A_date_alone_is_not_moved_to_utc() =>
+        AthenaOneWriteProfile.InUtc("2024-03-01").Should().Be("2024-03-01");
+
+    // PR #244 review: the PUT upserts by allergenid, so the channel is told to read the chart first.
+    [Fact]
+    public void An_allergy_asks_the_channel_to_check_the_chart_for_the_allergen_first()
+    {
+        var result = new AthenaOneAllergyWriteProfile().Shape(Json("""
+            {"resourceType":"AllergyIntolerance","patient":{"reference":"Patient/p"},"code":{"text":"Penicillin"}}
+            """), Options);
+
+        var existing = result.Resource!["existing"]!;
+        existing["path"]!.GetValue<string>().Should().Be("chart/{patientid}/allergies?showinactive=true",
+            because: "athena lists only active allergies otherwise, and a deactivated one would be overwritten");
+        existing["list"]!.GetValue<string>().Should().Be("allergies");
+        existing["match"]!.GetValue<string>().Should().Be("allergenid");
+        existing["value"]!.GetValue<string>().Should().Be(result.Resource["lookups"]![0]!["token"]!.GetValue<string>());
+    }
+
+    // PR #244 review: an 'old' or 'temp' contact point is not the patient's home phone or email.
+    [Fact]
+    public void A_patient_old_or_temporary_phone_and_email_are_not_registered()
+    {
+        var shaped = new AthenaOnePatientWriteProfile().Shape(Json("""
+            {"resourceType":"Patient","name":[{"family":"Doe","given":["Jo"]}],"gender":"female","birthDate":"1990-01-31",
+             "telecom":[{"system":"phone","use":"old","value":"555-0100"},{"system":"phone","use":"home","value":"555-0199"},
+                        {"system":"email","use":"temp","value":"old@example.org"},{"system":"email","value":"jo@example.org"},
+                        {"system":"phone","value":"555-0123"}]}
+            """), Options);
+
+        Field(shaped, "homephone").Should().Be("555-0199");
+        Field(shaped, "email").Should().Be("jo@example.org");
     }
 
     [Fact]
