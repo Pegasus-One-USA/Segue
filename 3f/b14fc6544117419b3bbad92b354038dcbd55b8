@@ -1,0 +1,34 @@
+portal/src/app/core/api-endpoints.ts
+  s_0121045dc9abeb::t_85bd25a7375373 16-43
+portal/src/app/services/wizard-v2.service.ts
+  s_0121045dc9abeb::t_cb483c20c5abac 17,481
+portal/src/app/pages/workflow-builder-v2/workflow-builder-v2.component.ts
+  s_0121045dc9abeb::t_1ca3fde8bff308 30,536-537,539,542
+portal/src/app/components/shared/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_0121045dc9abeb::t_da95ee7c8692ec 46,1539,2361-2362,2506,3243,4005
+portal/src/app/core/api-endpoints.jwks.spec.ts
+  s_0121045dc9abeb::t_d9b8ec917ef370 1-37
+portal/src/app/services/wizard.service.ts
+  s_0121045dc9abeb::t_cb483c20c5abac 17,568
+portal/src/app/services/workflow-build-assembler-v2.service.ts
+  s_0121045dc9abeb::t_cb483c20c5abac 4,204
+portal/src/app/components/shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.ts
+  s_0121045dc9abeb::t_e3997647f40597 44
+  s_0121045dc9abeb::t_da95ee7c8692ec 1521,2354-2355,2497,3305,4067
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3fb14fc6544117419b3bbad92b354038dcbd55b8",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
