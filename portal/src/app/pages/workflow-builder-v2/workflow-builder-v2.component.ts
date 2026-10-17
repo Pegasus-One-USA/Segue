@@ -27,7 +27,7 @@ import {
 
 import { Source } from '../../models/source.model';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node-v2.model';
-import { APP_ORIGIN } from '../../core/api-endpoints';
+import { hostedJwksUrl, isHostedJwksUrl } from '../../core/api-endpoints';
 /** V2's chain steps in canonical canvas order — Source → Mapping → Transformation →
  *  De-identification → Destination. Mirrors ApplicabilityServiceV2.CHAIN_STEP_IDS. */
 const CHAIN_STEP_IDS: string[] = ['field-mapping', 'transformation', 'deidentification'];
@@ -533,14 +533,13 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
       if (!isGeneratedOrImportedBackendKey) continue;
 
+      // A hosted URL saved without its origin (older Settings forms built it from an empty apiBase) is a
+      // placeholder too: it is replaced by the absolute one the EHR can actually fetch.
       const existingJwksUrl = (fields['JWKS URL'] ?? '').trim();
-      const isPlaceholder =
-        !existingJwksUrl ||
-        (existingJwksUrl.startsWith(`${APP_ORIGIN}/api/v1/source-connections/`) &&
-          existingJwksUrl.endsWith('/.well-known/jwks.json'));
+      const isPlaceholder = !existingJwksUrl || isHostedJwksUrl(existingJwksUrl);
       if (!isPlaceholder) continue;
 
-      const jwksUrl = `${APP_ORIGIN}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+      const jwksUrl = hostedJwksUrl(sourceConnectionId);
       if (existingJwksUrl !== jwksUrl) {
         this.store.updateNode(nodeId, { fields: { ...fields, 'JWKS URL': jwksUrl } } as Partial<CanvasNode>);
         anyCorrected = true;

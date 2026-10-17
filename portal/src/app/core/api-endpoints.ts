@@ -13,6 +13,34 @@ export const API_V1_BASE = `${environment.apiBase}/api/v1`;
 // NOT the same as the portal's own origin (e.g. http://localhost:4200).
 export const APP_ORIGIN = environment.apiBase || (typeof window !== 'undefined' ? window.location.origin : '');
 
+/** FHIRBridge's own JWKS endpoint for one source connection, as a path. */
+const HOSTED_JWKS_PATH = /^\/api\/v1\/source-connections\/[^/?#]+\/\.well-known\/jwks\.json$/i;
+
+/**
+ * FHIRBridge's hosted JWKS URL for a source connection whose signing key FHIRBridge generated or imported. Always
+ * absolute: the EHR fetches it from outside, and the JWKS URL field only accepts a full URL. Built from APP_ORIGIN,
+ * never environment.apiBase alone, which is empty in production.
+ */
+export function hostedJwksUrl(sourceConnectionId: string): string {
+  return `${APP_ORIGIN}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+}
+
+/**
+ * A JWKS URL as it should be shown and saved: a hosted JWKS path saved without its origin (forms that built it from
+ * an empty environment.apiBase did) gets this API's origin; any other value is returned trimmed and unchanged.
+ */
+export function absoluteJwksUrl(url: string | null | undefined): string {
+  const value = (url ?? '').trim();
+  return APP_ORIGIN && HOSTED_JWKS_PATH.test(value) ? `${APP_ORIGIN}${value}` : value;
+}
+
+/** True for FHIRBridge's own hosted JWKS URL for any source connection, with this API's origin or without one. */
+export function isHostedJwksUrl(url: string | null | undefined): boolean {
+  const value = (url ?? '').trim();
+  return HOSTED_JWKS_PATH.test(value)
+    || (!!APP_ORIGIN && value.startsWith(APP_ORIGIN) && HOSTED_JWKS_PATH.test(value.slice(APP_ORIGIN.length)));
+}
+
 /** Default values for the Epic app-registration fields an admin would otherwise have to type in by hand —
  *  always resolved from the actual deployment host, never a hardcoded placeholder domain. */
 export const OAUTH_DEFAULT_URLS = {

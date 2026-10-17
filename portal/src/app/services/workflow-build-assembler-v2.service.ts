@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { PipelineStoreV2 } from './pipeline-v2.store';
 import { WorkflowGraphMapperServiceV2 } from './workflow-graph-mapper-v2.service';
-import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
+import { OAUTH_DEFAULT_URLS, absoluteJwksUrl } from '../core/api-endpoints';
 import { EHR_WRITE_BACK_METADATA_KEYS } from '../destination-connections/utils/destination-connection-secret.util';
 import { vendorScopeProfile } from '../data/vendor-scope-catalog.data';
 import { declaredSourceResourceTypes, destinationWrittenResourceTypes, firstUpstreamSourceId } from './upstream-source-v2.util';
@@ -201,7 +201,7 @@ function buildAuthentication(
     // its own servers, so persisting what was really registered is what makes a later bare invalid_client
     // diagnosable. Previously never sent from this path at all — and since PreserveSecretsIfBlank guards only
     // ClientSecret/PrivateKey, every workflow rebuild silently nulled it on an existing row.
-    jwksUrl: signsJwtAssertion ? fields['JWKS URL'] || null : null,
+    jwksUrl: signsJwtAssertion ? absoluteJwksUrl(fields['JWKS URL']) || null : null,
     // Where OAuth2ClientCredentialsTokenProvider places the client id/secret — only meaningful for a type that
     // actually sends one. Null (a nullable column the backend reads as "post") for every other type.
     authPlacement: usesClientSecret

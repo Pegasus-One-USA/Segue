@@ -43,7 +43,7 @@ import { SourceConnectionModel } from '../../../source-connections/models/source
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { MappingCatalogService } from '../../../services/mapping-catalog.service';
 import { environment } from '../../../../environments/environment';
-import { OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
+import { OAUTH_DEFAULT_URLS, absoluteJwksUrl, hostedJwksUrl } from '../../../core/api-endpoints';
 import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { SourceConfigFormComponent } from '../config-form/config-form.contract';
@@ -1536,7 +1536,7 @@ export class EhrVendorSourceFormComponent
   protected readonly liveJwksUrl = computed(() => {
     const id = this.resolvedSourceConnectionId();
     return id
-      ? `${environment.apiBase}/api/v1/source-connections/${id}/.well-known/jwks.json`
+      ? hostedJwksUrl(id)
       : null;
   });
 
@@ -2358,7 +2358,8 @@ export class EhrVendorSourceFormComponent
     }
     setIfPresent('departmentId', 'Department ID');
     setIfPresent('launchDisplayMode', 'Launch display mode');
-    setIfPresent('jwksUrl', 'JWKS URL');
+    // A hosted URL saved without its origin (older Settings forms built it from an empty apiBase) is shown absolute.
+    if (fields['JWKS URL']) this.form.controls.jwksUrl.setValue(absoluteJwksUrl(fields['JWKS URL']));
     setIfPresent('jwtKid', 'JWT kid');
     setIfPresent('privateKeyRef', 'Key vault reference');
     setIfPresent('privateKeySecretName', 'Secret Name');
@@ -2502,7 +2503,7 @@ export class EhrVendorSourceFormComponent
       fields['Key vault reference'] = auth.privateKeyKeyVaultName;
     if (auth?.privateKeySecretName)
       fields['Secret Name'] = auth.privateKeySecretName;
-    if (auth?.jwksUrl) fields['JWKS URL'] = auth.jwksUrl;
+    if (auth?.jwksUrl) fields['JWKS URL'] = absoluteJwksUrl(auth.jwksUrl);
     if (auth?.discoveredScopes?.length)
       fields['Discovered scopes'] = auth.discoveredScopes.join(' ');
     // Same 'Auth placement' key restoreExtendedFieldsFromEditingNode reads — without emitting it here, editing a
@@ -3239,7 +3240,7 @@ export class EhrVendorSourceFormComponent
       jwtKid: dto.authentication?.keyId ?? '',
       privateKeyRef: dto.authentication?.privateKeyKeyVaultName ?? '',
       privateKeySecretName: dto.authentication?.privateKeySecretName ?? '',
-      jwksUrl: dto.authentication?.jwksUrl ?? '',
+      jwksUrl: absoluteJwksUrl(dto.authentication?.jwksUrl),
       // Required for EHR-Launch/Standalone audiences, but neither is guaranteed to be persisted on the source
       // connection being cloned (e.g. LaunchUrl is NULL on plenty of real rows, and EHR-Launch connections never
       // persist a resource-type selection server-side at all) — fall back to whatever the form already holds
@@ -4001,7 +4002,7 @@ export class EhrVendorSourceFormComponent
       authorize: v.authzEndpoint ?? '',
       algorithm: 'RS384',
       jwksMethod: v.authMethod === 'jwt' ? 'hosted' : 'external',
-      jwksUrl: v.jwksUrl ?? '',
+      jwksUrl: absoluteJwksUrl(v.jwksUrl),
       kid: v.jwtKid ?? '',
       kvRef: v.privateKeyRef ?? '',
       secretName: v.privateKeySecretName ?? '',
