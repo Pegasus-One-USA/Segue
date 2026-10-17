@@ -4,7 +4,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 import { FormControl } from '@angular/forms';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { DestinationWizardComponent } from './destination-wizard.component';
 import { CanvasNode } from '../../../models/node-v2.model';
 import { EhrWriteCapabilitiesService, EhrWriteCapability } from '../../../services/ehr-write-capabilities.service';
@@ -537,6 +537,61 @@ describe('DestinationWizardComponent — EHR Write-Back', () => {
       reopen({ ...LEGACY_TEST, dest_dryRun: 'true' }, 'Epic');
 
       expect(capabilities.writableResourceTypes).toHaveBeenCalledWith('Epic');
+      expect(target()!.vendorWriteApisActivated).toBeTrue();
+    });
+  });
+
+  describe('the target lookup on Step 1\'s Next', () => {
+    const target = () => (wizard as unknown as { ehrWriteTarget(): EhrWriteTarget | null }).ehrWriteTarget();
+    const load = (fields: Record<string, string>) =>
+      (wizard as unknown as { _loadEhrWriteTarget(f: Record<string, string>): void })._loadEhrWriteTarget(fields);
+    let replies: Record<string, Subject<{ vendorWriteApisActivated: boolean }>>;
+
+    beforeEach(() => {
+      create('ehrwriteback', { ehrVendor: 'Epic' });
+      replies = { c1: new Subject(), c2: new Subject() };
+      spyOn(TestBed.inject(ISourceConnectionService), 'getById').and.callFake(
+        ((id: string) => replies[id].asObservable()) as never);
+    });
+    const reply = (id: string, activated: boolean) => {
+      replies[id].next({ vendorWriteApisActivated: activated });
+      replies[id].complete();
+    };
+
+    it('a slower earlier lookup for another connection does not overwrite the later one', () => {
+      const form = fakeEhrForm();
+      useForm(form);
+      load({ ...form.config, dest_sourceConnectionId: 'c1', dest_enabledVariants: 'from-c1' });
+      form.config['dest_sourceConnectionId'] = 'c2';
+      load({ ...form.config, dest_enabledVariants: 'from-c2' });
+
+      reply('c2', true);
+      reply('c1', false);
+
+      expect(target()!.vendorWriteApisActivated).toBeTrue();
+      expect(target()!.optIns.enabledVariants).toEqual(['from-c2']);
+    });
+
+    it('ignores a reply for a connection that is no longer selected', () => {
+      const form = fakeEhrForm();
+      useForm(form);
+      load({ ...form.config, dest_sourceConnectionId: 'c1' });
+      // Back to Step 1 and another connection picked; Next not clicked again yet.
+      form.config['dest_sourceConnectionId'] = 'c2';
+
+      reply('c1', true);
+
+      expect(target()).toBeNull();
+    });
+
+    it('takes the reply when the form has not filled in its connection yet (a reopened node)', () => {
+      const form = fakeEhrForm();
+      form.config['dest_sourceConnectionId'] = '';
+      useForm(form);
+      load({ ...form.config, dest_sourceConnectionId: 'c1' });
+
+      reply('c1', true);
+
       expect(target()!.vendorWriteApisActivated).toBeTrue();
     });
   });

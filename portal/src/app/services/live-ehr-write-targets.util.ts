@@ -24,7 +24,16 @@ export function liveEhrWriteTargetOf(
   return vendor ? { nodeId, vendor, connectionId: fields['dest_sourceConnectionId'] ?? '' } : null;
 }
 
-/** The live EHR writes in a saved workflow definition. A node whose configuration cannot be read is skipped. */
+/** A saved node's settings: the object under "config" when the node has been migrated to the enveloped shape
+ *  ({"ref": ..., "config": {...}}), otherwise the root itself. Only an object under "config" counts, as on the
+ *  server (WorkflowNodeConfigurationEnvelope.ResolveSettings): a flat field called "config" keeps the node flat. */
+function nodeSettingsOf(root: object): Record<string, string> {
+  const config = (root as Record<string, unknown>)['config'];
+  return (config && typeof config === 'object' && !Array.isArray(config) ? config : root) as Record<string, string>;
+}
+
+/** The live EHR writes in a saved workflow definition, read from flat or enveloped node settings. A node whose
+ *  configuration cannot be read is skipped. */
 export function liveEhrWriteTargetsOfDefinition(nodes: readonly Pick<WorkflowNodeDto, 'id' | 'configurationJson' | 'isEnabled'>[] | null | undefined): LiveEhrWriteTarget[] {
   const targets: LiveEhrWriteTarget[] = [];
   for (const node of nodes ?? []) {
@@ -33,7 +42,7 @@ export function liveEhrWriteTargetsOfDefinition(nodes: readonly Pick<WorkflowNod
     try {
       const parsed: unknown = JSON.parse(node.configurationJson || '{}');
       if (!parsed || typeof parsed !== 'object') continue;
-      fields = parsed as Record<string, string>;
+      fields = nodeSettingsOf(parsed);
     } catch {
       continue;
     }

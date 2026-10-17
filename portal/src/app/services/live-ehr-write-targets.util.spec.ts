@@ -37,6 +37,19 @@ describe('live EHR write targets', () => {
     expect(liveEhrWriteTargetsOfDefinition(nodes)).toEqual([{ nodeId: 'n1', vendor: 'Healow', connectionId: 'c-1' }]);
   });
 
+  it('reads settings under "config" for a node migrated to the envelope, as the server does', () => {
+    const nodes = [
+      { id: 'n1', configurationJson: JSON.stringify({ ref: { id: 'r1' }, config: { __transformId: 'dest-ehr-writeback', ...live('Epic') } }) },
+      { id: 'n2', configurationJson: JSON.stringify({ ref: { id: 'r2' }, config: { __transformId: 'dest-ehr-writeback', dest_ehrVendor: 'Epic', dest_dryRun: 'true' } }) },
+      // A flat field that happens to be called "config" keeps the node flat.
+      { id: 'n3', configurationJson: JSON.stringify({ __transformId: 'dest-ehr-writeback', config: 'x', ...live('Healow', 'c-3') }) },
+    ] as WorkflowNodeDto[];
+    expect(liveEhrWriteTargetsOfDefinition(nodes)).toEqual([
+      { nodeId: 'n1', vendor: 'Epic', connectionId: 'c-1' },
+      { nodeId: 'n3', vendor: 'Healow', connectionId: 'c-3' },
+    ]);
+  });
+
   it('a save adds a new live node, a test or dry run switched to live, and a live node on another connection', () => {
     const saved = liveEhrWriteTargetsOfCanvas([writeBack('n1', live('Epic'))]);
     expect(addedLiveEhrWriteTargets(saved, saved)).toEqual([]);

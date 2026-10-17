@@ -27,6 +27,7 @@ describe('WorkflowListComponent — Run asks before a live EHR write', () => {
     status: 'Ready',
     action: 'Run',
     modifiedOnUtc: '2026-10-01T00:00:00Z',
+    liveEhrWriteTargets: ['Epic'],
   } as unknown as WorkflowSummary;
 
   /** The live EHR the check reports, or null for a test run, a dry run, or a workflow that already ran as it is. */
@@ -61,7 +62,9 @@ describe('WorkflowListComponent — Run asks before a live EHR write', () => {
 
     component.onAction(row, 'async');
 
-    expect(liveWriteCheck.firstLiveWrite).toHaveBeenCalledWith('wf-1', '2026-10-01T00:00:00Z');
+    // The row's cached modified time is never passed: the check reads the current one from the loaded definition.
+    // Its "Writes to" vendors are passed so the question can still be asked when that load fails.
+    expect(liveWriteCheck.firstLiveWrite).toHaveBeenCalledWith('wf-1', ['Epic']);
     expect(dialogs.open).toHaveBeenCalledTimes(1);
     const data = dialogs.open.calls.mostRecent().args[1].data;
     expect(data.title).toBe('Write into Epic now?');

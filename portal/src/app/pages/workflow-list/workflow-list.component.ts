@@ -514,7 +514,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
    *  EHR cannot be taken back. Runs <paramref name="proceed"/> at once when the workflow writes nothing live. */
   private confirmLiveWrite(row: WorkflowSummary, proceed: () => void): void {
     this.busyId.set(row.workflowId);
-    this.liveWriteCheck.firstLiveWrite(row.workflowId, row.modifiedOnUtc).subscribe(ehr => {
+    this.liveWriteCheck.firstLiveWrite(row.workflowId, row.liveEhrWriteTargets).subscribe(ehr => {
       this.busyId.set(null);
       if (!ehr) {
         proceed();

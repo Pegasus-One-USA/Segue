@@ -106,6 +106,9 @@ export interface WorkflowDefinitionDto {
   isPubliclyLaunchable?: boolean;
   nodes: WorkflowNodeDto[];
   edges: WorkflowEdgeDto[];
+  /** When the definition was first saved, and last re-saved (null until a second save). Sent by GET /workflows/{id}. */
+  createdOnUtc?: string | null;
+  updatedOnUtc?: string | null;
 }
 
 export interface WorkflowValidationResult {

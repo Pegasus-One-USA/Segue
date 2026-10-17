@@ -17,7 +17,7 @@ import {
 } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
-import { forkJoin, of, Observable } from 'rxjs';
+import { forkJoin, of, Observable, Subscription } from 'rxjs';
 import {
   catchError,
   map,
@@ -1388,6 +1388,8 @@ export class DestinationWizardComponent implements OnInit {
   /** EHR Write-Back only: what the target EHR accepts and its activation (EhrWriteTargetService). Its opt-ins are
    *  the ones saved so far, which seed ehrKindSwitches when it loads. */
   private readonly ehrWriteTarget = signal<EhrWriteTarget | null>(null);
+  /** The ehrWriteTarget lookup in flight, cancelled when a newer one starts (Step 1's Next clicked again). */
+  private _ehrWriteTargetLoad: Subscription | null = null;
   /** EHR Write-Back only: the switches the kinds ticked on Step 2 stand for (dest_enabledVariants,
    *  dest_createHolderEncounter). A kind ticked under one type is the same switch wherever else it appears. */
   readonly ehrKindSwitches = signal<EhrWriteKindSwitches>(NO_KIND_SWITCHES);
@@ -2636,6 +2638,8 @@ export class DestinationWizardComponent implements OnInit {
         this.step.set(1);
         this.selectedResources.set([]);
         this.ehrWritableResourceTypes.set(null);
+        this._ehrWriteTargetLoad?.unsubscribe();
+        this._ehrWriteTargetLoad = null;
         this.ehrWriteTarget.set(null);
         this.ehrKindSwitches.set(NO_KIND_SWITCHES);
         this._hasProgressed.set(false);
@@ -5076,15 +5080,28 @@ export class DestinationWizardComponent implements OnInit {
   });
 
   /** EHR Write-Back: what the Step 2 grid's greyed rows and notes need about the target (EhrWriteTargetService).
-   *  The kinds' switches start as the fields have them (a reopened node's saved choice, or Step 1's form). */
+   *  The kinds' switches start as the fields have them (a reopened node's saved choice, or Step 1's form).
+   *  Only the latest lookup counts: an earlier one still in flight is cancelled, and a reply for a connection that is
+   *  no longer the one Step 1's form has selected is ignored (a slow lookup must not overwrite the current target). */
   private _loadEhrWriteTarget(fields: Record<string, string>, vendor: EhrWriteVendor | null = null): void {
-    this.ehrWriteTargetSvc.load(fields, vendor).subscribe((target) => {
+    this._ehrWriteTargetLoad?.unsubscribe();
+    const connectionId = fields['dest_sourceConnectionId'] || '';
+    this._ehrWriteTargetLoad = this.ehrWriteTargetSvc.load(fields, vendor).subscribe((target) => {
+      if (connectionId !== this._selectedEhrWriteConnectionId(connectionId)) return;
       this.ehrKindSwitches.set({
         enabledVariants: [...target.optIns.enabledVariants],
         createHolderEncounter: target.optIns.createHolderEncounter,
       });
       this.ehrWriteTarget.set(target);
     });
+  }
+
+  /** The write connection Step 1's EHR Write-Back form has selected now. A reopened node can load before that form
+   *  is mounted or has filled in its connection, and then nothing contradicts the lookup's own (`fallback`). */
+  private _selectedEhrWriteConnectionId(fallback: string): string {
+    const form = this.activeForm();
+    if (!isEhrWriteBackForm(form)) return fallback;
+    return form.getFullConfig()['dest_sourceConnectionId'] || fallback;
   }
 
   /** EHR Write-Back: hands the kinds ticked on Step 2 to the form, which saves them (dest_enabledVariants,
