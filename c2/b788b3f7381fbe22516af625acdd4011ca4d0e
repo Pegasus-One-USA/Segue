@@ -1,0 +1,64 @@
+tests/FHIRBridge.Runtime.UnitTests/Workflows/SourceNodeExecutorDestinationRestrictionTests.cs
+  s_0121045dc9abeb::t_a2d5d10d3ff46c 133-161,163-184
+  s_0121045dc9abeb::t_96fd5e66004653 162
+tests/FHIRBridge.Runtime.UnitTests/Workflows/RankedWorkflowOrchestratorTests.cs
+  s_0121045dc9abeb::t_770c5e761ea1d4 581-644
+  s_0121045dc9abeb::t_69469abb350dd4 540-580,645-673
+  s_0121045dc9abeb::t_978c47d1bf00bd 771-776,780
+src/Api/FHIRBridge.Api/Controllers/V1/ConfigurationsController.cs
+  s_0121045dc9abeb::t_39213d3a39defb 122-136
+  s_0121045dc9abeb::t_9469b11a38ffe6 85,89
+  s_0121045dc9abeb::t_1630047e6cb98c 137
+tests/FHIRBridge.Api.IntegrationTests/Tests/EhrWriteConnectionTests.cs
+  s_0121045dc9abeb::t_d5709be47259f8 327-328,339-358,360
+  s_0121045dc9abeb::t_3942bc2f012a87 18-19
+  s_0121045dc9abeb::t_d294d3a4cd1a16 284-326,329-338,359
+  s_0121045dc9abeb::t_ad657100db765a 36
+  s_e2329fef2275f0::t_862257cd75e1d7 361
+src/Runtime/FHIRBridge.Runtime.Application/Workflows/RankedWorkflowOrchestrator.cs
+  s_0121045dc9abeb::t_8dc5096ccd11a3 981,994
+  s_0121045dc9abeb::t_89818c3b318f9e 919-920,923
+  s_0121045dc9abeb::t_5ee574d3c19284 917-918,924
+  s_0121045dc9abeb::t_d9de839b72fa7b 852-853,859
+  s_0121045dc9abeb::t_5cbe75c6a7fc29 566,568
+  s_0121045dc9abeb::t_4104c244357123 399,402,411-412,414-416
+  s_0121045dc9abeb::t_c38f39af3c15e3 803-804,807
+  s_0121045dc9abeb::t_886b86a5dda647 854-855,858
+  s_0121045dc9abeb::t_ca149ac6539f4e 952,957,965,968-974
+  s_0121045dc9abeb::t_f7c7b4e5562417 966-967,975-980,982-993
+  s_0121045dc9abeb::t_cd68533a1e747d 761-763
+  s_0121045dc9abeb::t_9962b8e3249430 802,808
+src/Runtime/FHIRBridge.Runtime.Infrastructure/Workflows/Executors/SourceNodeExecutors.cs
+  s_0121045dc9abeb::t_40e143bdb5681a 504-532
+src/Api/FHIRBridge.Api/Controllers/V1/SourceConnectionsController.cs
+  s_0121045dc9abeb::t_5c17ca65e98f23 150-153,166-170
+  s_0121045dc9abeb::t_e5f0a6b5d63c0e 143
+  s_0121045dc9abeb::t_0eb3fb52432051 141-142
+  s_0121045dc9abeb::t_52f7137aaace40 164-165,171-175,193
+  s_0121045dc9abeb::t_8e9c7a3b29b8a0 194-216
+  s_e2329fef2275f0::t_7a225510e45ed8 217-218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c2b788b3f7381fbe22516af625acdd4011ca4d0e",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_e2329fef2275f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26c43641-c0f6-45d6-bd2a-e22c57204249",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
