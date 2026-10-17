@@ -891,7 +891,8 @@ public sealed class EpicCommunityResourceMessageWriteProfile : IEhrWriteProfile
 /// assignment, by identifier (as CarePlan.Read (Questionnaires Due) returns it), not the patient; <c>questionnaire</c>
 /// and each <c>linkId</c> are Epic ids. Status in-progress or completed. Answers are valueDecimal, valueString,
 /// valueQuantity, valueDate, valueTime or valueBoolean; an integer is sent as a decimal. A wrong answer is refused with
-/// 59159.
+/// 59159. Group and follow-up items keep their nesting. A response holding any other answer (a coded choice, an
+/// attachment) is skipped whole as <c>unsupported-answer</c>, never filed without it.
 /// </summary>
 public sealed class EpicPatientEnteredQuestionnaireWriteProfile : IEhrWriteProfile
 {
@@ -922,33 +923,12 @@ public sealed class EpicPatientEnteredQuestionnaireWriteProfile : IEhrWriteProfi
             return EhrShapeResult.Reject("missing-questionnaire");
         }
 
-        var items = new JsonArray();
-        foreach (var item in Objects(source, "item"))
+        // Any answer Epic cannot take (a coded answer, an attachment) stops the whole response: filing the rest would
+        // send a partial response under the source's status, "completed" included.
+        var items = ShapeItems(source);
+        if (items is null)
         {
-            if (String(item, "linkId") is not { Length: > 0 } linkId)
-            {
-                continue;
-            }
-
-            var answers = new JsonArray();
-            foreach (var answer in Objects(item, "answer"))
-            {
-                if (answer["valueInteger"] is JsonValue integer && integer.TryGetValue<long>(out var number))
-                {
-                    answers.Add(new JsonObject { ["valueDecimal"] = number });
-                    continue;
-                }
-
-                if (AnswerProperties.FirstOrDefault(answer.ContainsKey) is { } property)
-                {
-                    answers.Add(new JsonObject { [property] = answer[property]!.DeepClone() });
-                }
-            }
-
-            if (answers.Count > 0)
-            {
-                items.Add(new JsonObject { ["linkId"] = linkId, ["answer"] = answers });
-            }
+            return EhrShapeResult.Skip("unsupported-answer");
         }
 
         if (items.Count == 0)
@@ -971,5 +951,106 @@ public sealed class EpicPatientEnteredQuestionnaireWriteProfile : IEhrWriteProfi
     public void BindReferences(JsonObject shaped, string targetPatientId, string? targetEncounterId)
     {
         // The subject is the questionnaire's assignment, carried as given.
+    }
+
+    /// <summary>
+    /// The answered items under <paramref name="parent"/> (the response, an item or an answer), nested as in the
+    /// source: a group keeps its answered child items, an answer its follow-up items. Unanswered items are left out.
+    /// Null when any answer cannot be sent: one of a type Epic does not take, or one under an item with no linkId.
+    /// </summary>
+    private static JsonArray? ShapeItems(JsonObject parent)
+    {
+        var items = new JsonArray();
+        foreach (var item in Objects(parent, "item"))
+        {
+            var answers = new JsonArray();
+            foreach (var answer in Objects(item, "answer"))
+            {
+                var shapedAnswer = ShapeAnswer(answer);
+                if (shapedAnswer is null)
+                {
+                    return null;
+                }
+
+                // An answer with no value and nothing under it says nothing to file.
+                if (shapedAnswer.Count > 0)
+                {
+                    answers.Add(shapedAnswer);
+                }
+            }
+
+            var children = ShapeItems(item);
+            if (children is null)
+            {
+                return null;
+            }
+
+            if (answers.Count == 0 && children.Count == 0)
+            {
+                continue;
+            }
+
+            if (String(item, "linkId") is not { Length: > 0 } linkId)
+            {
+                return null;
+            }
+
+            var shapedItem = new JsonObject { ["linkId"] = linkId };
+            if (answers.Count > 0)
+            {
+                shapedItem["answer"] = answers;
+            }
+
+            if (children.Count > 0)
+            {
+                shapedItem["item"] = children;
+            }
+
+            items.Add(shapedItem);
+        }
+
+        return items;
+    }
+
+    /// <summary>One answer in a type Epic takes (an integer as a decimal), with its follow-up items; null when its
+    /// value is of any other type.</summary>
+    private static JsonObject? ShapeAnswer(JsonObject answer)
+    {
+        var values = answer.Where(p => p.Key.StartsWith("value", StringComparison.Ordinal)).ToList();
+        if (values.Count > 1)
+        {
+            return null;
+        }
+
+        var shaped = new JsonObject();
+        if (values.Count == 1)
+        {
+            var (property, value) = values[0];
+            if (property == "valueInteger" && value is JsonValue integer && integer.TryGetValue<long>(out var number))
+            {
+                shaped["valueDecimal"] = number;
+            }
+            else if (AnswerProperties.Contains(property) && value is not null)
+            {
+                shaped[property] = value.DeepClone();
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        var followUps = ShapeItems(answer);
+        if (followUps is null)
+        {
+            return null;
+        }
+
+        if (followUps.Count > 0)
+        {
+            shaped["item"] = followUps;
+        }
+
+        return shaped;
     }
 }

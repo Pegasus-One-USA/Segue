@@ -672,6 +672,61 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
             .Should().Contain(new KeyValuePair<string, int>("patient-not-created", 2));
     }
 
+    // PR #244 review: a patient create the cap stopped is remembered for the run, so its other records neither read the
+    // ledger again nor add another Patient skip to the report.
+    [Fact]
+    public async Task A_patient_create_stopped_by_the_cap_is_counted_once_for_all_its_records()
+    {
+        var ledger = new CountingLedger();
+        var writer = new MappedEhrWriteBackDestinationWriter(
+            new EhrWriteProfileRegistry([new EpicAllergyIntoleranceWriteProfile(), new EpicPatientWriteProfile()]),
+            ledger,
+            new FixedCloneModePolicy(false),
+            NullLogger<MappedEhrWriteBackDestinationWriter>.Instance);
+        var channel = new FakeEhrWriteChannel(dryRun: false, maxWrites: 0, createPatient: true) { MatchResult = NoMatch };
+        var allergies = new[] { "a1", "a2", "a3" }.Select(id => Record(Allergy.Replace("\"id\":\"a1\"", $"\"id\":\"{id}\""))).ToList();
+
+        var result = await writer.WriteAsync(Destination(), Profile(), allergies, Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().BeEmpty();
+        var patient = result.EhrWrite!.Resources.Single(r => r.ResourceType == "Patient");
+        patient.Skipped.Should().Be(1);
+        patient.Reasons.Should().Contain(new KeyValuePair<string, int>("write-cap-reached", 1));
+        ledger.PatientLookups.Should().Be(2, because: "one when the patient is resolved, one when its create is planned, none per later record");
+        result.EhrWrite.Resources.Single(r => r.ResourceType == "AllergyIntolerance").Reasons
+            .Should().Contain(new KeyValuePair<string, int>("write-cap-reached", 3));
+    }
+
+    private sealed class CountingLedger : FHIRBridge.Application.Abstractions.Persistence.IEhrWriteLedgerRepository
+    {
+        private readonly InMemoryEhrWriteLedgerRepository _inner = new();
+
+        public int PatientLookups { get; private set; }
+
+        public Task<IReadOnlyDictionary<string, EhrWriteLedgerEntry>> FindAsync(
+            string targetKey, string resourceType, IReadOnlyCollection<string> sourceKeys, CancellationToken cancellationToken)
+        {
+            if (resourceType == "Patient")
+            {
+                PatientLookups++;
+            }
+
+            return _inner.FindAsync(targetKey, resourceType, sourceKeys, cancellationToken);
+        }
+
+        public Task<bool> TryAddAsync(EhrWriteLedgerEntry entry, CancellationToken cancellationToken) => _inner.TryAddAsync(entry, cancellationToken);
+
+        public Task<bool> TryClaimAsync(EhrWriteLedgerEntry entry, CancellationToken cancellationToken) => _inner.TryClaimAsync(entry, cancellationToken);
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken) => _inner.SaveChangesAsync(cancellationToken);
+
+        public Task<(IReadOnlyList<EhrWriteLedgerEntry> Items, int TotalCount)> ListNeedingReviewAsync(
+            string? resourceType, DateTime utcNow, int skip, int take, CancellationToken cancellationToken) =>
+            _inner.ListNeedingReviewAsync(resourceType, utcNow, skip, take, cancellationToken);
+
+        public Task<EhrWriteLedgerEntry?> GetAsync(Guid id, CancellationToken cancellationToken) => _inner.GetAsync(id, cancellationToken);
+    }
+
     [Fact]
     public async Task Records_are_skipped_with_a_clear_reason_when_patient_is_not_selected()
     {

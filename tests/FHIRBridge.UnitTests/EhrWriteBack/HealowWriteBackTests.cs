@@ -316,6 +316,46 @@ public sealed class HealowWriteBackTests
         channel.Sent.Should().BeEmpty();
     }
 
+    // PR #244 review: the telephone encounter is a create of its own, so it counts against the run's write cap.
+    [Fact]
+    public async Task A_telephone_encounter_counts_against_the_write_cap()
+    {
+        var channel = new HealowChannel(dryRun: false, activated: true, "Condition")
+        {
+            IdentifierHit = IdentifierHit, CreateHolderEncounter = true, MaxWrites = 2,
+        };
+
+        var result = await RunAsync(Writer(), channel, Patient, Condition("h1", "medical-history", "resolved"), Condition("h2", "medical-history", "resolved"));
+
+        channel.HolderEncounters.Should().Be(1);
+        channel.Sent.Should().ContainSingle(because: "the encounter and the first history item use up the cap of 2");
+        var condition = Summary(result, "Condition");
+        condition.Written.Should().Be(1);
+        condition.Reasons.Should().Contain(new KeyValuePair<string, int>("write-cap-reached", 1));
+    }
+
+    [Fact]
+    public async Task A_history_item_whose_telephone_encounter_would_pass_the_cap_is_not_sent_and_creates_nothing()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = new HealowChannel(dryRun: false, activated: true, "Condition")
+        {
+            IdentifierHit = IdentifierHit, CreateHolderEncounter = true, MaxWrites = 1,
+        };
+
+        var result = await RunAsync(Writer(ledger: ledger), channel, Patient, Condition("h1", "medical-history", "resolved"));
+
+        channel.HolderEncounters.Should().Be(0);
+        channel.Sent.Should().BeEmpty();
+        Summary(result, "Condition").Reasons.Should().ContainKey("write-cap-reached");
+
+        // Nothing was sent, so the next run with room for both files it.
+        var next = new HealowChannel(dryRun: false, activated: true, "Condition") { IdentifierHit = IdentifierHit, CreateHolderEncounter = true };
+        var nextRun = await RunAsync(Writer(ledger: ledger), next, Patient, Condition("h1", "medical-history", "resolved"));
+        Summary(nextRun, "Condition").Written.Should().Be(1);
+        next.HolderEncounters.Should().Be(1);
+    }
+
     /// <summary>Every record is claimed by another run between this run's read and its insert.</summary>
     private sealed class ClaimedElsewhereLedger : FHIRBridge.Application.Abstractions.Persistence.IEhrWriteLedgerRepository
     {
@@ -365,8 +405,10 @@ public sealed class HealowWriteBackTests
         public bool CreateHolderEncounter { get; init; }
         public bool HolderEncounterFails { get; init; }
 
+        public int MaxWrites { get; init; } = 500;
+
         public EhrWriteBackRunOptions Options => new(
-            _dryRun, _createPatient, 500, "preliminary", ["Patient", .. _types], CreateHolderEncounter: CreateHolderEncounter);
+            _dryRun, _createPatient, MaxWrites, "preliminary", ["Patient", .. _types], CreateHolderEncounter: CreateHolderEncounter);
 
         public string? IdentifierHit { get; init; }
         public int MatchCalls { get; private set; }

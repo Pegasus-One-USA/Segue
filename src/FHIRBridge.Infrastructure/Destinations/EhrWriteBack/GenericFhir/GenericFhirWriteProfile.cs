@@ -19,6 +19,12 @@ namespace FHIRBridge.Infrastructure.Destinations.EhrWriteBack.GenericFhir;
 /// that the server does not have; a server that checks references would refuse the whole record, and one that does not
 /// would hold a dangling link. Each keeps its <c>display</c> and <c>identifier</c> and loses its <c>reference</c>; one
 /// left with nothing gets a display saying it was not transferred. Contained (<c>#</c>) references stay.</item>
+/// <item>An attachment's <c>url</c> that names a FHIR resource (relative <c>Binary/123</c>, or absolute into a FHIR
+/// server) goes too, its embedded <c>data</c> stays. A record whose content IS its attachments (a note, a message
+/// payload, an attachment value, a report with nothing but its presentedForm) and whose every such attachment is left
+/// without content is skipped as <c>attachment-not-transferable</c>; an incidental one (a patient's photo, a report's
+/// rendering beside its results) only loses its link. A note's first attachment is the exception: the writer brings
+/// its text inline from the source first.</item>
 /// </list>
 /// </summary>
 public sealed class GenericFhirWriteProfile : IEhrWriteProfile
@@ -52,6 +58,11 @@ public sealed class GenericFhirWriteProfile : IEhrWriteProfile
         }
 
         var shaped = new JsonObject();
+        var attachments = new AttachmentTally
+        {
+            // A report's presentedForm is its content only when it has no results or conclusion of its own.
+            PresentedFormIsContent = source["result"] is null && source["conclusion"] is null && source["conclusionCode"] is null,
+        };
         string? patientReference = null;
         string? encounterReference = null;
         foreach (var (name, value) in source)
@@ -76,7 +87,12 @@ public sealed class GenericFhirWriteProfile : IEhrWriteProfile
 
             // A DocumentReference's context holds its encounter as well as its period: the encounter goes.
             var copy = value.DeepClone();
-            DetachReferences(copy, isContextOfDocument: name == "context");
+            if (ResourceType == "DocumentReference" && name == "content")
+            {
+                attachments.NoteAttachment = FirstNoteAttachment(copy);
+            }
+
+            DetachReferences(copy, isContextOfDocument: name == "context", attachments, name);
             shaped[name] = copy;
         }
 
@@ -89,6 +105,14 @@ public sealed class GenericFhirWriteProfile : IEhrWriteProfile
         if (ResourceType != "Patient" && patientReference is null)
         {
             return EhrShapeResult.Reject("missing-patient");
+        }
+
+        if (attachments.Emptied > 0 && attachments.Kept == 0)
+        {
+            // Every attachment that IS the record's content was a link the server cannot follow: the record would
+            // arrive empty. An incidental one (a patient's photo, a report's rendering beside its results) just loses
+            // its link.
+            return EhrShapeResult.Skip("attachment-not-transferable");
         }
 
         return EhrShapeResult.Shaped(Ordered(shaped), patientReference, encounterReference);
@@ -117,7 +141,86 @@ public sealed class GenericFhirWriteProfile : IEhrWriteProfile
         return ordered;
     }
 
-    private static void DetachReferences(JsonNode? node, bool isContextOfDocument)
+    // The R4 elements of type Attachment in the types this profile writes (DocumentReference.content.attachment,
+    // DiagnosticReport.presentedForm, Communication.payload.contentAttachment, QuestionnaireResponse answers, Patient
+    // photo). An extension's own "url" is never one of these.
+    private static readonly HashSet<string> AttachmentProperties = new(StringComparer.Ordinal)
+    {
+        "attachment", "presentedForm", "contentAttachment", "valueAttachment", "photo",
+    };
+
+    // Of those, the ones that are the record's content (a note's document, a message's payload, an observation's or
+    // answer's value): a record whose every such attachment loses its content is skipped. presentedForm counts only
+    // when the report has nothing else (AttachmentTally.PresentedFormIsContent); a photo never does.
+    private static readonly HashSet<string> ContentAttachmentProperties = new(StringComparer.Ordinal)
+    {
+        "attachment", "contentAttachment", "valueAttachment",
+    };
+
+    /// <summary>How many content attachments still carry content after shaping, and how many lost it.</summary>
+    private sealed class AttachmentTally
+    {
+        public int Kept { get; set; }
+        public int Emptied { get; set; }
+
+        public bool PresentedFormIsContent { get; init; }
+
+        public bool IsContent(string propertyName) =>
+            ContentAttachmentProperties.Contains(propertyName) || (propertyName == "presentedForm" && PresentedFormIsContent);
+
+        /// <summary>A note's first attachment: the writer brings its text inline from the source before the send
+        /// (<see cref="EhrNoteContent"/>), or skips the note, so its link is left for that step.</summary>
+        public JsonObject? NoteAttachment { get; set; }
+    }
+
+    private static JsonObject? FirstNoteAttachment(JsonNode? content) =>
+        (content as JsonArray)?.OfType<JsonObject>().Select(c => c["attachment"] as JsonObject).FirstOrDefault(a => a is not null);
+
+    /// <summary>
+    /// Drops an attachment <c>url</c> the server cannot follow for this record: a relative one (<c>Binary/123</c>
+    /// resolves against the TARGET's base, naming whatever record of its own has that id, possibly another patient's),
+    /// one that is not http(s) (a <c>urn:</c> names a bundle entry), and an absolute one that addresses a FHIR resource
+    /// (<c>.../Binary/123</c>: a link into the source server, which the target cannot authorise). Embedded
+    /// <c>data</c> stays. A plain web document link stays.
+    /// </summary>
+    private static void DetachAttachmentUrl(JsonObject attachment, AttachmentTally tally, string propertyName)
+    {
+        var url = String(attachment, "url");
+        var hasData = !string.IsNullOrWhiteSpace(String(attachment, "data"));
+        if (ReferenceEquals(attachment, tally.NoteAttachment) && !hasData && url is not null)
+        {
+            tally.Kept++;
+            return;
+        }
+
+        var removed = false;
+        if (url is not null && !IsTransferableUrl(url))
+        {
+            attachment.Remove("url");
+            removed = true;
+        }
+
+        if (!tally.IsContent(propertyName))
+        {
+            return;
+        }
+
+        if (hasData || attachment.ContainsKey("url"))
+        {
+            tally.Kept++;
+        }
+        else if (removed)
+        {
+            tally.Emptied++;
+        }
+    }
+
+    private static bool IsTransferableUrl(string url) =>
+        Uri.TryCreate(url.Trim(), UriKind.Absolute, out var absolute)
+        && absolute.Scheme is "http" or "https"
+        && !EhrFhirReference.TryParse(url, out _, out _);
+
+    private static void DetachReferences(JsonNode? node, bool isContextOfDocument, AttachmentTally attachments, string? propertyName)
     {
         switch (node)
         {
@@ -125,6 +228,11 @@ public sealed class GenericFhirWriteProfile : IEhrWriteProfile
                 if (isContextOfDocument)
                 {
                     obj.Remove("encounter");
+                }
+
+                if (propertyName is not null && AttachmentProperties.Contains(propertyName))
+                {
+                    DetachAttachmentUrl(obj, attachments, propertyName);
                 }
 
                 if (obj["reference"] is JsonValue reference && reference.TryGetValue<string>(out var text) && !text.StartsWith('#'))
@@ -137,16 +245,17 @@ public sealed class GenericFhirWriteProfile : IEhrWriteProfile
                     }
                 }
 
-                foreach (var (_, child) in obj.ToList())
+                foreach (var (childName, child) in obj.ToList())
                 {
-                    DetachReferences(child, isContextOfDocument: false);
+                    DetachReferences(child, isContextOfDocument: false, attachments, childName);
                 }
 
                 break;
             case JsonArray array:
+                // An array's items are of its property's type (presentedForm[] are attachments).
                 foreach (var child in array)
                 {
-                    DetachReferences(child, isContextOfDocument: false);
+                    DetachReferences(child, isContextOfDocument: false, attachments, propertyName);
                 }
 
                 break;

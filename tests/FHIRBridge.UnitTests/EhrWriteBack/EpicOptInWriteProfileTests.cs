@@ -226,6 +226,49 @@ public sealed class EpicOptInWriteProfileTests
         new EpicPatientEnteredQuestionnaireWriteProfile().Shape(source, Options).Reason.Should().Be("missing-questionnaire-assignment");
     }
 
+    private static string Questionnaire(string items) =>
+        $$$"""{"resourceType":"QuestionnaireResponse","status":"completed","subject":{"identifier":{"system":"urn:epic:assignment","value":"A-1"}},"questionnaire":"Q-9","item":{{{items}}}}""";
+
+    // PR #244 review: an answer Epic cannot take stops the whole response; it is never filed as complete without it.
+    [Fact]
+    public void A_questionnaire_with_a_coded_answer_is_skipped_whole_not_filed_without_it()
+    {
+        var source = Json(Questionnaire("""
+            [{"linkId":"1","answer":[{"valueCoding":{"system":"http://loinc.org","code":"LA6568-5"}}]},
+             {"linkId":"total","answer":[{"valueInteger":7}]}]
+            """));
+
+        var result = new EpicPatientEnteredQuestionnaireWriteProfile().Shape(source, Options);
+
+        result.Outcome.Should().Be(EhrShapeOutcome.Skipped);
+        result.Reason.Should().Be("unsupported-answer");
+    }
+
+    [Fact]
+    public void A_questionnaire_keeps_the_answers_of_group_and_follow_up_items()
+    {
+        var source = Json(Questionnaire("""
+            [{"linkId":"g1","item":[{"linkId":"1","answer":[{"valueInteger":2}]},{"linkId":"unanswered"}]},
+             {"linkId":"2","answer":[{"valueBoolean":true,"item":[{"linkId":"2.1","answer":[{"valueString":"daily"}]}]}]}]
+            """));
+
+        var shaped = new EpicPatientEnteredQuestionnaireWriteProfile().Shape(source, Options).Resource!;
+
+        shaped["item"]!.ToJsonString().Should().Be(
+            """[{"linkId":"g1","item":[{"linkId":"1","answer":[{"valueDecimal":2}]}]},{"linkId":"2","answer":[{"valueBoolean":true,"item":[{"linkId":"2.1","answer":[{"valueString":"daily"}]}]}]}]""");
+        Text(shaped["status"]).Should().Be("completed");
+    }
+
+    [Fact]
+    public void A_questionnaire_with_a_coded_answer_in_a_group_is_skipped_whole()
+    {
+        var source = Json(Questionnaire("""
+            [{"linkId":"g1","item":[{"linkId":"1","answer":[{"valueCoding":{"code":"x"}}]}]},{"linkId":"2","answer":[{"valueString":"ok"}]}]
+            """));
+
+        new EpicPatientEnteredQuestionnaireWriteProfile().Shape(source, Options).Reason.Should().Be("unsupported-answer");
+    }
+
     // ---- Generic FHIR ----
 
     [Fact]
@@ -258,6 +301,111 @@ public sealed class EpicOptInWriteProfileTests
     public void A_generic_fhir_create_skips_or_refuses_what_it_cannot_file(string json, string reason)
     {
         new GenericFhirWriteProfile("Condition").Shape(Json(json), Options).Reason.Should().Be(reason);
+    }
+
+    // PR #244 review: a relative Binary/<id> resolves against the TARGET's base, where it names another record (possibly
+    // another patient's); an absolute one is a link into the source server the target cannot follow.
+    [Theory]
+    [InlineData("Binary/1042")]
+    [InlineData("https://source.example.com/fhir/Binary/1042")]
+    [InlineData("urn:uuid:5b0f2c3e-1d6a-4b1e-9b4a-1f2e3d4c5b6a")]
+    public void A_generic_fhir_report_keeps_embedded_content_and_drops_links_the_server_cannot_follow(string url)
+    {
+        var source = Json($$"""
+            {"resourceType":"DiagnosticReport","status":"final","code":{"text":"CBC"},"subject":{"reference":"Patient/p1"},
+             "presentedForm":[{"contentType":"application/pdf","url":"{{url}}"},{"contentType":"text/plain","data":"aGk=","url":"{{url}}"}]}
+            """);
+
+        var shaped = new GenericFhirWriteProfile("DiagnosticReport").Shape(source, Options).Resource!;
+
+        shaped["presentedForm"]!.ToJsonString().Should().Be("""[{"contentType":"application/pdf"},{"contentType":"text/plain","data":"aGk="}]""");
+    }
+
+    [Fact]
+    public void A_generic_fhir_record_whose_only_content_is_a_source_link_is_skipped()
+    {
+        var source = Json("""
+            {"resourceType":"DiagnosticReport","status":"final","code":{"text":"CBC"},"subject":{"reference":"Patient/p1"},
+             "presentedForm":[{"contentType":"application/pdf","url":"Binary/1042"}]}
+            """);
+
+        var result = new GenericFhirWriteProfile("DiagnosticReport").Shape(source, Options);
+
+        result.Outcome.Should().Be(EhrShapeOutcome.Skipped);
+        result.Reason.Should().Be("attachment-not-transferable");
+    }
+
+    // PR #244 review: a photo is not the content of a Patient; skipping the patient would leave it unmatched and
+    // every dependent record unwritten.
+    [Theory]
+    [InlineData("Binary/1")]
+    [InlineData("https://source.example.com/fhir/Binary/1")]
+    public void A_generic_fhir_patient_whose_photo_is_a_source_link_loses_the_link_and_is_kept(string url)
+    {
+        var source = Json($$"""
+            {"resourceType":"Patient","id":"p1","name":[{"family":"Doe"}],"photo":[{"contentType":"image/jpeg","url":"{{url}}"}]}
+            """);
+
+        var result = new GenericFhirWriteProfile("Patient").Shape(source, Options);
+
+        result.Outcome.Should().Be(EhrShapeOutcome.Shaped);
+        result.Resource!["photo"]!.ToJsonString().Should().Be("""[{"contentType":"image/jpeg"}]""");
+    }
+
+    [Fact]
+    public void A_generic_fhir_report_with_a_conclusion_loses_its_source_linked_rendering_and_is_kept()
+    {
+        var source = Json("""
+            {"resourceType":"DiagnosticReport","status":"final","code":{"text":"CBC"},"subject":{"reference":"Patient/p1"},
+             "conclusion":"Normal","presentedForm":[{"contentType":"application/pdf","url":"Binary/1042"}]}
+            """);
+
+        var result = new GenericFhirWriteProfile("DiagnosticReport").Shape(source, Options);
+
+        result.Outcome.Should().Be(EhrShapeOutcome.Shaped);
+        result.Resource!["presentedForm"]!.ToJsonString().Should().Be("""[{"contentType":"application/pdf"}]""");
+    }
+
+    [Fact]
+    public void A_generic_fhir_observation_whose_value_is_a_source_link_is_skipped()
+    {
+        var source = Json("""
+            {"resourceType":"Observation","status":"final","code":{"text":"ECG"},"subject":{"reference":"Patient/p1"},
+             "valueAttachment":{"contentType":"application/pdf","url":"Binary/9"}}
+            """);
+
+        new GenericFhirWriteProfile("Observation").Shape(source, Options).Reason.Should().Be("attachment-not-transferable");
+    }
+
+    [Fact]
+    public void A_generic_fhir_note_leaves_its_first_attachment_for_the_writer_and_drops_later_source_links()
+    {
+        // The writer brings the first attachment's text inline from the source before the send (EhrNoteContent).
+        var source = Json("""
+            {"resourceType":"DocumentReference","status":"current","subject":{"reference":"Patient/p1"},
+             "content":[{"attachment":{"contentType":"text/html","url":"Binary/b1"}},{"attachment":{"contentType":"application/pdf","url":"Binary/b2"}}],
+             "extension":[{"url":"http://example.org/StructureDefinition/x","valueString":"kept"}]}
+            """);
+
+        var result = new GenericFhirWriteProfile("DocumentReference").Shape(source, Options);
+
+        result.Outcome.Should().Be(EhrShapeOutcome.Shaped);
+        Text(result.Resource!["content"]![0]!["attachment"]!["url"]).Should().Be("Binary/b1");
+        result.Resource["content"]![1]!["attachment"]!.ToJsonString().Should().Be("""{"contentType":"application/pdf"}""");
+        Text(result.Resource["extension"]![0]!["url"]).Should().Be("http://example.org/StructureDefinition/x", because: "an extension's url is not an attachment");
+    }
+
+    [Fact]
+    public void A_generic_fhir_attachment_linking_a_plain_web_document_keeps_its_link()
+    {
+        var source = Json("""
+            {"resourceType":"DiagnosticReport","status":"final","code":{"text":"CBC"},"subject":{"reference":"Patient/p1"},
+             "presentedForm":[{"contentType":"application/pdf","url":"https://leaflets.example.org/cbc.pdf"}]}
+            """);
+
+        var shaped = new GenericFhirWriteProfile("DiagnosticReport").Shape(source, Options).Resource!;
+
+        Text(shaped["presentedForm"]![0]!["url"]).Should().Be("https://leaflets.example.org/cbc.pdf");
     }
 
     [Fact]

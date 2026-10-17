@@ -437,6 +437,12 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 
         if (holder.Id is null)
         {
+            if (holder.Problem == WriteCapReached)
+            {
+                // The record is not sent either: give back the write it was counted as.
+                run.PlannedWrites--;
+            }
+
             return holder.Problem;
         }
 
@@ -468,6 +474,15 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         {
             return new HolderEncounter(null, "holder-encounter-awaiting-review");
         }
+
+        // The encounter is a create of its own and counts against the run's cap like any other. The record that needs
+        // it was already counted, so both must fit; when they do not, neither is sent.
+        if (run.PlannedWrites >= run.Channel.Options.MaxWritesPerRun)
+        {
+            return new HolderEncounter(null, WriteCapReached);
+        }
+
+        run.PlannedWrites++;
 
         var now = DateTime.UtcNow;
         var entry = existing;
@@ -608,9 +623,18 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
         {
             run.Resolver.RecordPatientNotCreated(sourcePatientId, "patient-awaiting-review");
         }
+        else if (sent.Kind == SendKind.Capped)
+        {
+            // The cap never frees up within a run: every later record of the patient is skipped with this answer,
+            // without another ledger read or another Patient skip in the report.
+            run.Resolver.RecordPatientNotCreated(sourcePatientId, WriteCapReached);
+        }
 
-        // WouldWrite (dry run / type not live-capable) and Capped leave the patient as "would create".
+        // WouldWrite (dry run / type not live-capable) leaves the patient as "would create".
     }
+
+    /// <summary>The run's write cap stopped a create (the record's own, or one it needs first).</summary>
+    private const string WriteCapReached = "write-cap-reached";
 
     /// <summary>Ledger check, write cap and live-capability check for one shaped record, then the send itself when all
     /// allow it. <paramref name="recordIndex"/> is null for a patient created on behalf of another record.
@@ -640,7 +664,7 @@ public sealed class MappedEhrWriteBackDestinationWriter : IConfiguredDestination
 
         if (run.PlannedWrites >= run.Channel.Options.MaxWritesPerRun)
         {
-            tally.Count(EhrShapeOutcome.Skipped, "write-cap-reached");
+            tally.Count(EhrShapeOutcome.Skipped, WriteCapReached);
             return new SendResult(SendKind.Capped, null);
         }
 
