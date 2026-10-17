@@ -51,6 +51,57 @@ public sealed class TabularRowReader : ITabularRowReader
         "'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX', 'FILE', 'SUPER', 'EXECUTE', 'TRIGGER', " +
         "'EVENT', 'CREATE ROUTINE', 'ALTER ROUTINE', 'CREATE VIEW', 'CREATE TEMPORARY TABLES', 'LOCK TABLES'";
 
+    // 1 when the SQL Server login can change anything: a server-wide or database-wide right (HAS_PERMS_BY_NAME, the
+    // effective right through roles and groups), INSERT/UPDATE/DELETE/ALTER/CONTROL/TAKE OWNERSHIP on a schema that
+    // holds a user object (also effective; a database has few schemas; an empty one is skipped, since every member of
+    // db_datareader controls the empty schema of that name), or a grant on one object, read set-based from sys.database_permissions
+    // for the login's own tokens (sys.user_token: the user, its roles, its Windows groups, public): ALTER/CONTROL/TAKE
+    // OWNERSHIP on any object; INSERT/UPDATE/DELETE on a table, a view or an inline function (writable like a view);
+    // EXECUTE on a procedure, or on a schema that holds one; RECEIVE on a Service Broker queue (it deletes messages);
+    // or ownership of an object. Not HAS_PERMS_BY_NAME per object: on a catalog of tens of thousands of tables (Clarity,
+    // Caboodle) that is ~100k evaluations on every connection, since a read-only login matches none and EXISTS cannot
+    // stop early. A DENY is not subtracted from an object grant, so a grant that a DENY cancels is still refused.
+    // EXECUTE on a function is not refused: a function cannot change data, and readers are often granted it.
+    internal const string SqlServerVerifyReadOnlySql = """
+        SELECT CASE WHEN IS_SRVROLEMEMBER('sysadmin') = 1
+            OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'INSERT') = 1
+            OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'UPDATE') = 1
+            OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'DELETE') = 1
+            OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'ALTER') = 1
+            OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'EXECUTE') = 1
+            OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CONTROL') = 1
+            OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'BACKUP DATABASE') = 1
+            OR HAS_PERMS_BY_NAME(NULL, NULL, 'CONTROL SERVER') = 1
+            OR HAS_PERMS_BY_NAME(NULL, NULL, 'ALTER ANY CONNECTION') = 1
+            OR HAS_PERMS_BY_NAME(NULL, NULL, 'SHUTDOWN') = 1
+            OR HAS_PERMS_BY_NAME(NULL, NULL, 'ALTER SETTINGS') = 1
+            OR EXISTS (
+                SELECT 1 FROM sys.schemas s
+                CROSS APPLY (VALUES ('INSERT'), ('UPDATE'), ('DELETE'), ('ALTER'), ('CONTROL'), ('TAKE OWNERSHIP')) p(name)
+                WHERE s.name NOT IN ('sys', 'INFORMATION_SCHEMA')
+                  AND EXISTS (SELECT 1 FROM sys.objects so WHERE so.schema_id = s.schema_id AND so.is_ms_shipped = 0)
+                  AND HAS_PERMS_BY_NAME(QUOTENAME(s.name), 'SCHEMA', p.name) = 1)
+            OR EXISTS (
+                SELECT 1 FROM sys.database_permissions dp
+                JOIN sys.objects o ON o.object_id = dp.major_id
+                WHERE dp.class = 1 AND dp.state IN ('G', 'W') AND o.is_ms_shipped = 0
+                  AND dp.grantee_principal_id IN (SELECT t.principal_id FROM sys.user_token t)
+                  AND (dp.permission_name IN ('ALTER', 'CONTROL', 'TAKE OWNERSHIP')
+                    OR (dp.permission_name IN ('INSERT', 'UPDATE', 'DELETE') AND o.type IN ('U', 'V', 'IF'))
+                    OR (dp.permission_name = 'EXECUTE' AND o.type IN ('P', 'PC', 'X'))
+                    OR (dp.permission_name = 'RECEIVE' AND o.type = 'SQ')))
+            OR EXISTS (
+                SELECT 1 FROM sys.database_permissions dp
+                JOIN sys.objects o ON o.schema_id = dp.major_id
+                WHERE dp.class = 3 AND dp.state IN ('G', 'W') AND dp.permission_name = 'EXECUTE'
+                  AND dp.grantee_principal_id IN (SELECT t.principal_id FROM sys.user_token t)
+                  AND o.is_ms_shipped = 0 AND o.type IN ('P', 'PC', 'X'))
+            OR EXISTS (
+                SELECT 1 FROM sys.objects o
+                WHERE o.is_ms_shipped = 0 AND o.principal_id IN (SELECT t.principal_id FROM sys.user_token t))
+        THEN 1 ELSE 0 END
+        """;
+
     // One opener per engine, never a switch: a new engine is one more entry.
     private static readonly IReadOnlyDictionary<string, SqlEngine> Engines = new Dictionary<string, SqlEngine>(StringComparer.Ordinal)
     {
@@ -59,21 +110,7 @@ public sealed class TabularRowReader : ITabularRowReader
         ["sqlserver"] = new(
             async (connectionString, ct) => await SqlServerConnectionFactory.OpenConnectionAsync(connectionString, ct),
             BeginReadOnly: null,
-            VerifyReadOnlySql: """
-                SELECT CASE WHEN IS_SRVROLEMEMBER('sysadmin') = 1
-                    OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'INSERT') = 1
-                    OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'UPDATE') = 1
-                    OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'DELETE') = 1
-                    OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'ALTER') = 1
-                    OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'EXECUTE') = 1
-                    OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CONTROL') = 1
-                    OR HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'BACKUP DATABASE') = 1
-                    OR HAS_PERMS_BY_NAME(NULL, NULL, 'CONTROL SERVER') = 1
-                    OR HAS_PERMS_BY_NAME(NULL, NULL, 'ALTER ANY CONNECTION') = 1
-                    OR HAS_PERMS_BY_NAME(NULL, NULL, 'SHUTDOWN') = 1
-                    OR HAS_PERMS_BY_NAME(NULL, NULL, 'ALTER SETTINGS') = 1
-                THEN 1 ELSE 0 END
-                """,
+            VerifyReadOnlySql: SqlServerVerifyReadOnlySql,
             DescribeAsync: DescribeSqlServerAsync,
             // 208 invalid object, 207 invalid column, 4104 multi-part identifier, 102/156 syntax, 195 unknown function,
             // 2812 unknown procedure.
@@ -289,7 +326,7 @@ public sealed class TabularRowReader : ITabularRowReader
     // keyed by a hash of the connection string itself: a changed login or password is checked again at once. A
     // refusal is never remembered. Only engines whose READ ONLY transaction still holds back a login that gained
     // write rights inside that window remember it (RemembersReadOnlyCheck); on SQL Server the check is the only
-    // backstop, and it is cheap there, so it runs on every connection.
+    // backstop, so it runs on every connection.
     private static readonly TimeSpan VerifiedLoginLifetime = TimeSpan.FromMinutes(5);
 
     private static readonly ConcurrentDictionary<string, DateTimeOffset> VerifiedLogins = new(StringComparer.Ordinal);

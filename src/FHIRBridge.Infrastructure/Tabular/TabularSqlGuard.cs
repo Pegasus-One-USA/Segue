@@ -84,7 +84,8 @@ public static partial class TabularSqlGuard
     }
 
     /// <summary>The query with comments removed (a space each) and every string literal and quoted identifier
-    /// emptied, read the way <paramref name="engine"/> reads it. <paramref name="statementEnds"/>, when given,
+    /// emptied, read the way <paramref name="engine"/> reads it; a quoted identifier becomes a spaced placeholder and a
+    /// number is split from a word glued to it, so every keyword stands alone. <paramref name="statementEnds"/>, when given,
     /// receives the index in <paramref name="query"/> of every ';' that is code.</summary>
     internal static string Sanitise(string query, string engine, List<int>? statementEnds = null)
     {
@@ -98,9 +99,10 @@ public static partial class TabularSqlGuard
             var c = query[i];
             var next = i + 1 < query.Length ? query[i + 1] : '\0';
 
-            // MySQL reads "--" as a comment only when whitespace follows it ("1--1" is arithmetic there).
+            // MySQL reads "--" as a comment only when an ASCII space or control character follows it ("1--1" is
+            // arithmetic there, and so is "--" before a non-ASCII space, which MySQL reads as part of a name).
             var lineComment = c == '-' && next == '-'
-                && (!mysql || i + 2 >= query.Length || char.IsWhiteSpace(query[i + 2]));
+                && (!mysql || i + 2 >= query.Length || query[i + 2] <= ' ' || query[i + 2] == '\x7F');
             if (lineComment || (mysql && c == '#'))
             {
                 i = SkipToLineEnd(query, i);
@@ -131,10 +133,48 @@ public static partial class TabularSqlGuard
 
             if (c == '"' || (mysql && c == '`') || (sqlServer && c == '['))
             {
-                // Quoted identifiers: a keyword inside one is a name, not a statement.
+                // Quoted identifiers: a keyword inside one is a name, not a statement. PostgreSQL calls a quoted
+                // function name like the bare one, so there "pg_sleep"(1) is checked by what the quotes hold.
+                if (postgres && IsUnicodeEscapePrefix(query, i))
+                {
+                    throw new BusinessRuleException(
+                        "The query may not use U&\"...\" identifiers; write the name without escapes.");
+                }
+
                 var close = c == '[' ? ']' : c;
+                var start = i;
                 i = SkipQuoted(query, i, close, backslashEscapes: false, open: c);
-                output.Append("x");
+                if (postgres)
+                {
+                    RequireNoQuotedServerFunction(query[(start + 1)..(i - 1)].Replace("\"\"", "\"", StringComparison.Ordinal));
+                }
+
+                // Spaced, so a keyword written against the name ([a]DELETE[t]) is still a word of its own.
+                output.Append(" x ");
+                continue;
+            }
+
+            // A word glued to a number is a word of its own: SQL Server reads 1DELETE and $1COMMIT as a number then a
+            // keyword. Where the number ends inside that word depends on how the engine reads an exponent or hex digits
+            // (1eSET, 0xBEGIN), so each reading is put in the copy for the checks. A digit inside a name (t1delete)
+            // does not start a number.
+            if (char.IsAsciiDigit(c) && StartsNumber(query, i, sqlServer))
+            {
+                var end = i;
+                while (end < query.Length && (char.IsAsciiDigit(query[end]) || query[end] == '.'))
+                {
+                    end++;
+                }
+
+                output.Append(query, i, end - i);
+                var wordEnd = end;
+                while (wordEnd < query.Length && IsIdentifierChar(query[wordEnd]))
+                {
+                    wordEnd++;
+                }
+
+                AppendGluedWordReadings(output, query, end, wordEnd);
+                i = wordEnd;
                 continue;
             }
 
@@ -167,7 +207,8 @@ public static partial class TabularSqlGuard
 
     /// <summary>Refuses the first match of <paramref name="keywords"/> in the sanitised query, except a call to a name
     /// that is also a read-only function (<see cref="ReadOnlyFunctions"/>: MySQL's TRUNCATE(x, d) and INSERT(str, ...)).
-    /// A column or table named like a keyword can be quoted: quoted identifiers are not checked.</summary>
+    /// A column or table named like a keyword can be quoted: quoted identifiers are not checked against these lists
+    /// (on PostgreSQL a quoted name of a blocked server function still is, see <see cref="RequireNoQuotedServerFunction"/>).</summary>
     private static void RequireNoForbiddenKeyword(string check, Regex keywords)
     {
         foreach (Match match in keywords.Matches(check))
@@ -197,13 +238,88 @@ public static partial class TabularSqlGuard
         return i < text.Length && text[i] == '(';
     }
 
-    /// <summary>PostgreSQL's E'...' string: an E (or e) that stands alone as a token right before the quote.</summary>
-    private static bool IsEscapeStringPrefix(string text, int quoteIndex) =>
-        quoteIndex > 0
-        && text[quoteIndex - 1] is 'E' or 'e'
-        && (quoteIndex == 1 || !IsIdentifierChar(text[quoteIndex - 2]));
+    /// <summary>Refuses a PostgreSQL quoted identifier that names one of the blocked server functions or dblink:
+    /// <c>"pg_terminate_backend"(pid)</c> calls the function as the bare name does. Matched without regard to case,
+    /// which also refuses a quoted name PostgreSQL would not resolve to the function; that costs nothing real.</summary>
+    private static void RequireNoQuotedServerFunction(string name)
+    {
+        var function = PostgreSqlServerFunction().Match(name);
+        var blocked = (function.Success && function.Index == 0 && function.Length == name.Length)
+            || (name.StartsWith("dblink", StringComparison.OrdinalIgnoreCase) && name.All(ch => char.IsLetterOrDigit(ch) || ch == '_'));
+        if (blocked)
+        {
+            throw new BusinessRuleException(
+                $"The query may only read data; '{name.ToUpperInvariant()}' is not allowed, quoted or not.");
+        }
+    }
+
+    /// <summary>PostgreSQL's U&amp;"..." identifier, whose \XXXX escapes could spell a blocked name the check would
+    /// not see: a U (or u) and '&amp;' that stand alone as a token right before the quote.</summary>
+    private static bool IsUnicodeEscapePrefix(string text, int quoteIndex) =>
+        quoteIndex > 1
+        && text[quoteIndex - 1] == '&'
+        && text[quoteIndex - 2] is 'U' or 'u'
+        && (quoteIndex == 2 || !IsIdentifierChar(text[quoteIndex - 3]));
+
+    /// <summary>PostgreSQL's E'...' string: an E (or e) that stands alone as a token right before the quote, or that
+    /// follows a number (PostgreSQL before 15 reads 1e'...' as the number 1, then an E'...' string).</summary>
+    private static bool IsEscapeStringPrefix(string text, int quoteIndex)
+    {
+        if (quoteIndex == 0 || text[quoteIndex - 1] is not ('E' or 'e'))
+        {
+            return false;
+        }
+
+        var i = quoteIndex - 2;
+        while (i >= 0 && (char.IsAsciiDigit(text[i]) || text[i] == '.'))
+        {
+            i--;
+        }
+
+        return i < 0 || !IsIdentifierChar(text[i]);
+    }
 
     private static bool IsIdentifierChar(char c) => char.IsLetterOrDigit(c) || c is '_' or '$';
+
+    /// <summary>Whether the digit at <paramref name="i"/> starts a number rather than continuing a name. On SQL Server a
+    /// '$' that does not continue a name starts a money literal ($1.50), so the digit after it starts a number too.</summary>
+    private static bool StartsNumber(string text, int i, bool sqlServer)
+    {
+        if (i == 0 || !IsIdentifierChar(text[i - 1]))
+        {
+            return true;
+        }
+
+        return sqlServer && text[i - 1] == '$' && (i == 1 || !IsIdentifierChar(text[i - 2]));
+    }
+
+    /// <summary>Appends, each as a word of its own, the word <c>text[start..end)</c> glued to a number and what follows
+    /// each place the number could end inside it: after a leading x or e (0xSET, 1eSET), and after the hex digits of
+    /// 0x... or the digits of an exponent (0xBEGIN is 0xBE then GIN, 1e5DELETE is 1e5 then DELETE). Whichever way the
+    /// engine reads the number, a keyword after it is seen. The copy is only checked, never run.</summary>
+    private static void AppendGluedWordReadings(StringBuilder output, string text, int start, int end)
+    {
+        if (start == end)
+        {
+            return;
+        }
+
+        output.Append(' ').Append(text, start, end - start);
+        if (text[start] is 'x' or 'X' or 'e' or 'E')
+        {
+            var hex = text[start] is 'x' or 'X';
+            var after = start + 1;
+            output.Append(' ').Append(text, after, end - after);
+            while (after < end && (hex ? char.IsAsciiHexDigit(text[after]) : char.IsAsciiDigit(text[after])))
+            {
+                after++;
+            }
+
+            output.Append(' ').Append(text, after, end - after);
+        }
+
+        output.Append(' ');
+    }
 
     /// <summary>MySQL's /*! ... */ and MariaDB's /*M! ... */, whose text the server executes.</summary>
     private static bool IsExecutableComment(string text, int start) =>
@@ -311,8 +427,10 @@ public static partial class TabularSqlGuard
     // them (SELECT 1 BACKUP DATABASE ... and SELECT 1 DECLARE @x int SET @x = 1 ... are each one batch). All are reserved
     // words, so none can be an unquoted column name in a SELECT. USE is not here: it only changes which database the
     // rest, still checked, reads, which the login's own rights bound; and 'use' is a common column name
-    // (ContactPoint.use). FETCH is not here either: OFFSET ... FETCH NEXT is part of a SELECT.
-    [GeneratedRegex(@"\b(backup|restore|dbcc|kill|shutdown|waitfor|reconfigure|checkpoint|deny|revert|setuser|writetext|updatetext|declare|set|begin|if|while|goto|return|print|raiserror|throw|close|deallocate)\b", RegexOptions.IgnoreCase)]
+    // (ContactPoint.use). FETCH is not here either: OFFSET ... FETCH NEXT is part of a SELECT. Service Broker's RECEIVE
+    // (which deletes a queue's messages) and SEND are not reserved, so a column of that name must be quoted; END only
+    // as END CONVERSATION (and GET / MOVE CONVERSATION), since CASE ... END is part of a SELECT.
+    [GeneratedRegex(@"\b(backup|restore|dbcc|kill|shutdown|waitfor|reconfigure|checkpoint|deny|revert|setuser|writetext|updatetext|declare|set|begin|if|while|goto|return|print|raiserror|throw|close|deallocate|commit|rollback|save|receive|send|(?:end|get|move)\s+conversation)\b", RegexOptions.IgnoreCase)]
     private static partial Regex SqlServerStatement();
 
     // PostgreSQL functions a plain SELECT can call that read or write the server's files, change the session's settings
