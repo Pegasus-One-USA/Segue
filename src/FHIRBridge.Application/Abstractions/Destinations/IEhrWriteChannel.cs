@@ -32,6 +32,10 @@ public interface IEhrWriteChannel
 
     EhrWriteBackRunOptions Options { get; }
 
+    /// <summary>The connection says the practice has the vendor's contracted or proprietary write APIs turned on
+    /// (<c>SourceConnection.VendorWriteApisActivated</c>). Types that need them are sent only when this is true.</summary>
+    bool VendorWriteApisActivated => false;
+
     /// <summary>The scope string the EHR actually granted the connection's token, or null when the token response
     /// did not echo one.</summary>
     Task<string?> GetGrantedScopeAsync(CancellationToken cancellationToken);
@@ -47,8 +51,19 @@ public interface IEhrWriteChannel
     /// <summary><c>POST Patient/$match</c> with certain-only matching.</summary>
     Task<EhrPatientMatchOutcome> MatchPatientAsync(string patientJson, CancellationToken cancellationToken);
 
-    /// <summary>One non-idempotent create. Never retried after the request may have reached the EHR.</summary>
+    /// <summary>One non-idempotent create. Never retried after the request may have reached the EHR. The
+    /// <paramref name="resourceJson"/> is what the vendor's write profile shaped: a FHIR resource for a FHIR channel,
+    /// or the vendor request it describes for a channel over a proprietary API.</summary>
     Task<EhrCreateOutcome> CreateAsync(string resourceType, string resourceJson, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Creates the encounter a vendor files some records on and that it will not create itself (eClinicalWorks medical
+    /// and surgical history need an open telephone encounter). Non-idempotent, like <see cref="CreateAsync"/>. A
+    /// channel whose vendor needs none refuses it.
+    /// </summary>
+    Task<EhrCreateOutcome> CreateHolderEncounterAsync(string targetPatientId, CancellationToken cancellationToken) =>
+        Task.FromResult(new EhrCreateOutcome(
+            EhrCreateKind.Rejected, null, null, [new EhrOutcomeIssue("error", "not-supported", "holder-encounter-not-supported", null)]));
 }
 
 /// <summary>Per-destination write-back options, read from the destination node's <c>dest_*</c> settings.</summary>
@@ -62,18 +77,48 @@ public interface IEhrWriteChannel
 /// every source patient is written as a new, obviously-synthetic test patient (altered name, birth date and
 /// identifiers), and its records are filed against that clone. This is the only way to write an EHR's own data back
 /// into the same EHR.</param>
+/// <param name="CreateHolderEncounter">Opt-in: create the encounter a vendor needs for records it files only on one
+/// (eClinicalWorks medical and surgical history). Off, those records are skipped.</param>
+/// <param name="TargetProviderId">The EHR's own id for the provider records are filed under, where the vendor API needs
+/// one (an eClinicalWorks note's author, an athenaOne document's provider). Null when not configured.</param>
+/// <param name="TargetDepartmentId">athenaOne: the department a new patient is registered in, and the department used
+/// when a patient's own primary department cannot be read. Null when not configured.</param>
+/// <param name="TestAsVendor">A test run: the connection is a Generic FHIR test server standing in for this vendor.
+/// Every record goes through the vendor's own capabilities, profiles and channel, and is sent to the test server
+/// instead (athenaOne calls to an in-process athenaOne test server that files them there). Null for a real
+/// write.</param>
+/// <param name="EnabledVariants">Variants the destination turned on (<c>dest_enabledVariants</c>), for the APIs that
+/// need it on top of the resource type (<c>EhrWriteCapability.RequiresVariantOptIn</c>).</param>
 public sealed record EhrWriteBackRunOptions(
     bool DryRun,
     bool CreatePatientIfMissing,
     int MaxWritesPerRun,
     string NoteDocStatus,
     IReadOnlyList<string> ResourceTypes,
-    bool CloneMode = false)
+    bool CloneMode = false,
+    bool CreateHolderEncounter = false,
+    string? TargetProviderId = null,
+    string? TargetDepartmentId = null,
+    SourceSystemType? TestAsVendor = null,
+    IReadOnlyCollection<string>? EnabledVariants = null)
 {
     public const int DefaultMaxWritesPerRun = 500;
     public const int MaxAllowedWritesPerRun = 10000;
     public const string PreliminaryDocStatus = "preliminary";
     public const string FinalDocStatus = "final";
+
+    public bool IsTestRun => TestAsVendor is not null;
+
+    public bool IsVariantEnabled(string? variant) =>
+        variant is not null && (EnabledVariants?.Contains(variant, StringComparer.Ordinal) ?? false);
+}
+
+/// <summary>Codes the write path itself puts on an <see cref="EhrOutcomeIssue"/>.</summary>
+public static class EhrWriteOutcomeCodes
+{
+    /// <summary>The run was cancelled before the create left this process (while waiting for a token, the rate
+    /// limiter, or a retry delay): nothing reached the EHR, so the record is retried as is, not left for review.</summary>
+    public const string CancelledBeforeSend = "cancelled-before-send";
 }
 
 /// <summary>One OperationOutcome issue, reduced to what is safe to log and store.</summary>
@@ -131,13 +176,16 @@ public sealed record EhrCreateOutcome(
 /// </summary>
 /// <param name="ScopeStatus">"verified" when the granted scope covers every type written, "missing:Type,Type" when it
 /// does not, "unknown" when the token response echoed no scope.</param>
+/// <param name="TestRun">The writes went to a Generic FHIR test server standing in for <paramref name="TargetVendor"/>,
+/// not to the vendor.</param>
 public sealed record EhrWriteReport(
     bool DryRun,
     string TargetVendor,
     int RecordsReceived,
     string ScopeStatus,
     IReadOnlyList<EhrWriteResourceSummary> Resources,
-    bool CloneMode = false);
+    bool CloneMode = false,
+    bool TestRun = false);
 
 /// <param name="WouldWrite">Records that passed every check; in a dry run, what a live run would send.</param>
 /// <param name="AlreadyWritten">Records the ledger shows are already in the EHR (or awaiting review).</param>

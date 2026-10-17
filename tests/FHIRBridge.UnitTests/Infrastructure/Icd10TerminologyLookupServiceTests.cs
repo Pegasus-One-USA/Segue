@@ -15,10 +15,15 @@ namespace FHIRBridge.UnitTests.Infrastructure;
 /// </summary>
 public sealed class Icd10TerminologyLookupServiceTests
 {
+    // static: a new InMemoryDatabaseRoot per test makes EF build another internal service provider each time, and
+    // past twenty EF raises ManyServiceProvidersCreatedWarning as an error in whichever test crosses the line (these
+    // ones, in a full run). Each test still gets its own database via the unique name.
+    private static readonly InMemoryDatabaseRoot _root = new();
+
     private static FHIRBridgeDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<FHIRBridgeDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString(), new InMemoryDatabaseRoot())
+            .UseInMemoryDatabase(Guid.NewGuid().ToString(), _root)
             .Options;
         return new FHIRBridgeDbContext(options);
     }

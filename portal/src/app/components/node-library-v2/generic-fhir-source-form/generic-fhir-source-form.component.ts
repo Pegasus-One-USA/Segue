@@ -1,8 +1,10 @@
 import { Component, input, signal, computed, effect, untracked, inject } from '@angular/core';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { FHIR_RESOURCES } from '../../../data/scope-constants-v2.data';
+import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants-v2.data';
 import { SourceConfigFormComponent } from '../../shared-v2/config-form/config-form-v2.contract';
+import { SourceResourceTypePickerComponent } from '../../shared-v2/source-resource-type-picker/source-resource-type-picker.component';
+import { SOURCE_TYPES_DECLARED_KEY, hasDeclaredTypesMarker } from '../../../services/upstream-source-v2.util';
 import {
   detectBrowserTimeZone,
   TIME_ZONE_OPTIONS,
@@ -50,7 +52,7 @@ const RETRIEVAL_METHOD_OPTIONS: readonly { value: GenericFhirRetrievalMethod; la
 @Component({
   selector: 'app-generic-fhir-source-form',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, SourceResourceTypePickerComponent],
   templateUrl: './generic-fhir-source-form.component.html',
   styleUrls: [
     '../../shared-v2/ehr-vendor-source-form/ehr-vendor-source-form.component.scss',
@@ -186,12 +188,23 @@ export class GenericFhirSourceFormComponent implements SourceConfigFormComponent
     }
   });
 
-  // Resource Type is not asked in this form's own UI — the destination node's own "dest_resources" picker already
-  // captures it, and SourceNodeExecutor derives it from there when a source node has none of its own. Defaults to
-  // every MVP1 resource type (same fallback EpicAudienceFormComponent.ensureRetrievalResourceTypeDefault uses for
-  // its own now-hidden per-method Resource Type controls) so the emitted 'Resources' field is never empty; a node
-  // restored from a previously saved value keeps that value instead (see _populate).
-  readonly selectedResources = signal<string[]>([...FHIR_RESOURCES]);
+  // "Resource types to read": the source declares what it reads, destinations choose only from it, and the run never
+  // fetches more. A new node starts with none and getFields() refuses it until at least one is picked; a node
+  // restored from a saved value keeps exactly that value (see _populate). A plain FHIR server has no vendor
+  // restriction, so every platform-supported type is offered.
+  readonly selectedResources = signal<string[]>([]);
+  readonly readableResourceTypes = SUPPORTED_RESOURCE_TYPES;
+  /** True once getFields() refused an empty list — turns the picker's empty state into an error. */
+  readonly resourceTypesSaveAttempted = signal(false);
+  /** A saved node without the declared-types marker (SOURCE_TYPES_DECLARED_KEY): saved before sources declared their
+   *  types, when this form wrote all 12 FHIR_RESOURCES silently. Until the admin changes the list it stays legacy —
+   *  re-saved with its old fields, and its destinations still decide what it reads. */
+  readonly legacyNode = signal(false);
+  /** The admin changed "Resource types to read" in this session (a legacy node then declares its list). */
+  private readonly resourceTypesEdited = signal(false);
+  /** Still legacy on save: a legacy node whose list was not touched. */
+  readonly keepsLegacyTypes = computed(() => this.legacyNode() && !this.resourceTypesEdited());
+  private legacyFields: Record<string, string> = {};
 
   constructor() {
     effect(() => {
@@ -240,9 +253,19 @@ export class GenericFhirSourceFormComponent implements SourceConfigFormComponent
       timeoutSeconds: fields['Timeout (seconds)'] || '',
       maxRecordsPerRun: fields['Max records per run'] || '',
     });
-    if (fields['Resources']) {
-      this.selectedResources.set(fields['Resources'].split(',').map(r => r.trim()).filter(Boolean));
-    }
+    this.selectedResources.set((fields['Resources'] || '').split(',').map(r => r.trim()).filter(Boolean));
+    this.legacyNode.set(!hasDeclaredTypesMarker(fields));
+    this.resourceTypesEdited.set(false);
+    this.legacyFields = {
+      Resources: fields['Resources'] ?? '',
+      'Retrieval resource type': fields['Retrieval resource type'] ?? '',
+    };
+  }
+
+  onResourceTypesChange(types: string[]): void {
+    this.selectedResources.set(types);
+    this.resourceTypesEdited.set(true);
+    if (types.length > 0) this.resourceTypesSaveAttempted.set(false);
   }
 
   toggleWeekday(day: string): void {
@@ -259,17 +282,29 @@ export class GenericFhirSourceFormComponent implements SourceConfigFormComponent
     this.form.markAllAsTouched();
     if (this.form.invalid) return null;
     if (this.showRecurrence() && this.form.controls.fullRefreshRecurrence.value === 'weekly' && this.selectedWeekdays().length === 0) return null;
+    const keepsLegacy = this.keepsLegacyTypes();
+    if (this.selectedResources().length === 0 && !keepsLegacy) {
+      this.resourceTypesSaveAttempted.set(true);
+      return null;
+    }
 
     const v = this.form.getRawValue();
-    const resourcesJoined = this.selectedResources().join(', ');
+    // An untouched legacy node keeps its old fields and no marker, so it is fetched exactly as before; otherwise the
+    // list is the source's declared "Resource types to read".
+    const typeFields: Record<string, string> = keepsLegacy
+      ? { ...this.legacyFields }
+      : {
+          Resources: this.selectedResources().join(','),
+          'Retrieval resource type': this.selectedResources().join(', '),
+          [SOURCE_TYPES_DECLARED_KEY]: 'true',
+        };
     const fields: Record<string, string> = {
       __name: v.name || 'Generic FHIR R4',
       Connector: 'Generic FHIR R4',
       'App context': 'Backend system',
       'Ingestion mode': 'search',
       'FHIR base URL': v.baseUrl || '',
-      Resources: this.selectedResources().join(','),
-      'Retrieval resource type': resourcesJoined,
+      ...typeFields,
       'Retrieval method key': v.retrievalMethod ?? 'search-rest',
     };
 

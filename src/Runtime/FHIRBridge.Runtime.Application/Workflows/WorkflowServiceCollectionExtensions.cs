@@ -19,6 +19,7 @@ public static class WorkflowServiceCollectionExtensions
         services.AddSingleton<IWorkflowNodeResourceHistoryRecorder, InMemoryWorkflowNodeResourceHistoryRecorder>();
         services.AddScoped<IWorkflowAuditRecorder, InMemoryWorkflowAuditRecorder>();
         services.AddSingleton<IWorkflowRunTracker, InMemoryWorkflowRunTracker>();
+        services.AddSingleton<IActiveWorkflowRuns, ActiveWorkflowRuns>();
 
         // validate-run's rule set. Registered as a collection so a new rule is a new class plus one line here —
         // never an edit to a switch — matching how source vendors and application types are already extended.

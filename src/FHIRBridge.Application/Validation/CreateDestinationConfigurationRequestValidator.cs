@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using FHIRBridge.Application.Abstractions.Destinations;
 using FHIRBridge.Application.DTOs;
 using FHIRBridge.Domain.Enums;
+using FHIRBridge.Domain.Fhir;
 using FluentValidation;
 
 namespace FHIRBridge.Application.Validation;
@@ -130,7 +131,36 @@ public sealed class CreateDestinationConfigurationRequestValidator : AbstractVal
         RequireOneOf(context, metadata, "dest_dryRun", BooleanFlagValues, "dry-run flag");
         RequireOneOf(context, metadata, "dest_createPatientIfMissing", BooleanFlagValues, "create-patient flag");
         RequireOneOf(context, metadata, "dest_cloneMode", BooleanFlagValues, "clone-mode flag");
+        RequireOneOf(context, metadata, "dest_createHolderEncounter", BooleanFlagValues, "holder-encounter flag");
+        foreach (var idKey in new[] { "dest_targetProviderId", "dest_targetDepartmentId" })
+        {
+            // EHR-side ids (an eCW practitioner id, an athena provider or department number): short, no spaces.
+            if (metadata.TryGetValue(idKey, out var id) && !string.IsNullOrWhiteSpace(id)
+                && (id.Trim().Length > 64 || id.Trim().Any(char.IsWhiteSpace)))
+            {
+                context.AddFailure(idKey, "Enter the EHR's id as shown in the EHR: up to 64 characters, no spaces.");
+            }
+        }
         RequireOneOf(context, metadata, "dest_noteDocStatus", NoteDocStatusValues, "note status");
+
+        // A test run: the vendor a Generic FHIR connection stands in for (ConfigurationService checks the connection).
+        if (metadata.TryGetValue("dest_testAsVendor", out var testAs) && !string.IsNullOrWhiteSpace(testAs)
+            && !(EhrWriteCapabilities.TryParseVendor(testAs, out var tested) && EhrWriteCapabilities.TestableVendors.Contains(tested)))
+        {
+            context.AddFailure("dest_testAsVendor", "Test on FHIR server can stand in for Epic, eClinicalWorks (Healow) or athenahealth only.");
+        }
+
+        if (metadata.TryGetValue("dest_enabledVariants", out var variants) && !string.IsNullOrWhiteSpace(variants))
+        {
+            var unknown = variants.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(v => !EhrWriteCapabilities.OptInVariants.Contains(v))
+                .ToList();
+            if (unknown.Count > 0)
+            {
+                context.AddFailure("dest_enabledVariants", $"Unknown write API: {string.Join(", ", unknown)}.");
+            }
+        }
+
         RequireOptionalIntInRange(
             context,
             metadata,

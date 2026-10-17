@@ -14,10 +14,20 @@ export interface TabularSourceFile {
   createdOnUtc: string;
 }
 
+/** TabularSqlConnectionDto: a saved database. Never carries the connection string. */
 export interface TabularSqlConnection {
   engine: string;
   secretKeyVaultName: string;
   secretName: string;
+  id: string | null;
+  name: string | null;
+  createdBy: string | null;
+  updatedOnUtc: string | null;
+}
+
+export interface TabularSqlConnectionTest {
+  ok: boolean;
+  message: string;
 }
 
 export interface TabularTemplatePreset {
@@ -43,8 +53,45 @@ export interface TabularPreview {
   missingColumns: string[];
 }
 
+/** One resource type a source reads, as the node stores it (tab_streams). */
+export interface TabularStreamEntry {
+  resourceType: string;
+  query?: string | null;
+  fileId?: string | null;
+  rowFilterColumn?: string | null;
+  rowFilterValue?: string | null;
+  template: unknown;
+}
+
+export interface TabularCheckRequest {
+  kind: 'csv' | 'sql';
+  sqlEngine: string | null;
+  secretKeyVaultName: string | null;
+  secretName: string | null;
+  /** The entries exactly as the node stores them (JSON text). */
+  streams: string;
+  preview: boolean;
+}
+
+export interface TabularStreamCheck {
+  index: number;
+  resourceType: string;
+  passed: boolean;
+  problems: string[];
+  columns: string[];
+  missingColumns: string[];
+  rowsRead: number | null;
+  resources: { resourceType: string; resourceId: string | null; rowNumber: number; json: string }[];
+  rowErrors: string[];
+}
+
+export interface TabularCheckResult {
+  allPassed: boolean;
+  streams: TabularStreamCheck[];
+}
+
 /** CSV / SQL Table source setup (TabularSourcesController). File contents and connection strings go to the API
- *  and are never kept in the workflow: the node stores only the file id and the secret reference. */
+ *  and are never kept in the workflow: the node stores only file ids and the secret reference. */
 @Injectable({ providedIn: 'root' })
 export class TabularSourceService {
   private readonly http = inject(HttpClient);
@@ -59,8 +106,31 @@ export class TabularSourceService {
     return this.http.get<TabularSourceFile>(TABULAR_SOURCE_ENDPOINTS.file(id));
   }
 
-  saveSqlConnection(engine: string, connectionString: string): Observable<TabularSqlConnection> {
-    return this.http.post<TabularSqlConnection>(TABULAR_SOURCE_ENDPOINTS.sqlConnections, { engine, connectionString });
+  listFiles(): Observable<TabularSourceFile[]> {
+    return this.http.get<TabularSourceFile[]>(TABULAR_SOURCE_ENDPOINTS.files);
+  }
+
+  saveSqlConnection(engine: string, connectionString: string, name?: string): Observable<TabularSqlConnection> {
+    return this.http.post<TabularSqlConnection>(TABULAR_SOURCE_ENDPOINTS.sqlConnections, { engine, connectionString, name: name ?? null });
+  }
+
+  listSqlConnections(): Observable<TabularSqlConnection[]> {
+    return this.http.get<TabularSqlConnection[]>(TABULAR_SOURCE_ENDPOINTS.sqlConnections);
+  }
+
+  updateSqlConnection(id: string, change: { name?: string | null; connectionString?: string | null }): Observable<TabularSqlConnection> {
+    return this.http.put<TabularSqlConnection>(TABULAR_SOURCE_ENDPOINTS.sqlConnection(id), {
+      name: change.name ?? null,
+      connectionString: change.connectionString ?? null,
+    });
+  }
+
+  deleteSqlConnection(id: string): Observable<void> {
+    return this.http.delete<void>(TABULAR_SOURCE_ENDPOINTS.sqlConnection(id));
+  }
+
+  testSqlConnection(id: string): Observable<TabularSqlConnectionTest> {
+    return this.http.post<TabularSqlConnectionTest>(TABULAR_SOURCE_ENDPOINTS.sqlConnectionTest(id), {});
   }
 
   templatePresets(): Observable<TabularTemplatePreset[]> {
@@ -69,5 +139,10 @@ export class TabularSourceService {
 
   preview(request: TabularPreviewRequest): Observable<TabularPreview> {
     return this.http.post<TabularPreview>(TABULAR_SOURCE_ENDPOINTS.preview, request);
+  }
+
+  /** Checks every resource type's query or file against what it reads; with `preview`, also builds its first rows. */
+  check(request: TabularCheckRequest): Observable<TabularCheckResult> {
+    return this.http.post<TabularCheckResult>(TABULAR_SOURCE_ENDPOINTS.check, request);
   }
 }

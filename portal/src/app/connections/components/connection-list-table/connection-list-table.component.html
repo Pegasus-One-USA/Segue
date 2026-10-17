@@ -1,0 +1,84 @@
+<div class="table-wrapper">
+  <table mat-table [dataSource]="rows()" class="data-table">
+
+    @for (col of columns(); track col.id) {
+      <ng-container [matColumnDef]="col.id">
+        <th mat-header-cell *matHeaderCellDef [class.col-sortable]="!!col.sortKey" (click)="onHeaderClick(col)">
+          {{ col.header }}
+          @if (col.sortKey; as key) {
+            <span class="sort-ico" [class.sort-ico--active]="sort().key === key">
+              {{ sort().key === key && sort().dir === 'desc' ? '↓' : '↑' }}
+            </span>
+          }
+        </th>
+        <td mat-cell *matCellDef="let row">
+          @switch (col.id) {
+            @case ('name') {
+              <div class="cell-name"><span class="cell-primary">{{ row.name }}</span></div>
+            }
+            @case ('type') {
+              <span class="type-badge">{{ row.typeLabel }}</span>
+            }
+            @case ('address') {
+              <span class="cell-url" [matTooltip]="row.address ?? ''">{{ text(row, col) }}</span>
+            }
+            @case ('status') {
+              @if (row.isEnabled === null) {
+                <span class="cell-muted">—</span>
+              } @else {
+                <span class="badge" [class.badge-active]="row.isEnabled" [class.badge-inactive]="!row.isEnabled">
+                  {{ row.isEnabled ? statusLabels().on : statusLabels().off }}
+                </span>
+              }
+            }
+            @case ('actionOn') {
+              <span class="cell-muted">{{ (row.actionOn | date:'MMM d, h:mm a') ?? '—' }}</span>
+            }
+            @default {
+              <span class="cell-muted">{{ text(row, col) }}</span>
+            }
+          }
+        </td>
+      </ng-container>
+    }
+
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef class="col-actions"></th>
+      <td mat-cell *matCellDef="let row" class="col-actions">
+        <div class="actions-cell">
+          @let actions = actionsFor()(row);
+          @if (actions.length > 0) {
+            <button mat-icon-button class="btn-more" matTooltip="More actions" [matMenuTriggerFor]="rowMenu"
+                    [attr.data-testid]="testIdPrefix() + '-row-menu'">
+              <mat-icon>more_vert</mat-icon>
+            </button>
+            <mat-menu #rowMenu="matMenu" class="app-kebab-menu">
+              @for (a of actions; track a.id) {
+                <button mat-menu-item [disabled]="a.disabled" [class.menu-item-danger]="a.danger"
+                        [attr.data-testid]="testIdPrefix() + '-row-' + a.id" (click)="action.emit({ row, id: a.id })">
+                  <mat-icon>{{ a.icon }}</mat-icon>
+                  {{ a.label }}
+                </button>
+              }
+            </mat-menu>
+          }
+        </div>
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="displayedColumns()"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns()" class="data-row"
+        [attr.data-testid]="testIdPrefix() + '-row'" [attr.data-row-name]="row.name" [attr.data-row-kind]="row.kind"></tr>
+
+  </table>
+</div>
+
+@if (total() === 0) {
+  <div class="empty-state">
+    <div class="empty-state__icon-wrap">
+      <mat-icon>cable</mat-icon>
+    </div>
+    <h3 class="empty-state__title">{{ emptyTitle() }}</h3>
+    <p class="empty-state__sub">{{ emptyHint() }}</p>
+  </div>
+}

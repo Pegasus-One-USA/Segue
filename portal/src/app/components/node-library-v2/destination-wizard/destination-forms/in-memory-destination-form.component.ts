@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { SimpleStubFormEngine } from './simple-stub-form.helper';
 import { WizardDestinationFormApi } from './destination-form-api';
 
@@ -17,6 +17,7 @@ export class InMemoryDestinationFormComponent implements WizardDestinationFormAp
   readonly extraFields = this.engine.extraFields;
 
   isValid(): boolean { return this.engine.isValid(); }
+  nameControl(): FormControl<string | null> { return this.engine.nameControl(); }
   getRawValue(): Record<string, unknown> { return this.engine.getRawValue(); }
   getFullConfig(): Record<string, string> { return this.engine.getFullConfig(); }
   getMetadata() { return this.engine.getMetadata(); }

@@ -14,7 +14,7 @@ import { EHR_VENDOR_TO_SOURCE_FORM_KEY } from './source-form.registry';
 export function sourceFormKeyForNode(node: CanvasNode): string {
   if (isGenericFhirNode(node)) return 'generic-fhir';
   if (isHl7v2Node(node)) return 'hl7v2';
-  if (isTabularNode(node)) return 'tabular';
+  if (isTabularNode(node)) return node.fields['tab_kind'] === 'csv' ? 'tabular-csv' : 'tabular-sql';
   const connector = isSourceNode(node) ? node.fields['Connector'] : undefined;
   const mapped = connector ? EHR_VENDOR_TO_SOURCE_FORM_KEY[connector] : undefined;
   return mapped ?? 'epic';

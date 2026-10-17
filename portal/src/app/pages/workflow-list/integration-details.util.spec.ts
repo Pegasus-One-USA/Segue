@@ -316,6 +316,42 @@ describe('buildIntegrationDetails', () => {
       ['EHR Launch', { action: 'Launch', applicationType: 'EhrLaunch' }],
     ];
 
+    // EHR Launch's correlation line has always pointed at "correlationId from validate-run" while its own steps
+    // never mentioned the call. The reference client (Demo_TestApp's backend mint) does call it — server-side,
+    // before minting the context, and ONLY on the inbound leg carrying iss: validating the return leg too mints a
+    // second id and strands an orphaned Execution History row per launch.
+    it('documents validate-run on EHR Launch, gated to the inbound leg', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch');
+      const values = valuesOf(details);
+      const text = values + '\n' + hintsOf(details);
+
+      expect(values).toContain('/validate-run');
+      expect(values.indexOf('/validate-run')).toBeLessThan(values.indexOf('/public-launch-context'));
+      expect(text).toContain('iss and launch');
+      expect(text).toContain('isValid');
+    });
+
+    // userIdentity is what the EHR access is permanently tied to, and the mint endpoint reads it — but the panel
+    // only ever mentioned it in the framed-page note, never in the call that takes it.
+    it('shows userIdentity on the EHR Launch mint call', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch');
+
+      expect(valuesOf(details)).toContain('public-launch-context?callerId={yourAppUrl}&userIdentity={accountId}');
+    });
+
+    // context_mismatch means the sign-in was rejected and nothing was saved — a different branch from
+    // workflow_failed, which the panel previously presented as the only failure marker on this audience.
+    it('documents context_mismatch on EHR Launch, not just workflow_failed', () => {
+      const details = buildIntegrationDetails(
+        row({ action: 'Launch', applicationType: 'EhrLaunch' }), ORIGIN, 'EHR Launch');
+      const text = valuesOf(details) + '\n' + hintsOf(details);
+
+      expect(text).toContain('launchError=context_mismatch');
+      expect(text).toContain('replaceState');
+    });
+
     // Each value gets its own Copy button and the template tracks by label, so duplicates would both break
     // rendering and hand the partner an unusable copy.
     it('gives every value a unique, individually copyable label', () => {

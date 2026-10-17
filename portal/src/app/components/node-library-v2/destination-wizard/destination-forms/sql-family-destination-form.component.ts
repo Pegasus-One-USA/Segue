@@ -1,5 +1,5 @@
 import { Component, inject, input, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DestinationSchemaService, DestinationTable, DestinationProbeRequest } from '../../../../services/destination-schema.service';
 import { buildConnectionMetadata, buildSqlConnectionString } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
@@ -88,6 +88,11 @@ export class SqlFamilyDestinationFormComponent implements WizardDestinationFormA
       case 'azuresql': return 'AzureSql';
       default: return 'SqlServer';
     }
+  }
+
+  /** The destination's name. The wizard hides it on Step 1 (only the connection is chosen there) and shows it on Review. */
+  nameControl(): FormControl<string | null> {
+    return this.sqlForm.controls.name;
   }
 
   isValid(): boolean {

@@ -14,6 +14,7 @@ using FHIRBridge.Application.DTOs;
 using FHIRBridge.Application.Mappings;
 using FHIRBridge.Application.Security;
 using FHIRBridge.Application.Services;
+using FHIRBridge.Application.Services.Workflows;
 using FHIRBridge.Domain.Enums;
 using FHIRBridge.Domain.ValueObjects;
 using FHIRBridge.Infrastructure.Security;
@@ -66,6 +67,14 @@ public static class WorkflowEndpoints
             fieldErrors = (IReadOnlyDictionary<string, string[]>?)new Dictionary<string, string[]> { [field] = [message] },
         });
 
+    // See WorkflowResourceTypeSubsetRule. Null when every destination writes only what its source(s) read.
+    private static string? CheckDestinationResourceTypesAgainstSources(
+        IReadOnlyCollection<WorkflowNodeRequest>? nodes, IReadOnlyCollection<WorkflowEdgeRequest>? edges) =>
+        WorkflowResourceTypeSubsetRule.Check(
+            (nodes ?? []).Select(node => new WorkflowResourceTypeSubsetRule.Node(
+                node.Id, node.NodeType, node.Category, node.DisplayName, node.ConfigurationJson)).ToList(),
+            (edges ?? []).Select(edge => new WorkflowResourceTypeSubsetRule.Edge(edge.FromNodeId, edge.ToNodeId)).ToList());
+
     public static IEndpointRouteBuilder MapWorkflowEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints
@@ -87,6 +96,13 @@ public static class WorkflowEndpoints
             // License workflow-quota enforcement lives centrally in LicenseEnforcementSaveChangesInterceptor,
             // which distinguishes this genuine create from an edit at the actual persistence choke point
             // (SqlWorkflowDefinitionStore.SaveAsync) rather than here.
+            // Same save-time rule as /workflows/build and PUT: a destination may only write what its source reads.
+            var resourceTypeSubsetError = CheckDestinationResourceTypesAgainstSources(request.Nodes, request.Edges);
+            if (resourceTypeSubsetError is not null)
+            {
+                return ValidationBadRequest(resourceTypeSubsetError);
+            }
+
             var workflow = BuildWorkflow(Guid.NewGuid(), request);
             if (!await CanSaveEhrWriteBackNodesAsync(authorizationService, httpContext.User, request.Nodes, existing: null)
                 || !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
@@ -162,6 +178,15 @@ public static class WorkflowEndpoints
             if (parentReferenceError is not null)
             {
                 return ValidationBadRequest(parentReferenceError);
+            }
+
+            // A destination may only write what its source reads: the source node declares its resource types,
+            // destinations choose from them. Checked on save only (not in WorkflowGraphValidator, which also runs at
+            // run time), so a workflow saved before sources declared their types still runs unchanged.
+            var resourceTypeSubsetError = CheckDestinationResourceTypesAgainstSources(request.Nodes, request.Edges);
+            if (resourceTypeSubsetError is not null)
+            {
+                return ValidationBadRequest(resourceTypeSubsetError);
             }
 
             // Destinations, Sources, Mappings, and the workflow-definition save below used to each commit
@@ -292,9 +317,50 @@ public static class WorkflowEndpoints
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
                 }
 
-                var source = spec.ExistingId is { } existingSourceId
-                    ? await configurationService.UpdateSourceConnectionAsync(existingSourceId, spec.Source, cancellationToken)
-                    : await configurationService.AddSourceConnectionAsync(spec.Source, cancellationToken);
+                // A source node only reads, so its save never decides what the connection may write: Access, the
+                // vendor write-API activation and the department are dropped (null: Read on create, the saved value
+                // on update). An older canvas node still carrying Access=Read must not downgrade a connection that
+                // Destination Connections has since made able to write, nor clear its activation.
+                var sourceRequest = spec.Source with { Access = null, VendorWriteApisActivated = null, DepartmentId = null };
+                SourceConnectionDto source;
+                if (spec.ExistingId is { } savedSourceId
+                    && await configurationService.GetSourceConnectionByIdAsync(savedSourceId, cancellationToken) is { } savedSource)
+                {
+                    // As in ConfigurationsController.UpdateSourceConnection: the saved vendor's right too.
+                    if (savedSource.SourceSystemType != spec.Source.SourceSystemType
+                        && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, savedSource.SourceSystemType, PermissionActionCode.Edit))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+
+                    // The access, activation and department were dropped above, but a source node can still repoint a
+                    // Read & Write connection (vendor, base URL, token endpoint, credentials), which decides where its
+                    // live writes and their PHI go: as in ConfigurationsController, that needs the EHR Write-Back edit
+                    // right as well.
+                    if (savedSource.Access.AllowsRead()
+                        && SourceConnectionWriteSide.UpdateChangesWriteSide(savedSource, sourceRequest)
+                        && !await ControllerAuthorizationExtensions.HasPermissionAsync(
+                            authorizationService, httpContext.User, DestinationType.EhrWriteBack, PermissionActionCode.Edit))
+                    {
+                        return Results.StatusCode(StatusCodes.Status403Forbidden);
+                    }
+
+                    // A write-only connection is an EHR write connection, listed under Destination Connections, and a
+                    // source form must not rewrite it. A node bound to one before source forms lost their Access
+                    // setting keeps its binding untouched, so the rest of the workflow still saves; the run refuses
+                    // to read through it (SourceNodeExecutors) until the node is pointed at a readable connection.
+                    source = savedSource.Access.AllowsRead()
+                        ? await configurationService.UpdateSourceConnectionAsync(savedSourceId, sourceRequest, cancellationToken)
+                        : savedSource;
+                }
+                else
+                {
+                    source = spec.ExistingId is { } existingSourceId
+                        ? await configurationService.UpdateSourceConnectionAsync(existingSourceId, sourceRequest, cancellationToken)
+                        : await configurationService.AddSourceConnectionAsync(sourceRequest, cancellationToken);
+                }
+
                 sourceIds[spec.NodeId] = source.Id;
                 nodes[spec.NodeId] = WithConfiguration(node, config => config["sourceConnectionId"] = source.Id.ToString());
             }
@@ -712,7 +778,8 @@ public static class WorkflowEndpoints
                     workflow.WorkflowNumber,
                     workflowDestinationTypes.ToArray(),
                     workflowResourceTypes.ToArray(),
-                    lastRun?.Status.ToString()));
+                    lastRun?.Status.ToString(),
+                    LiveEhrWriteTargets.Of(workflow.Nodes)));
             }
 
             // Resolve each summary's CreatedBy/ModifiedBy (a stored Users.Id GUID, or an older/pre-conversion
@@ -872,6 +939,18 @@ public static class WorkflowEndpoints
 
             return Results.Ok(usedDestinationIds);
         }).RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
+
+        // Destination Connections page (and Source Connections, for a Read & Write connection): which source-connection
+        // ids an EHR write-back writes through right now — the dest_sourceConnectionId of any workflow Destination node,
+        // plus that of any saved EHR Write-Back destination. Used to lock Delete on a write connection still in use; the
+        // DELETE (SourceConnectionsController.Delete) checks the same thing itself, so a stale list or a direct call
+        // cannot remove one either.
+        group.MapGet("/workflows/ehr-write-connection-usage", async (
+            IWorkflowDefinitionStore store,
+            IConfigurationRepository configurationRepository,
+            CancellationToken cancellationToken) =>
+            Results.Ok(await FindEhrWriteConnectionUsageAsync(store, configurationRepository, cancellationToken)))
+            .RequireAuthorization(AuthorizationPolicies.UnifiedAdmin);
 
         // Mapping Profiles master screen: which mapping profile ids are referenced right now, either by a workflow
         // node's config (mappingProfileId / the per-resource mappingProfileIds map — see BuildWorkflow above) or by
@@ -1244,6 +1323,13 @@ public static class WorkflowEndpoints
                 }
             }
 
+            // Same save-time rule as /workflows/build: a destination may only write what its source reads.
+            var resourceTypeSubsetError = CheckDestinationResourceTypesAgainstSources(request.Nodes, request.Edges);
+            if (resourceTypeSubsetError is not null)
+            {
+                return ValidationBadRequest(resourceTypeSubsetError);
+            }
+
             var workflow = BuildWorkflow(workflowId, request, (existing?.Version ?? 0) + 1);
             if (!await CanSaveEhrWriteBackNodesAsync(authorizationService, httpContext.User, request.Nodes, existing)
                 || !await CanArmEhrWriteBackScheduleAsync(authorizationService, httpContext.User, workflow))
@@ -1336,6 +1422,15 @@ public static class WorkflowEndpoints
                     // connection of this vendor" rule. Resolved from the original connection's own vendor,
                     // since the copy request itself carries no vendor information.
                     var originalSource = await configurationRepository.GetSourceConnectionAsync(sourceConnectionId, cancellationToken);
+
+                    // A write-only connection is an EHR write connection, not a source: cloning it would mint a
+                    // readable connection carrying the write app's credentials. As on /workflows/build, the copied
+                    // node keeps its binding to the original and the run refuses to read through it.
+                    if (originalSource is not null && !originalSource.Access.AllowsRead())
+                    {
+                        continue;
+                    }
+
                     if (originalSource is not null
                         && !await ControllerAuthorizationExtensions.HasPermissionAsync(
                             authorizationService, httpContext.User, originalSource.SourceSystemType, PermissionActionCode.Create))
@@ -2842,17 +2937,34 @@ public static class WorkflowEndpoints
                 return Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"));
             }
 
-            // Not live in this process, yet still "Running" on record: a Run-button run is tracked for its whole
-            // execution (sync and async alike), so this one is dead. Its process stopped, or saving its outcome
-            // failed. Nothing will ever finish it, so cancelling closes it rather than refusing.
+            // Not live in this process, yet still "Running" on record. The run's lease says whether another instance
+            // is executing it: if so, the cancel is recorded and that instance stops the run on its next heartbeat
+            // (WorkflowRunLeaseService); if the lease lapsed, nothing will ever finish the run, so cancelling closes it.
             var run = await runStore.GetAsync(runId, cancellationToken);
-            if (run is { Status: WorkflowRunStatus.Running, TriggerType: "Manual", BulkRequestId: null })
+            if (run is { Status: WorkflowRunStatus.Running })
             {
-                run.Cancel(
-                    "Cancelled: this run was no longer executing (the API restarted, or its outcome could not be saved).",
-                    DateTimeOffset.UtcNow);
-                await runStore.SaveAsync(run, cancellationToken);
-                return Results.Ok(new WorkflowRunStatusResponse(runId, run.Status.ToString(), run.CorrelationId));
+                var now = DateTimeOffset.UtcNow;
+
+                // Closed only if its lease is still lapsed when the cancel is written (one conditional update): an
+                // instance that renewed it meanwhile is still executing it, and gets a cancel request instead.
+                const string abandonedReason =
+                    "Cancelled: this run was no longer executing (the process running it stopped, or its outcome could not be saved).";
+                if (run.IsLeaseExpired(now, WorkflowRunLease.LegacyGrace)
+                    && await runStore.CancelAbandonedAsync(runId, now, now - WorkflowRunLease.LegacyGrace, abandonedReason, cancellationToken))
+                {
+                    return Results.Ok(new WorkflowRunStatusResponse(runId, nameof(WorkflowRunStatus.Cancelled), run.CorrelationId));
+                }
+
+                // Only a Run-button run has a cancellation handle (IWorkflowRunTracker) on the instance executing
+                // it; a scheduled or resumed run on the Worker cannot be stopped part-way.
+                if (run is not { TriggerType: "Manual", BulkRequestId: null })
+                {
+                    return Results.Conflict(new { message = "This run is executing on the Worker and cannot be cancelled." });
+                }
+
+                return await runStore.RequestCancellationAsync(runId, now, cancellationToken)
+                    ? Results.Accepted(value: new WorkflowRunStatusResponse(runId, "CancellationRequested"))
+                    : Results.Conflict(new { message = "This run is not currently active and cannot be cancelled." });
             }
 
             return Results.Conflict(new { message = "This run is not currently active and cannot be cancelled." });
@@ -4068,9 +4180,11 @@ public static class WorkflowEndpoints
             // Resets the incremental-sync cursor — the clone has never actually run, so LastSuccessfulSyncUtc
             // carried over from the original would make its first real run think resources up to that point
             // were already fetched by THIS connection, silently skipping them.
-            dto.Retrieval is { } retrieval ? retrieval with { LastSuccessfulSyncUtcByResourceType = null } : null,
-            // Without this the copy would silently drop to Read and its write-back destinations stop working.
-            dto.Access);
+            dto.Retrieval is { } retrieval ? retrieval with { LastSuccessfulSyncUtcByResourceType = null } : null);
+        // Access (and with it activation and the department) is left out, so the clone is Read: only the copied
+        // source node uses it, and a source only reads. The copied EHR Write-Back nodes keep writing over the
+        // original connection (dest_sourceConnectionId is not repointed), so copying write access would only mint a
+        // second EHR write connection without the ehrwriteback.create right that creating one needs.
 
         var cloned = await configurationService.AddSourceConnectionAsync(createRequest, cancellationToken);
         var result = (cloned.Id, cloned.ApplicationType);
@@ -4727,6 +4841,8 @@ public static class WorkflowEndpoints
     [
         "dest_dryRun", "dest_resources", "dest_createPatientIfMissing", "dest_cloneMode",
         "dest_maxWritesPerRun", "dest_noteDocStatus", "dest_sourceConnectionId", "destinationId",
+        "dest_createHolderEncounter", "dest_targetProviderId", "dest_targetDepartmentId",
+        "dest_testAsVendor", "dest_enabledVariants",
     ];
 
     private static bool IsEhrWriteBackNode(string? nodeType) => WorkflowNodeTypes.IsEhrWriteBack(nodeType);
@@ -4795,6 +4911,35 @@ public static class WorkflowEndpoints
                 authorizationService, user, PermissionGroupCode.Workflow, PermissionActionCode.Run)
             && await ControllerAuthorizationExtensions.HasPermissionAsync(
                 authorizationService, user, DestinationType.EhrWriteBack, PermissionActionCode.Execute);
+    }
+
+    /// <summary>The source-connection ids an EHR write-back writes through: the <c>dest_sourceConnectionId</c> of any
+    /// workflow Destination node and of any saved EHR Write-Back destination.</summary>
+    internal static async Task<IReadOnlyCollection<Guid>> FindEhrWriteConnectionUsageAsync(
+        IWorkflowDefinitionStore store,
+        IConfigurationRepository configurationRepository,
+        CancellationToken cancellationToken)
+    {
+        var workflows = await store.ListAsync(cancellationToken);
+        var usedFromNodes = workflows
+            .SelectMany(workflow => workflow.Nodes.Where(node => node.Category == WorkflowNodeCategory.Destination))
+            .Select(node => TryGetConfigurationGuid(node.ConfigurationJson, "dest_sourceConnectionId", out var connectionId)
+                ? connectionId
+                : (Guid?)null);
+
+        var destinations = await configurationRepository.GetDestinationsAsync(cancellationToken);
+        var usedFromDestinations = destinations
+            .Where(destination => destination.DestinationType == DestinationType.EhrWriteBack)
+            .Select(destination => TryGetConfigurationGuid(destination.ConnectionMetadataJson, "dest_sourceConnectionId", out var connectionId)
+                ? connectionId
+                : (Guid?)null);
+
+        return usedFromNodes
+            .Concat(usedFromDestinations)
+            .Where(connectionId => connectionId is not null && connectionId != Guid.Empty)
+            .Select(connectionId => connectionId!.Value)
+            .Distinct()
+            .ToArray();
     }
 
     private static bool TryGetConfigurationGuid(string? configurationJson, string key, out Guid value)

@@ -15,6 +15,17 @@ export interface EhrWriteCapability {
   /** The product can send this type live: a destination that selects it and is not a dry run sends it. False keeps
    *  it dry-run-only. */
   liveWriteSupported: boolean;
+  /** Live only over a connection whose vendor write APIs are activated (eClinicalWorks contracted APIs, athenaOne).
+   *  Older API builds omit it: treat as false. */
+  requiresVendorActivation?: boolean;
+  /** Filed on an encounter the bridge creates, only when the destination opts in (eCW medical/surgical history). */
+  createsHolderEncounter?: boolean;
+  /** Used only when the destination also enables this variant (dest_enabledVariants), not just the type. */
+  requiresVariantOptIn?: boolean;
+  /** Filed against a patient the writer resolves. Older API builds omit it: treat as true. */
+  requiresPatient?: boolean;
+  /** Needs ids of records in the target EHR, so it takes a CSV / SQL Table source only. */
+  requiresTargetReferences?: boolean;
 }
 
 /** EhrWriteCapabilitiesDto. */
@@ -22,7 +33,12 @@ export interface EhrWriteCapabilities {
   vendor: string | null;
   supportsPatientMatch: boolean;
   cloneModeEnabled: boolean;
+  /** The EhrWriteBack:DryRunEnabled system setting: the destination form offers Dry run only while it is on. Older API
+   *  builds (and a failed call) omit it: treat as false, so Dry run stays hidden (it is off by default, like clone mode). */
+  dryRunEnabled?: boolean;
   capabilities: EhrWriteCapability[];
+  /** For a test-server vendor (Generic FHIR): the vendors a destination can test as. */
+  testableVendors?: string[] | null;
 }
 
 const NONE: EhrWriteCapabilities = { vendor: null, supportsPatientMatch: false, cloneModeEnabled: false, capabilities: [] };
@@ -55,8 +71,15 @@ export class EhrWriteCapabilitiesService {
     return stream;
   }
 
-  /** Resource types the vendor can be written to, in the order the API lists them. */
+  /** Forgets every cached answer, so the next call reads the system settings it carries (Dry run, clone mode) afresh.
+   *  Called after a System Settings save, so a changed setting shows in the destination form without a reload. */
+  clear(): void {
+    this.cache.clear();
+  }
+
+  /** Resource types the vendor can be written to, in the order the API lists them. A vendor that files one type
+   *  through several APIs (eCW Condition) lists it once. */
   writableResourceTypes(vendor: string | null | undefined): Observable<string[]> {
-    return this.forVendor(vendor).pipe(map(result => result.capabilities.map(c => c.resourceType)));
+    return this.forVendor(vendor).pipe(map(result => [...new Set(result.capabilities.map(c => c.resourceType))]));
   }
 }

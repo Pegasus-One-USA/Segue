@@ -24,7 +24,8 @@ public sealed record EhrWriteSummary(
     int RecordsReceived,
     string ScopeStatus,
     IReadOnlyList<EhrWriteResourceCounts> Resources,
-    bool CloneMode = false);
+    bool CloneMode = false,
+    bool TestRun = false);
 
 public sealed record EhrWriteResourceCounts(
     string ResourceType,

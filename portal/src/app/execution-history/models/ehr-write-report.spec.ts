@@ -95,13 +95,24 @@ describe('ehrWriteReasonLabel', () => {
   it('names dry-run-only types, and still reads the retired release reason on older runs', () => {
     expect(ehrWriteReasonLabel('live-write-not-supported')).toBe('This EHR accepts dry runs only for this type');
     expect(ehrWriteReasonLabel('live-write-not-released')).toBe('Type was not released for live writes (older run)');
-    expect(ehrWriteReasonLabel('patient-not-selected')).toBe('Patient not selected in Data groups, so the patient cannot be created');
+    expect(ehrWriteReasonLabel('patient-not-selected')).toBe('Patient not selected under Resource types, so the patient cannot be created');
   });
 
   it('names why a linked note could not be read from the source', () => {
     expect(ehrWriteReasonLabel('note-content-fetch-failed')).toBe('Note content could not be read from the source (retried next run)');
     expect(ehrWriteReasonLabel('note-content-url-not-on-source')).toBe('Note content links outside the source system, so it was not fetched');
     expect(ehrWriteReasonLabel('ccda-document')).toBe('Summary of care document (C-CDA), not a note: not sent');
+  });
+
+  it('names why an eClinicalWorks or athena record waits', () => {
+    expect(ehrWriteReasonLabel('vendor-activation-required'))
+      .toBe("Dry run: the EHR vendor's write APIs are not marked as activated on this connection");
+    expect(ehrWriteReasonLabel('patient-awaiting-mpi'))
+      .toBe('Patient not found by identifier; waiting for the master patient index to match them');
+    expect(ehrWriteReasonLabel('holder-encounter-not-enabled'))
+      .toBe('Needs a telephone encounter, which this destination does not create (tick the history kind under Resource types to send)');
+    expect(ehrWriteReasonLabel('missing-snomed-code')).toBe('No SNOMED code (athena files problems by SNOMED only)');
+    expect(ehrWriteReasonLabel('not-completed')).toBe('Not completed');
   });
 
   it('falls back to the code in words for a code it does not know', () => {
@@ -126,5 +137,29 @@ describe('ehrWriteReportToText', () => {
     expect(text).toContain('Would write: 1');
     expect(text).toContain('Condition: 35 received, 35 skipped');
     expect(text).toContain('31 × Not a problem-list entry (the EHR accepts problems only) (not-a-problem-list-item)');
+  });
+});
+
+describe('a test run on a Generic FHIR server', () => {
+  const detail = JSON.stringify({
+    EhrWrite: {
+      DryRun: false, CloneMode: false, TestRun: true, TargetVendor: 'Athenahealth', RecordsReceived: 2, ScopeStatus: 'test-server',
+      Resources: [{ ResourceType: 'Observation', Received: 2, WouldWrite: 0, Written: 1, AlreadyWritten: 0, Skipped: 1, Rejected: 0, Unknown: 0,
+        Reasons: { 'variant-not-enabled': 1 } }],
+    },
+  });
+
+  it('is read as a test run whose vendor access is not checked', () => {
+    const report = parseEhrWriteReport(detail)!;
+
+    expect(report.TestRun).toBeTrue();
+    expect(ehrWriteScopeLabel(report.ScopeStatus).ok).toBeTrue();
+    expect(ehrWriteReportToText(report)).toContain('Test run on a FHIR test server, shaped as Athenahealth');
+    expect(ehrWriteReasonLabel('variant-not-enabled')).toContain('has not ticked');
+    expect(ehrWriteReasonLabel('target-references-unmappable')).toContain('CSV / SQL Table');
+  });
+
+  it('is not a test run when an older report says nothing', () => {
+    expect(parseEhrWriteReport(DRY_RUN_DETAIL)!.TestRun).toBeFalse();
   });
 });

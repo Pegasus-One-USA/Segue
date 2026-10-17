@@ -1,0 +1,5 @@
+:host {
+  display: inline-flex;
+  /* A badge on the name cell's column; never stretched to the cell's width. */
+  align-self: flex-start;
+}

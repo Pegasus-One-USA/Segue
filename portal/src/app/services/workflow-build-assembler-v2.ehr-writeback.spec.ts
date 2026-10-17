@@ -55,6 +55,21 @@ describe('WorkflowBuildAssemblerServiceV2 — EHR write-back destination', () =>
     expect(metadata['dest_resources']).toBeUndefined();
   });
 
+  it('carries the eClinicalWorks and athena settings', () => {
+    const request = buildDestination({
+      dest_name: 'athena write-back',
+      dest_sourceConnectionId: '11111111-1111-1111-1111-111111111111',
+      dest_createHolderEncounter: 'true',
+      dest_targetProviderId: '71',
+      dest_targetDepartmentId: '150',
+    });
+
+    const metadata = JSON.parse(request.connectionMetadataJson) as Record<string, string>;
+    expect(metadata['dest_createHolderEncounter']).toBe('true');
+    expect(metadata['dest_targetProviderId']).toBe('71');
+    expect(metadata['dest_targetDepartmentId']).toBe('150');
+  });
+
   it('recognises the node by its transform id as well as its node type', () => {
     const request = buildDestination({ __transformId: 'dest-ehr-writeback', dest_name: 'x' }, 'SomethingElse');
 
@@ -79,6 +94,18 @@ describe('EhrWriteCapabilitiesService', () => {
     http.expectOne((req) => req.url.includes('/ehr-write-capabilities?vendor=Epic')).flush('boom', { status: 500, statusText: 'Server Error' });
 
     expect(result).toEqual([]);
+  });
+
+  it('lists a type once even when the vendor files it through several APIs', () => {
+    let result: string[] | undefined;
+    service.writableResourceTypes('Healow').subscribe((types) => (result = types));
+
+    http.expectOne((req) => req.url.includes('vendor=Healow')).flush({
+      vendor: 'Healow', supportsPatientMatch: false, cloneModeEnabled: false,
+      capabilities: ['Condition', 'Condition', 'Observation', 'Condition'].map((resourceType) => ({ resourceType })),
+    });
+
+    expect(result).toEqual(['Condition', 'Observation']);
   });
 
   it('asks nothing for a missing vendor', () => {

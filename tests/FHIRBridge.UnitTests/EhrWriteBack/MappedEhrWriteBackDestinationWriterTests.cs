@@ -120,6 +120,31 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
         allergy.Reasons.Should().NotContainKey("live-write-not-supported");
     }
 
+    // PR #244 review, round 2: once this process cannot vouch for the run's lease, another instance may close the run
+    // and the user run it again, so no create may leave from here.
+    [Fact]
+    public async Task A_run_whose_lease_this_process_lost_sends_no_create()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = new FakeEhrWriteChannel(dryRun: false);
+        var runId = Guid.NewGuid();
+        var active = new FHIRBridge.Runtime.Application.Workflows.ActiveWorkflowRuns();
+        using var held = active.Hold(runId);
+        active.Revoke(runId);
+        var writer = new MappedEhrWriteBackDestinationWriter(
+            new EhrWriteProfileRegistry([new EpicAllergyIntoleranceWriteProfile(), new EpicPatientWriteProfile()]),
+            ledger,
+            new FixedCloneModePolicy(false),
+            NullLogger<MappedEhrWriteBackDestinationWriter>.Instance,
+            activeRuns: active);
+
+        var act = () => writer.WriteAsync(
+            Destination(), Profile(), [Record(SourcePatient), Record(Allergy)], Context(channel) with { PipelineRunId = runId }, CancellationToken.None);
+
+        await act.Should().ThrowAsync<FHIRBridge.Runtime.Application.Workflows.WorkflowRunLeaseLostException>();
+        channel.Creates.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Dry_run_sends_nothing_even_for_a_live_capable_type()
     {
@@ -647,6 +672,61 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
             .Should().Contain(new KeyValuePair<string, int>("patient-not-created", 2));
     }
 
+    // PR #244 review: a patient create the cap stopped is remembered for the run, so its other records neither read the
+    // ledger again nor add another Patient skip to the report.
+    [Fact]
+    public async Task A_patient_create_stopped_by_the_cap_is_counted_once_for_all_its_records()
+    {
+        var ledger = new CountingLedger();
+        var writer = new MappedEhrWriteBackDestinationWriter(
+            new EhrWriteProfileRegistry([new EpicAllergyIntoleranceWriteProfile(), new EpicPatientWriteProfile()]),
+            ledger,
+            new FixedCloneModePolicy(false),
+            NullLogger<MappedEhrWriteBackDestinationWriter>.Instance);
+        var channel = new FakeEhrWriteChannel(dryRun: false, maxWrites: 0, createPatient: true) { MatchResult = NoMatch };
+        var allergies = new[] { "a1", "a2", "a3" }.Select(id => Record(Allergy.Replace("\"id\":\"a1\"", $"\"id\":\"{id}\""))).ToList();
+
+        var result = await writer.WriteAsync(Destination(), Profile(), allergies, Context(channel), CancellationToken.None);
+
+        channel.Creates.Should().BeEmpty();
+        var patient = result.EhrWrite!.Resources.Single(r => r.ResourceType == "Patient");
+        patient.Skipped.Should().Be(1);
+        patient.Reasons.Should().Contain(new KeyValuePair<string, int>("write-cap-reached", 1));
+        ledger.PatientLookups.Should().Be(2, because: "one when the patient is resolved, one when its create is planned, none per later record");
+        result.EhrWrite.Resources.Single(r => r.ResourceType == "AllergyIntolerance").Reasons
+            .Should().Contain(new KeyValuePair<string, int>("write-cap-reached", 3));
+    }
+
+    private sealed class CountingLedger : FHIRBridge.Application.Abstractions.Persistence.IEhrWriteLedgerRepository
+    {
+        private readonly InMemoryEhrWriteLedgerRepository _inner = new();
+
+        public int PatientLookups { get; private set; }
+
+        public Task<IReadOnlyDictionary<string, EhrWriteLedgerEntry>> FindAsync(
+            string targetKey, string resourceType, IReadOnlyCollection<string> sourceKeys, CancellationToken cancellationToken)
+        {
+            if (resourceType == "Patient")
+            {
+                PatientLookups++;
+            }
+
+            return _inner.FindAsync(targetKey, resourceType, sourceKeys, cancellationToken);
+        }
+
+        public Task<bool> TryAddAsync(EhrWriteLedgerEntry entry, CancellationToken cancellationToken) => _inner.TryAddAsync(entry, cancellationToken);
+
+        public Task<bool> TryClaimAsync(EhrWriteLedgerEntry entry, CancellationToken cancellationToken) => _inner.TryClaimAsync(entry, cancellationToken);
+
+        public Task SaveChangesAsync(CancellationToken cancellationToken) => _inner.SaveChangesAsync(cancellationToken);
+
+        public Task<(IReadOnlyList<EhrWriteLedgerEntry> Items, int TotalCount)> ListNeedingReviewAsync(
+            string? resourceType, DateTime utcNow, int skip, int take, CancellationToken cancellationToken) =>
+            _inner.ListNeedingReviewAsync(resourceType, utcNow, skip, take, cancellationToken);
+
+        public Task<EhrWriteLedgerEntry?> GetAsync(Guid id, CancellationToken cancellationToken) => _inner.GetAsync(id, cancellationToken);
+    }
+
     [Fact]
     public async Task Records_are_skipped_with_a_clear_reason_when_patient_is_not_selected()
     {
@@ -725,6 +805,56 @@ public sealed class MappedEhrWriteBackDestinationWriterTests
         EhrClonePatient.Build(source, "p1").ToJsonString().Should().Be(EhrClonePatient.Build(source, "p1").ToJsonString());
         EhrClonePatient.Build(source, "p1")["identifier"]!.ToJsonString()
             .Should().NotBe(EhrClonePatient.Build(source, "p2")["identifier"]!.ToJsonString());
+    }
+
+    // ---- PR #240 review: the ledger first, and a cancellation before the send is not an unknown outcome ----
+
+    [Fact]
+    public async Task A_record_written_before_is_reported_without_reading_the_source_or_searching_the_ehr_again()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = NoteChannel();
+        await CreateWriter(ledger).WriteAsync(
+            Destination(), Profile(), [Record(LinkedNote("Binary/b1"))], ContextWithBinary(channel, _ => HtmlBinary), CancellationToken.None);
+        var matchesAfterFirstRun = channel.MatchCalls;
+
+        // The source cannot serve the Binary any more: before, the rerun reported the note as note-content-fetch-failed.
+        var reads = new List<string>();
+        var rerun = await CreateWriter(ledger).WriteAsync(
+            Destination(), Profile(), [Record(LinkedNote("Binary/b1"))], ContextWithBinary(channel, _ => null, reads), CancellationToken.None);
+
+        var note = rerun.EhrWrite!.Resources.Single();
+        note.AlreadyWritten.Should().Be(1);
+        note.Reasons.Should().ContainKey("already-written").And.NotContainKey("note-content-fetch-failed");
+        reads.Should().BeEmpty(because: "neither the note text nor the patient is read for a record already written");
+        channel.MatchCalls.Should().Be(matchesAfterFirstRun);
+        channel.Creates.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_create_cancelled_before_it_was_sent_is_retried_next_run_not_left_for_review()
+    {
+        var ledger = new InMemoryEhrWriteLedgerRepository();
+        var channel = new FakeEhrWriteChannel(dryRun: false)
+        {
+            CreateResult = new EhrCreateOutcome(
+                EhrCreateKind.Rejected, null, null, [new EhrOutcomeIssue("error", "transient", EhrWriteOutcomeCodes.CancelledBeforeSend, null)]),
+        };
+
+        var cancelled = () => CreateWriter(ledger).WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        await cancelled.Should().ThrowAsync<OperationCanceledException>();
+        var row = (await ledger.ListNeedingReviewAsync(null, DateTime.UtcNow, 0, 10, CancellationToken.None)).Items.Single();
+        row.State.Should().Be(EhrWriteLedgerState.Rejected, because: "nothing reached the EHR, so it is not an unknown outcome");
+        row.HttpStatus.Should().BeNull(because: "a refusal with no HTTP status is retried as is");
+        row.OutcomeCodes.Should().Be(EhrWriteOutcomeCodes.CancelledBeforeSend);
+
+        channel.CreateResult = new EhrCreateOutcome(EhrCreateKind.Created, 201, "eAllergy", []);
+        var next = await CreateWriter(ledger).WriteAsync(
+            Destination(), Profile(), [Record(Allergy)], Context(channel), CancellationToken.None);
+
+        next.EhrWrite!.Resources.Single().Written.Should().Be(1);
     }
 
     private sealed class FakeEhrWriteChannel : IEhrWriteChannel

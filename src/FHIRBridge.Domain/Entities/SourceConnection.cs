@@ -33,6 +33,8 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
         IsEnabled = true;
     }
 
+    public const int MaxDepartmentIdLength = 64;
+
     public string Name { get; private set; } = default!;
     string? IHasAuditDisplayName.AuditDisplayName => Name;
     public SourceSystemType SourceSystemType { get; private set; }
@@ -61,6 +63,23 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
     /// <see cref="SetAccess"/>.
     /// </summary>
     public SourceConnectionAccess Access { get; private set; } = SourceConnectionAccess.Read;
+
+    /// <summary>
+    /// The practice behind this connection has the vendor's non-public write APIs turned on: eClinicalWorks' contracted
+    /// Create APIs (activated per practice) or athenaOne's proprietary chart APIs. Write-back types that need them
+    /// (<c>EhrWriteCapability.RequiresVendorActivation</c>) stay dry runs until this is set. Meaningful only with Write
+    /// access; changed only through <see cref="SetVendorWriteApisActivated"/>, for the same reason as
+    /// <see cref="Access"/>.
+    /// </summary>
+    public bool VendorWriteApisActivated { get; private set; }
+
+    /// <summary>
+    /// athenaOne: the department this write connection registers new patients in and files every write under (existing
+    /// patients too, in place of their own primary department), unless the EHR Write-Back node names its own
+    /// (<c>dest_targetDepartmentId</c>, which wins). Empty: existing patients' writes go to their own department. Meaningful only with Write
+    /// access; changed only through <see cref="SetDepartmentId"/>, for the same reason as <see cref="Access"/>.
+    /// </summary>
+    public string? DepartmentId { get; private set; }
 
     public void Update(
         string name,
@@ -93,6 +112,50 @@ public sealed class SourceConnection : AuditableChildEntity<Guid>, IHasAuditDisp
         }
 
         Access = access;
+        if (!access.AllowsWrite())
+        {
+            // Activation only means something for a connection that writes; dropping write access drops it too, so
+            // a later switch back to Write starts from dry run. The department is a write setting too.
+            VendorWriteApisActivated = false;
+            DepartmentId = null;
+        }
+    }
+
+    public void SetVendorWriteApisActivated(bool activated)
+    {
+        if (activated && !Access.AllowsWrite())
+        {
+            throw new InvalidOperationException(
+                "Vendor write APIs can only be marked as activated on a connection with Write or Read & Write access.");
+        }
+
+        VendorWriteApisActivated = activated;
+    }
+
+    /// <summary>Sets or (null / blank) clears <see cref="DepartmentId"/>. An EHR-side id: at most
+    /// <see cref="MaxDepartmentIdLength"/> characters, no spaces.</summary>
+    public void SetDepartmentId(string? departmentId)
+    {
+        var normalized = string.IsNullOrWhiteSpace(departmentId) ? null : departmentId.Trim();
+        if (normalized is null)
+        {
+            DepartmentId = null;
+            return;
+        }
+
+        if (!Access.AllowsWrite())
+        {
+            throw new InvalidOperationException(
+                "A department can only be set on a connection with Write or Read & Write access.");
+        }
+
+        if (normalized.Length > MaxDepartmentIdLength || normalized.Any(char.IsWhiteSpace))
+        {
+            throw new InvalidOperationException(
+                $"Department ID must be the EHR's id as shown in the EHR: up to {MaxDepartmentIdLength} characters, no spaces.");
+        }
+
+        DepartmentId = normalized;
     }
 
     /// <summary>Advances the incremental-sync cursor for the given resource types after a workflow run completes

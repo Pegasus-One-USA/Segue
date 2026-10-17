@@ -1,5 +1,5 @@
 import { Component, effect, inject, input, signal, untracked } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
 
@@ -298,6 +298,11 @@ export class ApiEndpointDestinationFormComponent implements WizardDestinationFor
       case 'clientCertificate': return 'Client certificate (base64 PFX, optionally "|password")';
       default: return 'Credential';
     }
+  }
+
+  /** The destination's name. The wizard hides it on Step 1 (only the connection is chosen there) and shows it on Review. */
+  nameControl(): FormControl<string | null> {
+    return this.apiForm.controls.name;
   }
 
   isValid(): boolean {

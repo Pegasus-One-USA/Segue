@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { EhrWriteCapabilitiesService } from '../../../services/ehr-write-capabilities.service';
+import { PermissionService } from '../../../auth/services/permission.service';
 import { Observable, catchError, map, of, switchMap } from 'rxjs';
 import { take } from 'rxjs/operators';
 import {
@@ -42,7 +43,7 @@ import { SourceConnectionModel } from '../../../source-connections/models/source
 import { SUPPORTED_RESOURCE_TYPES } from '../../../data/scope-constants.data';
 import { MappingCatalogService } from '../../../services/mapping-catalog.service';
 import { environment } from '../../../../environments/environment';
-import { OAUTH_DEFAULT_URLS } from '../../../core/api-endpoints';
+import { OAUTH_DEFAULT_URLS, absoluteJwksUrl, hostedJwksUrl } from '../../../core/api-endpoints';
 import { UnsavedChangesPromptService } from '../../../core/services/unsaved-changes-prompt.service';
 import { HasUnsavedChanges } from '../../../core/guards/has-unsaved-changes';
 import { SourceConfigFormComponent } from '../config-form/config-form.contract';
@@ -939,6 +940,7 @@ export class EhrVendorSourceFormComponent
   private readonly unsavedChangesPrompt = inject(UnsavedChangesPromptService);
   private readonly catalogSvc = inject(MappingCatalogService);
   private readonly ehrWriteCapabilitiesSvc = inject(EhrWriteCapabilitiesService);
+  private readonly permissions = inject(PermissionService);
   /** Whether this vendor accepts EHR write-back at all (EhrWriteCapabilities, deny-by-default). */
   protected readonly vendorAcceptsWrites = toSignal(
     toObservable(this.vendor).pipe(
@@ -947,6 +949,37 @@ export class EhrVendorSourceFormComponent
     ),
     { initialValue: false },
   );
+
+  /** The vendor writes some types through contracted / proprietary APIs that a practice must have activated. */
+  protected readonly vendorWritesNeedActivation = toSignal(
+    toObservable(this.vendor).pipe(
+      switchMap((vendor) => this.ehrWriteCapabilitiesSvc.forVendor(vendor)),
+      map((result) => result.capabilities.some((c) => c.requiresVendorActivation === true)),
+    ),
+    { initialValue: false },
+  );
+
+  /** Opened from the Destination Connections page for an EHR write connection (WizardService.purpose). Sources only read, so the
+   *  write-only bits (fixed Backend System audience, vendor activation, athena Department ID) show only here, and
+   *  only here does this form emit Access at all. Decided at open time, never toggled within one session. */
+  protected readonly isWritePurpose = computed(() => this.wiz.purpose() === 'write');
+
+  /** The "Vendor write APIs activated" switch, in write purpose for a vendor with activation-gated types. The server
+   *  needs ehrwriteback.edit to turn it on (even on a create), so a create-only role does not get the switch and the
+   *  save leaves it out (sent as null, i.e. off on a create and kept on an edit). */
+  protected readonly showActivationSwitch = computed(
+    () => this.isWritePurpose() && this.vendorWritesNeedActivation() && this.permissions.hasPermission('ehrwriteback.edit'),
+  );
+
+  /** Source Connections editing a connection that also writes (saved Access Write / Read & Write). Its audience is
+   *  shown as fixed text: write-back needs Backend System, and a read-purpose save sends no Access (the server keeps
+   *  the saved one), so a changed audience would only be refused. Write access is managed on the Destination
+   *  Connections page. Decided once in ngOnInit. */
+  protected readonly audienceLockedByWriteAccess = signal(false);
+
+  protected audienceLabel(audience: EpicAudience): string {
+    return EhrVendorSourceFormComponent.AUDIENCE_LABELS[audience] ?? audience;
+  }
 
   /** True only when opened in read-only View mode from the Source Connections page — disables every control and
    *  hides Save. Decided once at open time (see ngOnInit), never toggled live within a single open session. */
@@ -1077,6 +1110,12 @@ export class EhrVendorSourceFormComponent
     // Read / Write / Read & Write (SourceConnectionAccess). Write is offered only for a vendor that accepts EHR
     // write-back over a Backend System connection — see canChooseWriteAccess.
     access: ['Read' as 'Read' | 'Write' | 'ReadWrite', Validators.required],
+    // The practice has the vendor's contracted / proprietary write APIs (eCW, athenaOne) turned on: their write-back
+    // types go live only then. Write purpose only (see isWritePurpose).
+    vendorWriteApisActivated: [false],
+    // athenahealth write connections only — the default department write-backs file into. A write-back destination
+    // node's own Department ID still wins. Same rule as that node field: no whitespace, at most 64 characters.
+    departmentId: ['', [Validators.pattern(/^\S{0,64}$/)]],
     epicBaseUrl: [
       'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4',
       [Validators.required, urlValidator],
@@ -1335,6 +1374,9 @@ export class EhrVendorSourceFormComponent
   protected readonly showPracticeId = computed(
     () => this.vendor() === 'Athenahealth',
   );
+  protected readonly showDepartmentId = computed(
+    () => this.isWritePurpose() && this.vendor() === 'Athenahealth',
+  );
 
   /** Token/Authorization Endpoint watermarks — both fields are normally auto-populated by Discover, so the
    *  placeholder is only ever seen while they're still blank. Athenahealth and eClinicalWorks (Healow) don't
@@ -1494,7 +1536,7 @@ export class EhrVendorSourceFormComponent
   protected readonly liveJwksUrl = computed(() => {
     const id = this.resolvedSourceConnectionId();
     return id
-      ? `${environment.apiBase}/api/v1/source-connections/${id}/.well-known/jwks.json`
+      ? hostedJwksUrl(id)
       : null;
   });
 
@@ -2153,6 +2195,20 @@ export class EhrVendorSourceFormComponent
       this.form.controls.appName.setValue(this.displayVendor());
     }
 
+    // A new EHR write connection (Destination Connections) is always server to server with write-only access —
+    // applied after the per-vendor defaults above (eCW's own default is the Patient audience) and before
+    // prevAudience is captured, so the audience change below never runs clearInapplicableFields.
+    if (this.isWritePurpose() && !this.wiz.isEditing()) {
+      this.form.controls.audience.setValue('backend-system');
+      this.form.controls.authMethod.setValue(defaultAuthMethodFor(this.vendor(), 'backend-system'));
+      this.form.controls.access.setValue('Write');
+    }
+
+    // The restored Access is the saved one here (a read-purpose form has no Access select).
+    this.audienceLockedByWriteAccess.set(
+      !this.isWritePurpose() && this.wiz.isEditing() && this.form.controls.access.value !== 'Read',
+    );
+
     this.prevAudience = this.audience();
     this.prevAuthMethod = this.form.controls.authMethod.value as
       | 'public'
@@ -2297,8 +2353,13 @@ export class EhrVendorSourceFormComponent
 
     // Restored before any early return below: a connection created in Settings has no retrieval method.
     setIfPresent('access', 'Access');
+    if (fields['Vendor write APIs activated'] !== undefined) {
+      this.form.controls.vendorWriteApisActivated.setValue(fields['Vendor write APIs activated'] === 'true');
+    }
+    setIfPresent('departmentId', 'Department ID');
     setIfPresent('launchDisplayMode', 'Launch display mode');
-    setIfPresent('jwksUrl', 'JWKS URL');
+    // A hosted URL saved without its origin (older Settings forms built it from an empty apiBase) is shown absolute.
+    if (fields['JWKS URL']) this.form.controls.jwksUrl.setValue(absoluteJwksUrl(fields['JWKS URL']));
     setIfPresent('jwtKid', 'JWT kid');
     setIfPresent('privateKeyRef', 'Key vault reference');
     setIfPresent('privateKeySecretName', 'Secret Name');
@@ -2442,7 +2503,7 @@ export class EhrVendorSourceFormComponent
       fields['Key vault reference'] = auth.privateKeyKeyVaultName;
     if (auth?.privateKeySecretName)
       fields['Secret Name'] = auth.privateKeySecretName;
-    if (auth?.jwksUrl) fields['JWKS URL'] = auth.jwksUrl;
+    if (auth?.jwksUrl) fields['JWKS URL'] = absoluteJwksUrl(auth.jwksUrl);
     if (auth?.discoveredScopes?.length)
       fields['Discovered scopes'] = auth.discoveredScopes.join(' ');
     // Same 'Auth placement' key restoreExtendedFieldsFromEditingNode reads — without emitting it here, editing a
@@ -2450,6 +2511,8 @@ export class EhrVendorSourceFormComponent
     // default on reopen/re-save, the same data-loss bug as canvas mode.
     if (auth?.authPlacement) fields['Auth placement'] = auth.authPlacement;
     if (dto.access) fields['Access'] = dto.access;
+    fields['Vendor write APIs activated'] = dto.vendorWriteApisActivated ? 'true' : 'false';
+    if (dto.departmentId) fields['Department ID'] = dto.departmentId;
     if (dto.interactive?.launchDisplayMode)
       fields['Launch display mode'] = dto.interactive.launchDisplayMode;
 
@@ -2917,8 +2980,13 @@ export class EhrVendorSourceFormComponent
     this.sourceConnectionSvc.getAll().subscribe({
       next: (connections) => {
         this._allConnectionNames = new Set(connections.map((c) => c.name));
+        // A source only reads: write-only EHR connections (Access = Write, managed under Destination Connections)
+        // are never offered here. The full list still feeds the name-collision check above (names are unique
+        // across every connection), which is why this filters client-side instead of asking for access=read.
         this.existingConnections.set(
-          connections.filter((c) => c.sourceSystemType === this.vendor()),
+          connections.filter(
+            (c) => c.sourceSystemType === this.vendor() && (c.access ?? 'Read') !== 'Write',
+          ),
         );
         this.loadingExisting.set(false);
       },
@@ -3155,6 +3223,8 @@ export class EhrVendorSourceFormComponent
       audience,
       environment: 'sandbox',
       access: dto.access ?? 'Read',
+      vendorWriteApisActivated: dto.vendorWriteApisActivated === true,
+      departmentId: dto.departmentId ?? '',
       appName: dto.name,
       epicBaseUrl: dto.baseUrl,
       tokenEndpoint: dto.authentication?.tokenEndpoint ?? '',
@@ -3170,7 +3240,7 @@ export class EhrVendorSourceFormComponent
       jwtKid: dto.authentication?.keyId ?? '',
       privateKeyRef: dto.authentication?.privateKeyKeyVaultName ?? '',
       privateKeySecretName: dto.authentication?.privateKeySecretName ?? '',
-      jwksUrl: dto.authentication?.jwksUrl ?? '',
+      jwksUrl: absoluteJwksUrl(dto.authentication?.jwksUrl),
       // Required for EHR-Launch/Standalone audiences, but neither is guaranteed to be persisted on the source
       // connection being cloned (e.g. LaunchUrl is NULL on plenty of real rows, and EHR-Launch connections never
       // persist a resource-type selection server-side at all) — fall back to whatever the form already holds
@@ -3706,7 +3776,20 @@ export class EhrVendorSourceFormComponent
       // actually assembled Epic connections; wiring non-Epic vendors all the way through canvas → workflow-build
       // is tracked as follow-up work, not part of this UI-layer split).
       Connector: this.vendor(),
-      Access: v.access ?? 'Read',
+      // Sources only read: a read-purpose save emits no Access at all, so WizardService sends null and a re-saved
+      // source can never downgrade a Write/ReadWrite connection or clear its activation. Write purpose only.
+      ...(this.isWritePurpose()
+        ? {
+            Access: v.access ?? 'Write',
+            // Only while the switch is shown (activation-gated vendor, ehrwriteback.edit); omitted otherwise, so
+            // WizardService sends null and the saved value is kept.
+            ...(this.showActivationSwitch()
+              ? { 'Vendor write APIs activated': v.vendorWriteApisActivated ? 'true' : 'false' }
+              : {}),
+            // athenahealth only; "" clears a saved department (WizardService sends it as-is).
+            ...(this.showDepartmentId() ? { 'Department ID': (v.departmentId ?? '').trim() } : {}),
+          }
+        : {}),
       'Client ID': v.clientId ?? '',
       // Only meaningful when the audience is on Client Secret auth (showSecret()) — WizardService.save() treats
       // a blank value here as "leave whatever secret is already stored untouched" (existingClientSecretRef),
@@ -3919,7 +4002,7 @@ export class EhrVendorSourceFormComponent
       authorize: v.authzEndpoint ?? '',
       algorithm: 'RS384',
       jwksMethod: v.authMethod === 'jwt' ? 'hosted' : 'external',
-      jwksUrl: v.jwksUrl ?? '',
+      jwksUrl: absoluteJwksUrl(v.jwksUrl),
       kid: v.jwtKid ?? '',
       kvRef: v.privateKeyRef ?? '',
       secretName: v.privateKeySecretName ?? '',

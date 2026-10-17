@@ -1,0 +1,12 @@
+<details class="tab-template" [open]="open()">
+  <summary>Advanced</summary>
+  <div class="tab-field" [class.tab-field--error]="control().touched && control().invalid">
+    <label class="tab-label" for="tab-key">Data set identity</label>
+    <input id="tab-key" class="tab-input" type="text" [formControl]="control()" (input)="edited.emit()" />
+    <p class="tab-hint">Only change this when you replace a source with a new one that reads the same data, so rows
+      already written are recognised.</p>
+    @if (control().touched && control().invalid) {
+      <p class="tab-error-msg">3 to 64 letters or digits; anything else becomes '-'.</p>
+    }
+  </div>
+</details>

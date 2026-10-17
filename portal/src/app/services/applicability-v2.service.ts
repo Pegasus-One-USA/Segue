@@ -189,7 +189,7 @@ export class ApplicabilityServiceV2 {
       ruleLabel = `Applicable next steps after "${this.nodeDisplayName(node)}".`;
       if (!hasChild(node.id)) {
         // No destination yet — that's the only thing that can follow a bare source.
-        items = TRANSFORMS.filter(t => t.rank === DESTINATION_RANK).map(t => this.transformItem(t.id)!).filter(Boolean);
+        items = TRANSFORMS.filter(t => t.rank === DESTINATION_RANK && !t.pickerHidden).map(t => this.transformItem(t.id)!).filter(Boolean);
       } else {
         // A destination exists, so the source's `+` is where the first chain step goes — chain steps are
         // inserted between the source and the destination, which is exactly "after the source".

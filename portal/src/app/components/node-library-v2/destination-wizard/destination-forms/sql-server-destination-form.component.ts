@@ -1,4 +1,5 @@
 import { Component, input, viewChild } from '@angular/core';
+import { FormControl } from '@angular/forms';
 import { SqlFamilyDestinationFormComponent } from './sql-family-destination-form.component';
 import { SqlFamilyFormApi } from './destination-form-api';
 
@@ -19,6 +20,7 @@ export class SqlServerDestinationFormComponent implements SqlFamilyFormApi {
   get probeError() { return this.engineForm().probeError; }
 
   isValid(): boolean { return this.engineForm().isValid(); }
+  nameControl(): FormControl<string | null> { return this.engineForm().nameControl(); }
   getRawValue(): Record<string, unknown> { return this.engineForm().getRawValue(); }
   getFullConfig(): Record<string, string> { return this.engineForm().getFullConfig(); }
   getMetadata() { return this.engineForm().getMetadata(); }

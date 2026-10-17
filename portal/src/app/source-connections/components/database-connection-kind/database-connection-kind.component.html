@@ -1,0 +1,15 @@
+@if (editing()) {
+  <div class="db-backdrop" tabindex="0" (click)="onBackdropClick($event)" (keydown.escape)="editing.set(null)">
+    <div class="db-panel" role="dialog" [attr.aria-label]="editingExisting() ? 'Edit database connection' : 'New database connection'">
+      <div class="db-head">
+        <div>
+          <h2 class="db-title">{{ editingExisting() ? 'Edit database connection' : 'New database connection' }}</h2>
+          <p class="db-sub">A database CSV / SQL Table sources read, one query per resource type. The connection string
+            is kept as a secret and never shown.</p>
+        </div>
+        <button class="db-close" type="button" title="Close" (click)="editing.set(null)">×</button>
+      </div>
+      <app-tabular-database-editor [existing]="editingExisting()" (saved)="onSaved()" (cancelled)="editing.set(null)" />
+    </div>
+  </div>
+}

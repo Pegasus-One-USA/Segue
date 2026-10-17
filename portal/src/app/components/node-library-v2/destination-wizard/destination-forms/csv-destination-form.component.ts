@@ -1,5 +1,5 @@
 import { Component, effect, inject, input, signal, untracked } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DestinationSchemaService } from '../../../../services/destination-schema.service';
 import { buildConnectionMetadata, buildSftpUri } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { WizardDestinationFormApi } from './destination-form-api';
@@ -64,6 +64,11 @@ export class CsvDestinationFormComponent implements WizardDestinationFormApi {
       this.reusingExisting();
       untracked(() => this._syncDeliveryModeValidators(this.csvForm.value.deliveryMode ?? null));
     });
+  }
+
+  /** The destination's name. The wizard hides it on Step 1 (only the connection is chosen there) and shows it on Review. */
+  nameControl(): FormControl<string | null> {
+    return this.csvForm.controls.name;
   }
 
   /** 'download' (inline bytes returned in the HTTP response) can never work for a canvas-workflow destination —

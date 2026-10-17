@@ -1,0 +1,617 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Xunit;
+
+namespace FHIRBridge.Api.IntegrationTests.Tests;
+
+/// <summary>
+/// Sources only read, destinations only write. EHR write connections are still source connections with write access,
+/// listed under Destination Connections: the lists filter on the side a connection serves, giving a connection write
+/// access needs the EHR Write-Back right on top of the vendor's own, and a workflow's source node can never change
+/// what a connection may write.
+/// </summary>
+[Collection("ApiTests")]
+public sealed class EhrWriteConnectionTests(ApiFixture f)
+{
+    private static object EpicBody(
+        string name, string? access, bool? activated = null, string? departmentId = null, string secretName = "test-secret") => new
+    {
+        Name = name,
+        SourceSystemType = "Epic",
+        BaseUrl = "https://example.test/fhir",
+        ApplicationType = "Backend",
+        Access = access,
+        VendorWriteApisActivated = activated,
+        DepartmentId = departmentId,
+        Authentication = new
+        {
+            AuthenticationType = "SmartBackendServices",
+            ClientId = "test-client-id",
+            TokenEndpoint = "https://example.test/oauth2/token",
+            Scopes = new[] { "system/*.read" },
+            KeyId = "test-key-id",
+            PrivateKeyKeyVaultName = "test-vault",
+            PrivateKeySecretName = secretName,
+        },
+    };
+
+    private static string NewName(string prefix) => $"{prefix}-{Guid.NewGuid():N}";
+
+    private async Task<HttpClient> ClientWithAsync(params string[] permissions)
+    {
+        var (_, _, jwt) = await f.CreateUserWithPermissionsAndLoginAsync(permissions);
+        return f.CreateAuthenticatedClient(jwt);
+    }
+
+    private async Task<JsonElement> CreateAsAdminAsync(object body)
+    {
+        var resp = await f.AdminClient.PostAsJsonAsync("/api/v1/source-connections", body);
+        await ApiFixture.EnsureOkAsync(resp);
+        return JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement.Clone();
+    }
+
+    [Fact]
+    public async Task Creating_a_connection_with_write_access_needs_the_ehr_write_back_create_right()
+    {
+        using var vendorOnly = await ClientWithAsync("epic.create");
+        using var withWriteBack = await ClientWithAsync("epic.create", "ehrwriteback.create");
+
+        var refused = await vendorOnly.PostAsJsonAsync("/api/v1/source-connections", EpicBody(NewName("w"), "Write"));
+        var readOnly = await vendorOnly.PostAsJsonAsync("/api/v1/source-connections", EpicBody(NewName("r"), null));
+        var allowed = await withWriteBack.PostAsJsonAsync("/api/v1/source-connections", EpicBody(NewName("w"), "Write"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, readOnly.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, allowed.StatusCode);
+    }
+
+    [Fact]
+    public async Task Turning_write_access_on_needs_the_ehr_write_back_edit_right_but_keeping_it_does_not()
+    {
+        var readName = NewName("r");
+        var read = await CreateAsAdminAsync(EpicBody(readName, null));
+        var writeName = NewName("rw");
+        var write = await CreateAsAdminAsync(EpicBody(writeName, "ReadWrite"));
+        using var vendorOnly = await ClientWithAsync("epic.edit");
+        using var withWriteBack = await ClientWithAsync("epic.edit", "ehrwriteback.edit");
+
+        var refused = await vendorOnly.PutAsJsonAsync(
+            $"/api/v1/source-connections/{read.GetProperty("id").GetGuid()}", EpicBody(readName, "ReadWrite"));
+        var kept = await vendorOnly.PutAsJsonAsync(
+            $"/api/v1/source-connections/{write.GetProperty("id").GetGuid()}", EpicBody(writeName, "ReadWrite"));
+        var allowed = await withWriteBack.PutAsJsonAsync(
+            $"/api/v1/source-connections/{read.GetProperty("id").GetGuid()}", EpicBody(readName, "ReadWrite"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, kept.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        var updated = JsonDocument.Parse(await allowed.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("ReadWrite", updated.GetProperty("access").GetString());
+    }
+
+    [Fact]
+    public async Task The_lists_filter_on_the_side_a_connection_serves()
+    {
+        var read = (await CreateAsAdminAsync(EpicBody(NewName("r"), "Read"))).GetProperty("id").GetGuid();
+        var write = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        var both = (await CreateAsAdminAsync(EpicBody(NewName("rw"), "ReadWrite"))).GetProperty("id").GetGuid();
+
+        async Task<HashSet<Guid>> IdsAsync(string url)
+        {
+            var resp = await f.AdminClient.GetAsync(url);
+            await ApiFixture.EnsureOkAsync(resp);
+            var root = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+            var items = root.ValueKind == JsonValueKind.Array ? root : root.GetProperty("items");
+            return items.EnumerateArray().Select(item => item.GetProperty("id").GetGuid()).ToHashSet();
+        }
+
+        var readable = await IdsAsync("/api/v1/source-connections?access=read");
+        var writable = await IdsAsync("/api/v1/source-connections?access=write");
+        var all = await IdsAsync("/api/v1/source-connections");
+        var writablePaged = await IdsAsync("/api/v1/source-connections/paged?access=write&pageSize=200");
+        var readablePaged = await IdsAsync("/api/v1/source-connections/paged?access=read&pageSize=200");
+
+        Assert.Contains(read, readable);
+        Assert.Contains(both, readable);
+        Assert.DoesNotContain(write, readable);
+        Assert.Contains(write, writable);
+        Assert.Contains(both, writable);
+        Assert.DoesNotContain(read, writable);
+        Assert.Superset(new HashSet<Guid> { read, write, both }, all);
+        Assert.Contains(write, writablePaged);
+        Assert.DoesNotContain(read, writablePaged);
+        Assert.Contains(read, readablePaged);
+        Assert.DoesNotContain(write, readablePaged);
+    }
+
+    [Fact]
+    public async Task A_source_node_save_never_changes_what_the_connection_may_write()
+    {
+        var name = NewName("rw");
+        var connection = await CreateAsAdminAsync(EpicBody(name, "ReadWrite", activated: true));
+        var connectionId = connection.GetProperty("id").GetGuid();
+        var newName = NewName("new");
+        var created = await BuildAsync(EpicBody(newName, "Write", activated: true), existingId: null);
+        await ApiFixture.EnsureOkAsync(created);
+
+        // An older canvas node still carries Access=Read and no activation.
+        var resaved = await BuildAsync(EpicBody(name, "Read", activated: false), connectionId);
+        await ApiFixture.EnsureOkAsync(resaved);
+
+        var after = await f.AdminClient.GetAsync("/api/v1/source-connections?access=write");
+        var row = JsonDocument.Parse(await after.Content.ReadAsStringAsync()).RootElement
+            .EnumerateArray().Single(item => item.GetProperty("id").GetGuid() == connectionId);
+        Assert.Equal("ReadWrite", row.GetProperty("access").GetString());
+        Assert.True(row.GetProperty("vendorWriteApisActivated").GetBoolean());
+
+        // A connection created from a source node is read-only whatever the node says.
+        var all = await f.AdminClient.GetAsync("/api/v1/source-connections");
+        var fromNode = JsonDocument.Parse(await all.Content.ReadAsStringAsync()).RootElement
+            .EnumerateArray().Single(item => item.GetProperty("name").GetString() == newName);
+        Assert.Equal("Read", fromNode.GetProperty("access").GetString());
+        Assert.False(fromNode.GetProperty("vendorWriteApisActivated").GetBoolean());
+    }
+
+    private static object AthenaBody(
+        string name, string? access, string? departmentId = null, bool? activated = null, string baseUrl = "https://athena.example.test/fhir") => new
+    {
+        Name = name,
+        SourceSystemType = "Athenahealth",
+        BaseUrl = baseUrl,
+        ApplicationType = "Backend",
+        Access = access,
+        VendorWriteApisActivated = activated,
+        DepartmentId = departmentId,
+        Authentication = new
+        {
+            AuthenticationType = "OAuthClientCredentials",
+            ClientId = "athena-client-id",
+            TokenEndpoint = "https://athena.example.test/oauth2/token",
+            Scopes = new[] { "system/Patient.read" },
+            ClientSecretKeyVaultName = "test-vault",
+            ClientSecretName = "athena-secret",
+            PracticeId = "195900",
+        },
+    };
+
+    private async Task<JsonElement> GetConnectionAsync(Guid id)
+    {
+        var resp = await f.AdminClient.GetAsync("/api/v1/source-connections");
+        await ApiFixture.EnsureOkAsync(resp);
+        return JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement
+            .EnumerateArray().Single(item => item.GetProperty("id").GetGuid() == id).Clone();
+    }
+
+    [Fact]
+    public async Task Changing_a_write_connections_write_side_settings_needs_the_ehr_write_back_edit_right()
+    {
+        var name = NewName("rw");
+        var id = (await CreateAsAdminAsync(AthenaBody(name, "ReadWrite", departmentId: "1", activated: true))).GetProperty("id").GetGuid();
+        using var vendorOnly = await ClientWithAsync("athenahealth.edit");
+        using var withWriteBack = await ClientWithAsync("athenahealth.edit", "ehrwriteback.edit");
+        var url = $"/api/v1/source-connections/{id}";
+
+        var department = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, null, departmentId: "2"));
+        var deactivate = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, null, activated: false));
+        var downgrade = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, "Read"));
+        // PR #244 review, round 3: where a write connection's live writes (and their PHI) go needs the right too.
+        var baseUrl = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, null, baseUrl: "https://elsewhere.example.test/fhir"));
+        var unchanged = await vendorOnly.PutAsJsonAsync(url, AthenaBody(name, null));
+        var allowed = await withWriteBack.PutAsJsonAsync(url, AthenaBody(name, null, departmentId: "2"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, department.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, deactivate.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, downgrade.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, baseUrl.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, unchanged.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        var saved = await GetConnectionAsync(id);
+        Assert.Equal("2", saved.GetProperty("departmentId").GetString());
+        Assert.Equal("ReadWrite", saved.GetProperty("access").GetString());
+        Assert.True(saved.GetProperty("vendorWriteApisActivated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Updating_a_missing_connection_with_write_access_answers_not_found()
+    {
+        using var vendorOnly = await ClientWithAsync("epic.edit");
+
+        var resp = await vendorOnly.PutAsJsonAsync($"/api/v1/source-connections/{Guid.NewGuid()}", EpicBody(NewName("w"), "Write"));
+
+        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Deleting_a_connection_that_can_write_needs_the_ehr_write_back_delete_right()
+    {
+        var write = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        var read = (await CreateAsAdminAsync(EpicBody(NewName("r"), null))).GetProperty("id").GetGuid();
+        using var vendorOnly = await ClientWithAsync("sourceconnections.delete", "epic.delete");
+        using var withWriteBack = await ClientWithAsync("sourceconnections.delete", "epic.delete", "ehrwriteback.delete");
+
+        var refused = await vendorOnly.DeleteAsync($"/api/v1/source-connections/{write}");
+        var readDeleted = await vendorOnly.DeleteAsync($"/api/v1/source-connections/{read}");
+        var allowed = await withWriteBack.DeleteAsync($"/api/v1/source-connections/{write}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, readDeleted.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, allowed.StatusCode);
+    }
+
+    // PR #244 re-review: the DELETE checks usage itself; the list screen's lock is not the only guard.
+    [Fact]
+    public async Task A_write_connection_a_workflow_still_writes_through_cannot_be_deleted()
+    {
+        var connectionId = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        var workflow = new
+        {
+            Name = $"EHR write-back usage {Guid.NewGuid():N}",
+            IsEnabled = false,
+            Nodes = new object[]
+            {
+                new
+                {
+                    Id = "n-src", NodeType = "EpicSourceNode", Category = "Source", Rank = 0, SubRank = 0, DisplayName = "Source",
+                    ConfigurationJson = JsonSerializer.Serialize(new Dictionary<string, string> { ["Resources"] = "AllergyIntolerance" }),
+                    PositionX = 0, PositionY = 0, IsEnabled = true,
+                },
+                new
+                {
+                    Id = "n-ewb", NodeType = "EhrWriteBackDestinationNode", Category = "Destination", Rank = 70, SubRank = 0, DisplayName = "EHR",
+                    ConfigurationJson = JsonSerializer.Serialize(new Dictionary<string, string>
+                    {
+                        ["dest_dryRun"] = "true",
+                        ["dest_resources"] = "AllergyIntolerance",
+                        ["dest_sourceConnectionId"] = connectionId.ToString(),
+                    }),
+                    PositionX = 0, PositionY = 0, IsEnabled = true,
+                },
+            },
+            Edges = new[] { new { FromNodeId = "n-src", ToNodeId = "n-ewb" } },
+        };
+        var created = await f.AdminClient.PostAsJsonAsync("/api/v1/workflows", workflow);
+        created.EnsureSuccessStatusCode();
+        using var withWriteBack = await ClientWithAsync("sourceconnections.delete", "epic.delete", "ehrwriteback.delete");
+
+        var refused = await withWriteBack.DeleteAsync($"/api/v1/source-connections/{connectionId}");
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await f.AdminClient.GetAsync($"/api/v1/source-connections/{connectionId}")).StatusCode);
+    }
+
+    // PR #244 review: turning write access off stops every write-back over the connection, as deleting it does.
+    [Fact]
+    public async Task Write_access_cannot_be_turned_off_on_a_connection_a_workflow_still_writes_through()
+    {
+        var usedName = NewName("rw");
+        var used = (await CreateAsAdminAsync(EpicBody(usedName, "ReadWrite"))).GetProperty("id").GetGuid();
+        var unusedName = NewName("rw");
+        var unused = (await CreateAsAdminAsync(EpicBody(unusedName, "ReadWrite"))).GetProperty("id").GetGuid();
+        var workflow = await f.AdminClient.PostAsJsonAsync("/api/v1/workflows", new
+        {
+            Name = NewName("write-usage-access"),
+            IsEnabled = false,
+            Nodes = new[]
+            {
+                UsageNode("n-src", "EpicSourceNode", "Source", 0, new() { ["Resources"] = "AllergyIntolerance" }),
+                UsageNode("n-ewb", "EhrWriteBackDestinationNode", "Destination", 70, new()
+                {
+                    ["dest_dryRun"] = "true",
+                    ["dest_resources"] = "AllergyIntolerance",
+                    ["dest_sourceConnectionId"] = used.ToString(),
+                }),
+            },
+            Edges = new[] { new { FromNodeId = "n-src", ToNodeId = "n-ewb" } },
+        });
+        await ApiFixture.EnsureOkAsync(workflow);
+        using var withWriteBack = await ClientWithAsync("epic.edit", "ehrwriteback.edit");
+
+        var refused = await withWriteBack.PutAsJsonAsync($"/api/v1/source-connections/{used}", EpicBody(usedName, "Read"));
+        var kept = await withWriteBack.PutAsJsonAsync($"/api/v1/source-connections/{used}", EpicBody(usedName, "Write"));
+        var allowed = await withWriteBack.PutAsJsonAsync($"/api/v1/source-connections/{unused}", EpicBody(unusedName, "Read"));
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, kept.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        Assert.Equal("Write", (await GetConnectionAsync(used)).GetProperty("access").GetString());
+        Assert.Equal("Read", (await GetConnectionAsync(unused)).GetProperty("access").GetString());
+    }
+
+    // PR #244 review: the private key of a connection that can write is the key the vendor's write app trusts.
+    [Fact]
+    public async Task Downloading_the_private_key_of_a_connection_that_can_write_needs_the_ehr_write_back_edit_right()
+    {
+        var write = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        // A key of its own: the shared "test-secret" reference is also the key of other tests' write connections.
+        var read = (await CreateAsAdminAsync(EpicBody(NewName("r"), null, secretName: NewName("read-key")))).GetProperty("id").GetGuid();
+        using var vendorOnly = await ClientWithAsync("sourceconnections.export", "epic.edit");
+        using var withWriteBack = await ClientWithAsync("sourceconnections.export", "epic.edit", "ehrwriteback.edit");
+
+        var refused = await vendorOnly.GetAsync($"/api/v1/source-connections/{write}/signing-key/private.pem");
+        var readKey = await vendorOnly.GetAsync($"/api/v1/source-connections/{read}/signing-key/private.pem");
+        var allowed = await withWriteBack.GetAsync($"/api/v1/source-connections/{write}/signing-key/private.pem");
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        // Past every permission check: the test secret store holds no such key, so the lookup answers 404.
+        Assert.NotEqual(HttpStatusCode.Forbidden, readKey.StatusCode);
+        Assert.NotEqual(HttpStatusCode.Forbidden, allowed.StatusCode);
+    }
+
+    // PR #244 review: the gate is on the key. A read connection saved with a write connection's key reference
+    // would otherwise export the write app's key without the EHR Write-Back right.
+    [Fact]
+    public async Task Downloading_a_read_connections_private_key_that_a_write_connection_also_uses_needs_the_ehr_write_back_edit_right()
+    {
+        var sharedSecret = NewName("shared-key");
+        await CreateAsAdminAsync(EpicBody(NewName("w"), "Write", secretName: sharedSecret));
+        // Same reference, spelled with different case: Key Vault names are case-insensitive.
+        var read = (await CreateAsAdminAsync(EpicBody(NewName("r"), "Read", secretName: sharedSecret.ToUpperInvariant())))
+            .GetProperty("id").GetGuid();
+        using var vendorOnly = await ClientWithAsync("sourceconnections.export", "epic.edit");
+        using var withWriteBack = await ClientWithAsync("sourceconnections.export", "epic.edit", "ehrwriteback.edit");
+
+        var refused = await vendorOnly.GetAsync($"/api/v1/source-connections/{read}/signing-key/private.pem");
+        var allowed = await withWriteBack.GetAsync($"/api/v1/source-connections/{read}/signing-key/private.pem");
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        Assert.NotEqual(HttpStatusCode.Forbidden, allowed.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_source_node_resave_over_a_read_write_connection_needs_no_ehr_write_back_right()
+    {
+        // Saved as older writers did: no AuthPlacement, no JWKS URL.
+        var name = NewName("rw");
+        var id = (await CreateAsAdminAsync(AthenaBody(name, "ReadWrite", departmentId: "150", activated: true))).GetProperty("id").GetGuid();
+        using var designer = await ClientWithAsync("workflow.view", "workflow.create", "workflow.edit", "athenahealth.edit");
+        // Shaped as the canvas assembler sends it: authPlacement 'post', a JWKS URL, Access=Read on an older node.
+        var body = JsonSerializer.SerializeToNode(AthenaBody(name, "Read", activated: false))!.AsObject();
+        body["Authentication"]!["AuthPlacement"] = "post";
+        body["Authentication"]!["JwksUrl"] = "https://example.test/.well-known/jwks.json";
+
+        var resp = await BuildAsync(body, id, designer);
+
+        await ApiFixture.EnsureOkAsync(resp);
+        var saved = await GetConnectionAsync(id);
+        Assert.Equal("ReadWrite", saved.GetProperty("access").GetString());
+        Assert.Equal("150", saved.GetProperty("departmentId").GetString());
+        Assert.True(saved.GetProperty("vendorWriteApisActivated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_source_node_that_repoints_a_read_write_connection_needs_the_ehr_write_back_edit_right()
+    {
+        var name = NewName("rw");
+        var id = (await CreateAsAdminAsync(AthenaBody(name, "ReadWrite", departmentId: "150", activated: true))).GetProperty("id").GetGuid();
+        using var designer = await ClientWithAsync("workflow.view", "workflow.create", "workflow.edit", "athenahealth.edit");
+        using var writeBackEditor = await ClientWithAsync(
+            "workflow.view", "workflow.create", "workflow.edit", "athenahealth.edit", "ehrwriteback.edit");
+
+        var refused = await BuildAsync(AthenaBody(name, null), id, designer, baseUrl: "https://elsewhere.test/fhir");
+        var allowed = await BuildAsync(AthenaBody(name, null), id, writeBackEditor, baseUrl: "https://elsewhere.test/fhir");
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+        await ApiFixture.EnsureOkAsync(allowed);
+        Assert.Equal("https://elsewhere.test/fhir", (await GetConnectionAsync(id)).GetProperty("baseUrl").GetString());
+    }
+
+    [Fact]
+    public async Task An_edit_needs_the_saved_vendors_right_not_just_the_one_the_request_names()
+    {
+        var name = NewName("epic");
+        var id = (await CreateAsAdminAsync(EpicBody(name, null))).GetProperty("id").GetGuid();
+        using var cernerOnly = await ClientWithAsync("cerner.edit");
+        var body = JsonSerializer.SerializeToNode(EpicBody(name, null))!.AsObject();
+        body["SourceSystemType"] = "Cerner";
+
+        var resp = await cernerOnly.PutAsJsonAsync($"/api/v1/source-connections/{id}", body);
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Dropping_write_access_clears_the_department_and_the_activation()
+    {
+        var name = NewName("rw");
+        var id = (await CreateAsAdminAsync(AthenaBody(name, "ReadWrite", departmentId: "1", activated: true))).GetProperty("id").GetGuid();
+
+        var resp = await f.AdminClient.PutAsJsonAsync($"/api/v1/source-connections/{id}", AthenaBody(name, "Read"));
+
+        await ApiFixture.EnsureOkAsync(resp);
+        var saved = await GetConnectionAsync(id);
+        Assert.Equal("Read", saved.GetProperty("access").GetString());
+        Assert.Equal(JsonValueKind.Null, saved.GetProperty("departmentId").ValueKind);
+        Assert.False(saved.GetProperty("vendorWriteApisActivated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_read_only_connection_ignores_a_department_instead_of_rejecting_it()
+    {
+        var created = await CreateAsAdminAsync(AthenaBody(NewName("r"), null, departmentId: "not a valid id"));
+
+        Assert.Equal("Read", created.GetProperty("access").GetString());
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("departmentId").ValueKind);
+    }
+
+    [Fact]
+    public async Task A_source_node_save_keeps_an_athena_write_connections_department()
+    {
+        var name = NewName("rw");
+        var id = (await CreateAsAdminAsync(AthenaBody(name, "ReadWrite", departmentId: "150"))).GetProperty("id").GetGuid();
+
+        var resaved = await BuildAsync(AthenaBody(name, "Read"), id);
+
+        await ApiFixture.EnsureOkAsync(resaved);
+        var saved = await GetConnectionAsync(id);
+        Assert.Equal("ReadWrite", saved.GetProperty("access").GetString());
+        Assert.Equal("150", saved.GetProperty("departmentId").GetString());
+    }
+
+    [Fact]
+    public async Task A_workflow_whose_source_node_is_bound_to_a_write_only_connection_still_saves_and_leaves_it_untouched()
+    {
+        var name = NewName("w");
+        var id = (await CreateAsAdminAsync(EpicBody(name, "Write", activated: true))).GetProperty("id").GetGuid();
+
+        var resp = await BuildAsync(EpicBody(name, null), id, baseUrl: "https://elsewhere.example.test/fhir");
+
+        await ApiFixture.EnsureOkAsync(resp);
+        var saved = await GetConnectionAsync(id);
+        Assert.Equal("Write", saved.GetProperty("access").GetString());
+        Assert.Equal("https://example.test/fhir", saved.GetProperty("baseUrl").GetString());
+        Assert.Contains(id.ToString(), await resp.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Copying_a_workflow_never_clones_a_write_only_connection()
+    {
+        var name = NewName("w");
+        var id = (await CreateAsAdminAsync(EpicBody(name, "Write"))).GetProperty("id").GetGuid();
+        var built = await BuildAsync(EpicBody(name, null), id);
+        await ApiFixture.EnsureOkAsync(built);
+        var workflowId = JsonDocument.Parse(await built.Content.ReadAsStringAsync()).RootElement.GetProperty("workflowId").GetGuid();
+        using var creator = await ClientWithAsync("workflow.view", "workflow.create", "epic.create");
+
+        var copied = await creator.PostAsJsonAsync($"/api/v1/workflows/{workflowId}/copy", new { Name = NewName("copy") });
+
+        await ApiFixture.EnsureOkAsync(copied);
+        var all = await f.AdminClient.GetAsync("/api/v1/source-connections");
+        var clones = JsonDocument.Parse(await all.Content.ReadAsStringAsync()).RootElement.EnumerateArray()
+            .Where(item => item.GetProperty("name").GetString()!.StartsWith($"{name} (copy ", StringComparison.Ordinal));
+        Assert.Empty(clones);
+    }
+
+    [Fact]
+    public async Task Copying_a_workflow_clones_its_source_connection_read_only()
+    {
+        var name = NewName("rw");
+        var originalId = (await CreateAsAdminAsync(AthenaBody(name, "ReadWrite", departmentId: "150", activated: true)))
+            .GetProperty("id").GetGuid();
+        var built = await BuildAsync(AthenaBody(name, null), originalId);
+        await ApiFixture.EnsureOkAsync(built);
+        var workflowId = JsonDocument.Parse(await built.Content.ReadAsStringAsync()).RootElement.GetProperty("workflowId").GetGuid();
+        // No ehrwriteback.create: the copy has no write-back node and mints no write connection.
+        using var creator = await ClientWithAsync("workflow.view", "workflow.create", "athenahealth.create");
+
+        var copied = await creator.PostAsJsonAsync($"/api/v1/workflows/{workflowId}/copy", new { Name = NewName("copy") });
+
+        await ApiFixture.EnsureOkAsync(copied);
+        var all = await f.AdminClient.GetAsync("/api/v1/source-connections");
+        var clone = JsonDocument.Parse(await all.Content.ReadAsStringAsync()).RootElement.EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString()!.StartsWith($"{name} (copy ", StringComparison.Ordinal));
+        Assert.Equal("Read", clone.GetProperty("access").GetString());
+        Assert.Equal(JsonValueKind.Null, clone.GetProperty("departmentId").ValueKind);
+        Assert.False(clone.GetProperty("vendorWriteApisActivated").GetBoolean());
+        Assert.Equal("ReadWrite", (await GetConnectionAsync(originalId)).GetProperty("access").GetString());
+    }
+
+    [Fact]
+    public async Task Write_connection_usage_lists_the_connections_write_back_nodes_and_destinations_write_through()
+    {
+        var fromNode = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        var fromDestination = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+        var unused = (await CreateAsAdminAsync(EpicBody(NewName("w"), "Write"))).GetProperty("id").GetGuid();
+
+        var workflow = await f.AdminClient.PostAsJsonAsync("/api/v1/workflows", new
+        {
+            Name = NewName("write-usage"),
+            IsEnabled = false,
+            Nodes = new[]
+            {
+                UsageNode("n-src", "EpicSourceNode", "Source", 0, new() { ["Resources"] = "AllergyIntolerance" }),
+                UsageNode("n-ewb", "EhrWriteBackDestinationNode", "Destination", 70, new()
+                {
+                    ["dest_dryRun"] = "true",
+                    ["dest_resources"] = "AllergyIntolerance",
+                    ["dest_sourceConnectionId"] = fromNode.ToString(),
+                }),
+            },
+            Edges = new[] { new { FromNodeId = "n-src", ToNodeId = "n-ewb" } },
+        });
+        await ApiFixture.EnsureOkAsync(workflow);
+        var destination = await f.AdminClient.PostAsJsonAsync("/api/v1/destinations", new
+        {
+            Name = NewName("ewb"),
+            DestinationType = "EhrWriteBack",
+            KeyVaultName = "test-vault",
+            SecretName = $"secret-{Guid.NewGuid():N}",
+            ConnectionMetadataJson = JsonSerializer.Serialize(new Dictionary<string, string>
+            {
+                ["dest_sourceConnectionId"] = fromDestination.ToString(),
+                ["dest_dryRun"] = "true",
+            }),
+        });
+        await ApiFixture.EnsureOkAsync(destination);
+
+        var resp = await f.AdminClient.GetAsync("/api/v1/workflows/ehr-write-connection-usage");
+
+        await ApiFixture.EnsureOkAsync(resp);
+        var used = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement
+            .EnumerateArray().Select(item => item.GetGuid()).ToHashSet();
+        Assert.Contains(fromNode, used);
+        Assert.Contains(fromDestination, used);
+        Assert.DoesNotContain(unused, used);
+    }
+
+    [Fact]
+    public async Task Write_connection_usage_is_for_admins_only()
+    {
+        using var viewer = await ClientWithAsync("sourceconnections.view", "ehrwriteback.view");
+
+        var resp = await viewer.GetAsync("/api/v1/workflows/ehr-write-connection-usage");
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    private static object UsageNode(string id, string nodeType, string category, int rank, Dictionary<string, string> settings) => new
+    {
+        Id = id,
+        NodeType = nodeType,
+        Category = category,
+        Rank = rank,
+        SubRank = 0,
+        DisplayName = nodeType,
+        ConfigurationJson = JsonSerializer.Serialize(settings),
+        PositionX = 0,
+        PositionY = 0,
+        IsEnabled = true,
+    };
+
+    private Task<HttpResponseMessage> BuildAsync(object source, Guid? existingId, HttpClient? client = null, string? baseUrl = null)
+    {
+        if (baseUrl is not null)
+        {
+            var body = JsonSerializer.SerializeToNode(source)!.AsObject();
+            body["BaseUrl"] = baseUrl;
+            source = body;
+        }
+
+        return (client ?? f.AdminClient).PostAsJsonAsync("/api/v1/workflows/build", new
+        {
+            Name = NewName("source-only"),
+            IsEnabled = false,
+            Nodes = new[]
+            {
+                new
+                {
+                    Id = "n-src",
+                    NodeType = "EpicSourceNode",
+                    Category = "Source",
+                    Rank = 0,
+                    SubRank = 0,
+                    DisplayName = "Epic",
+                    ConfigurationJson = existingId is { } id
+                        ? JsonSerializer.Serialize(new Dictionary<string, string> { ["sourceConnectionId"] = id.ToString() })
+                        : "{}",
+                    PositionX = 0,
+                    PositionY = 0,
+                    IsEnabled = true,
+                },
+            },
+            Edges = Array.Empty<object>(),
+            Sources = new[] { new { NodeId = "n-src", Source = source, ExistingId = existingId } },
+        });
+    }
+}

@@ -17,7 +17,12 @@ public sealed class EhrWriteCapability
         bool requiresEncounter,
         bool optInOnly,
         IReadOnlySet<ApplicationType> allowedApplicationTypes,
-        bool liveWriteSupported = false)
+        bool liveWriteSupported = false,
+        bool requiresVendorActivation = false,
+        bool createsHolderEncounter = false,
+        bool requiresVariantOptIn = false,
+        bool requiresPatient = true,
+        bool requiresTargetReferences = false)
     {
         ResourceType = SupportedFhirResourceTypes.Normalize(resourceType);
         Operations = operations;
@@ -27,6 +32,11 @@ public sealed class EhrWriteCapability
         OptInOnly = optInOnly;
         AllowedApplicationTypes = allowedApplicationTypes;
         LiveWriteSupported = liveWriteSupported;
+        RequiresVendorActivation = requiresVendorActivation;
+        CreatesHolderEncounter = createsHolderEncounter;
+        RequiresVariantOptIn = requiresVariantOptIn;
+        RequiresPatient = requiresPatient;
+        RequiresTargetReferences = requiresTargetReferences;
     }
 
     /// <summary>Canonical FHIR resource type name, as in <see cref="SupportedFhirResourceTypes.All"/>.</summary>
@@ -59,6 +69,40 @@ public sealed class EhrWriteCapability
     /// permissions.</summary>
     public bool LiveWriteSupported { get; }
 
+    /// <summary>The vendor's API for this write is not open to every client: it is contracted and activated per
+    /// practice (eClinicalWorks), or a proprietary API product the practice must enable (athenaOne). Live only when the
+    /// write connection says so (<c>SourceConnection.VendorWriteApisActivated</c>); until then every run of the type is
+    /// a dry run, reported as <c>vendor-activation-required</c>.</summary>
+    public bool RequiresVendorActivation { get; }
+
+    /// <summary>The API files the record on an encounter the bridge must create first (eClinicalWorks medical and
+    /// surgical history go on an open telephone encounter). Written only when the destination opts in, one encounter
+    /// per patient per run, created only when at least one such record is actually sent.</summary>
+    public bool CreatesHolderEncounter { get; }
+
+    /// <summary>One flavour of a type that other flavours already cover (Epic files lines, drains and airways through a
+    /// different Observation API than vital signs). Selecting the resource type is not enough: a record goes to this
+    /// variant only when the destination also lists the variant (<c>dest_enabledVariants</c>), so turning on a new API
+    /// never changes what an existing destination sends. Otherwise reported as <c>variant-not-enabled</c>.</summary>
+    public bool RequiresVariantOptIn { get; }
+
+    /// <summary>The record is filed against a patient, which the writer resolves in the EHR first. False for an API whose
+    /// record is not about one patient (Epic non-patient documents) or names its context some other way (Epic
+    /// patient-entered questionnaires answer an assignment, not a patient).</summary>
+    public bool RequiresPatient { get; }
+
+    /// <summary>The API needs references to records that already exist in the TARGET EHR and that the writer cannot
+    /// resolve (a questionnaire and its question ids, the referral a message belongs to, the report an image finding is
+    /// about). Only a CSV / SQL Table source, whose template is written for the target, can carry them; from any other
+    /// source the record is skipped as <c>target-references-unmappable</c>, because a source system's ids would point at
+    /// nothing, or at the wrong record, in the target.</summary>
+    public bool RequiresTargetReferences { get; }
+
+    /// <summary>True when a destination that is not a dry run sends this type for real over a connection whose vendor
+    /// write APIs are (<paramref name="vendorWriteApisActivated"/>) or are not activated.</summary>
+    public bool IsLive(bool vendorWriteApisActivated) =>
+        LiveWriteSupported && (!RequiresVendorActivation || vendorWriteApisActivated);
+
     public bool Supports(EhrWriteOperation operation) => Operations.Contains(operation);
 }
 
@@ -73,14 +117,22 @@ public sealed class EhrWriteVendorProfile
         IReadOnlyList<EhrWriteCapability> capabilities,
         bool supportsPatientMatch,
         bool requestsScopeOnTokenRequest,
-        IReadOnlySet<string> alreadyAtTargetOutcomeCodes)
+        IReadOnlySet<string> alreadyAtTargetOutcomeCodes,
+        string? proprietaryApiScope = null)
     {
         Vendor = vendor;
         Capabilities = capabilities;
         SupportsPatientMatch = supportsPatientMatch;
         RequestsScopeOnTokenRequest = requestsScopeOnTokenRequest;
         AlreadyAtTargetOutcomeCodes = alreadyAtTargetOutcomeCodes;
+        ProprietaryApiScope = proprietaryApiScope;
     }
+
+    /// <summary>The scope that grants the vendor's proprietary write API (athenaOne: <c>athena/service/Athenanet.MDP.*</c>),
+    /// which a write connection requests alongside its FHIR scopes. Types that need vendor activation go through that
+    /// API, so their granted-scope check looks for this scope, not a FHIR create scope. Null for a FHIR-only
+    /// vendor.</summary>
+    public string? ProprietaryApiScope { get; }
 
     /// <summary>Vendor OperationOutcome codes that mean "this record is already in the EHR", each either a bare code
     /// or "code|expression" when the code means that only for one element. A create refused with one of them is

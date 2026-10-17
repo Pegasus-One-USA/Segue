@@ -1,6 +1,10 @@
 import { Signal } from '@angular/core';
+import { FormControl } from '@angular/forms';
 import { DestinationConfigFormComponent } from '../../../shared-v2/config-form/config-form-v2.contract';
 import { DestinationProbeRequest, DestinationTable } from '../../../../services/destination-schema.service';
+import { EhrWriteOptIns } from '../ehr-write-type-grid/ehr-write-type-grid.model';
+import { EhrWriteKindSwitches } from '../ehr-write-type-grid/ehr-write-kinds.model';
+import { EhrRunMode } from './ehr-write-back/ehr-write-back.model';
 
 /**
  * Superset of DestinationConfigFormComponent implemented by every component under destination-forms/ that
@@ -28,6 +32,9 @@ export interface WizardDestinationFormApi extends DestinationConfigFormComponent
   patchFrom(fields: Record<string, string>, target?: string | null): void;
   /** Back to this form's blank defaults — the "✕ clear existing connection" affordance. */
   reset(): void;
+  /** The destination's name (dest_name). The wizard's Step 1 is only the connection, so it hides this field there,
+   *  fills it from the connection, and lets the user change it on Review. Destination Connections shows it as usual. */
+  nameControl(): FormControl<string | null>;
 }
 
 /** Extra members exposed only by the SQL-family wrappers (SqlServer/AzureSql/MySql/PostgreSql) — the live
@@ -127,17 +134,33 @@ export function isCosmosDbFabricForm(
 }
 
 /** Extra members exposed only by EhrWriteBackDestinationFormComponent. The wizard copies the target's vendor and
- *  writable resource types into its own signals on Step 1's Next, because Step 2's resource picker must be filtered
- *  by what the TARGET EHR accepts, not by the upstream source. */
+ *  writable resource types into its own signals on Step 1's Next, because Step 2's resource picker shows the upstream
+ *  source's types with the ones the TARGET EHR does not accept greyed out (EhrWriteTypeGridComponent). The form's
+ *  options are shown in Step 3, after the resource types, and Step 3's Next waits for optionsValid() only: the kinds of
+ *  record each type is written as are chosen on Step 2, and the wizard hands them over through setWriteKinds(). */
 export interface EhrWriteBackFormApi extends WizardDestinationFormApi {
   readonly kind: 'ehrWriteBack';
   /** SourceSystemType name of the selected target connection, or null before one is chosen. */
   readonly targetVendor: Signal<string | null>;
   /** Resource types the selected target accepts writes for; empty when none (or before a choice). */
   readonly writableResourceTypes: Signal<string[]>;
+  /** How it runs, from the connection chosen (an EHR: live; a test server: test) and Dry run; null before a connection. */
+  readonly runMode: Signal<EhrRunMode | null>;
+  /** The chosen connection's name, or null before one is chosen. */
+  connectionName(): string | null;
+  /** The opt-ins as they would be saved (the same shape as ehrWriteOptInsOf). */
+  optIns(): EhrWriteOptIns;
+  /** The kinds chosen on Step 2, as saved (dest_enabledVariants, dest_createHolderEncounter). */
+  setWriteKinds(kinds: EhrWriteKindSwitches): void;
+  /** The options half (Step 3) is valid; isValid() covers the connection half (Step 1). */
+  optionsValid(): boolean;
+  /** The Review step's lines: where the destination writes and in which run mode. */
+  reviewLines(): { writesTo: string; mode: string };
+  /** The EHR a live run writes into; null for a test run, a dry run or a plain FHIR server. */
+  liveEhrLabel(): string | null;
 }
 
 /** Keyed on its own `kind` marker, for the same reason as isMongoForm. */
 export function isEhrWriteBackForm(x: WizardDestinationFormApi | null | undefined): x is EhrWriteBackFormApi {
   return !!x && (x as Partial<{ kind: string }>).kind === 'ehrWriteBack';
-}
+}

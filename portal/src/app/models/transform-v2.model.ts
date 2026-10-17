@@ -1,4 +1,5 @@
 import { DestinationTypeV2 } from './destination-configuration-v2.model';
+import { EhrWriteVendor } from '../connections/ehr-write-vendors';
 export { DestinationTypeV2, SQL_FAMILY_DESTINATION_TYPES } from './destination-configuration-v2.model';
 
 export interface Transform {
@@ -44,6 +45,14 @@ export interface Transform {
    *  So it stays a mode and this field carries the distinction the picker needs. Unset for every other entry,
    *  including OneLake Files, which is the Fabric form's own default. */
   fabricMode?: string;
+  /** For an EHR tile under the "EHR" heading: the write vendor the tile presets in the EHR Write-Back wizard.
+   *  Only set on those child rows, and never saved on a node: every tile saves as `dest-ehr-writeback`, and a
+   *  reopened node finds its tile again from its own `dest_ehrVendor` / `dest_testAsVendor` fields. */
+  ehrVendor?: EhrWriteVendor;
+  /** The row stays in the catalogue for lookups by id (name, rank, destinationType, permissionPrefix) but is never
+   *  offered in a picker. Used by `dest-ehr-writeback`, which saved nodes keep while the picker shows one tile per
+   *  EHR instead. */
+  pickerHidden?: boolean;
 }
 
 /** V2's simplified straight-chain sequence: Source → Destination → [Mapping →] Transformation →

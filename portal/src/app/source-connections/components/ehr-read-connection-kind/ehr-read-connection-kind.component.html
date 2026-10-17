@@ -1,0 +1,19 @@
+<!-- The @switch wraps each per-vendor form tag directly (not routed through another component's <ng-content>):
+     projected components are created once and only shown/hidden, so the form's ngOnInit (where the prefill happens)
+     would run only at page load, never on a later View/Edit. A @switch rather than NgComponentOutlet because Angular
+     has no template mechanism to bind a dynamically-resolved component's outputs. -->
+@if (formOpen()) {
+  <div class="sc-modal-backdrop" tabindex="0" (click)="onModalBackdropClick($event)" (keydown.escape)="wiz.close()">
+    <div class="sc-modal-panel" [class.sc-modal-panel--maximized]="formMaximized()">
+      @switch (currentEntityFormKey()) {
+        @case ('epic') { <app-epic-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+        @case ('cerner') { <app-cerner-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+        @case ('athena') { <app-athenahealth-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+        @case ('allscripts') { <app-allscripts-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+        @case ('healow') { <app-healow-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+        @case ('meditech') { <app-meditech-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+        @case ('sample') { <app-sample-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+      }
+    </div>
+  </div>
+}

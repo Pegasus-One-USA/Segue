@@ -24,7 +24,8 @@ public sealed class FhirClientEhrWriteChannel : IEhrWriteChannel
         Guid targetConnectionId,
         SourceSystemType targetVendor,
         Guid? destinationId,
-        EhrWriteBackRunOptions options)
+        EhrWriteBackRunOptions options,
+        bool vendorWriteApisActivated = false)
     {
         _client = client;
         _source = source;
@@ -33,6 +34,7 @@ public sealed class FhirClientEhrWriteChannel : IEhrWriteChannel
         TargetVendor = targetVendor;
         DestinationId = destinationId;
         Options = options;
+        VendorWriteApisActivated = vendorWriteApisActivated;
     }
 
     public Guid TargetConnectionId { get; }
@@ -44,6 +46,13 @@ public sealed class FhirClientEhrWriteChannel : IEhrWriteChannel
     public Guid? DestinationId { get; }
 
     public EhrWriteBackRunOptions Options { get; }
+
+    public bool VendorWriteApisActivated { get; }
+
+    /// <summary>The connector and connection this channel sends over, for a vendor channel that wraps it.</summary>
+    internal IFhirWriteClient Client => _client;
+
+    internal FhirSourceConfiguration Source => _source;
 
     public Task<string?> GetGrantedScopeAsync(CancellationToken cancellationToken) =>
         _accessTokenProvider is IFhirGrantedScopeProvider scopes

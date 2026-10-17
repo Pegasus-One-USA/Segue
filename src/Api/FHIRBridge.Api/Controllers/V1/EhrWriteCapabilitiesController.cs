@@ -35,6 +35,8 @@ public sealed class EhrWriteCapabilitiesController : ControllerBase
             : null;
         var cloneModeEnabled = await _settings.GetBoolAsync(
             EhrWriteBackSettings.CloneModeEnabledKey, EhrWriteBackSettings.CloneModeEnabledDefault, cancellationToken);
+        var dryRunEnabled = await _settings.GetBoolAsync(
+            EhrWriteBackSettings.DryRunEnabledKey, EhrWriteBackSettings.DryRunEnabledDefault, cancellationToken);
         var capabilities = (profile?.Capabilities ?? [])
             .Select(capability => new EhrWriteCapabilityDto(
                 capability.ResourceType,
@@ -44,13 +46,22 @@ public sealed class EhrWriteCapabilitiesController : ControllerBase
                 capability.RequiresEncounter,
                 capability.OptInOnly,
                 capability.AllowedApplicationTypes.Order().Select(type => type.ToString()).ToList(),
-                capability.LiveWriteSupported))
+                capability.LiveWriteSupported,
+                capability.RequiresVendorActivation,
+                capability.CreatesHolderEncounter,
+                capability.RequiresVariantOptIn,
+                capability.RequiresPatient,
+                capability.RequiresTargetReferences))
             .ToList();
 
         return Ok(new EhrWriteCapabilitiesDto(
             profile?.Vendor.ToString() ?? vendor,
             profile?.SupportsPatientMatch ?? false,
             cloneModeEnabled,
-            capabilities));
+            dryRunEnabled,
+            capabilities,
+            profile is not null && profile.Vendor == EhrWriteCapabilities.TestServerType
+                ? EhrWriteCapabilities.TestableVendors.Select(v => v.ToString()).ToList()
+                : []));
     }
 }

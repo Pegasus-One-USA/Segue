@@ -1,0 +1,623 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Domain.Enums;
+using FHIRBridge.Runtime.Application.DTOs;
+using R = FHIRBridge.Application.Abstractions.Destinations.AthenaOneWriteRequest;
+
+namespace FHIRBridge.Runtime.Infrastructure.Workflows.EhrWrite;
+
+/// <summary>
+/// athenahealth write channel. Clinical writes go to the proprietary athenaOne REST API
+/// (<c>https://{host}/v1/{practiceid}/...</c>, form-encoded or multipart), described by the athena write profiles as
+/// <see cref="AthenaOneWriteRequest"/> JSON; QuestionnaireResponse, identifier search and the granted scope stay on
+/// athena's FHIR API. One token serves both: the write connection requests <c>athena/service/Athenanet.MDP.*</c>
+/// alongside its FHIR scopes.
+///
+/// <para>Per run it caches each patient's department and each reference lookup, so a batch of fifty problems for one
+/// patient reads the department once. Only a definitive answer is cached (see <see cref="IsDefinitive"/>): after a
+/// timeout, 429 or 5xx the next record asks again rather than every later record being refused.</para>
+///
+/// <para><b>PHI.</b> Response bodies are read for ids and success flags only. athena's error text can echo what was
+/// sent, so it is never logged or stored: a refusal is reported as <c>athena-{status}</c>.</para>
+/// </summary>
+public sealed class AthenaOneEhrWriteChannel : IEhrWriteChannel
+{
+    /// <summary>The athenaOne scope a 2-legged client is granted for the proprietary API.</summary>
+    public const string ProprietaryApiScope = "athena/service/Athenanet.MDP.*";
+
+    private readonly FhirClientEhrWriteChannel _fhir;
+    private readonly string _apiBase;
+    private readonly Dictionary<string, string?> _departments = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string Kind, string Name), string?> _lookups = new();
+
+    public AthenaOneEhrWriteChannel(FhirClientEhrWriteChannel fhir, string practiceId)
+    {
+        _fhir = fhir;
+        _apiBase = ApiBase(fhir.TargetBaseUrl, practiceId);
+    }
+
+    public Guid TargetConnectionId => _fhir.TargetConnectionId;
+
+    public SourceSystemType TargetVendor => _fhir.TargetVendor;
+
+    public string TargetBaseUrl => _fhir.TargetBaseUrl;
+
+    public Guid? DestinationId => _fhir.DestinationId;
+
+    public EhrWriteBackRunOptions Options => _fhir.Options;
+
+    public bool VendorWriteApisActivated => _fhir.VendorWriteApisActivated;
+
+    public Task<string?> GetGrantedScopeAsync(CancellationToken cancellationToken) => _fhir.GetGrantedScopeAsync(cancellationToken);
+
+    public Task<EhrSearchOutcome> SearchByIdentifierAsync(string resourceType, string system, string value, CancellationToken cancellationToken) =>
+        _fhir.SearchByIdentifierAsync(resourceType, system, value, cancellationToken);
+
+    public Task<EhrPatientMatchOutcome> MatchPatientAsync(string patientJson, CancellationToken cancellationToken) =>
+        _fhir.MatchPatientAsync(patientJson, cancellationToken);
+
+    /// <summary>A patient's encounters come from athenaOne, whose encounter ids are the ones its vitals API takes, as
+    /// minimal FHIR Encounters: OPEN and REVIEW are in progress (athena modifies only those), CLOSED is finished.</summary>
+    public async Task<EhrSearchOutcome> SearchForPatientAsync(string resourceType, string targetPatientId, CancellationToken cancellationToken)
+    {
+        if (resourceType != "Encounter")
+        {
+            return await _fhir.SearchForPatientAsync(resourceType, targetPatientId, cancellationToken);
+        }
+
+        var patientId = AthenaPatientId(targetPatientId);
+        var department = patientId is null ? null : await DepartmentAsync(patientId, cancellationToken);
+        if (patientId is null || department is null)
+        {
+            return new EhrSearchOutcome(false, null, [], []);
+        }
+
+        var result = await GetAsync($"chart/{patientId}/encounters?departmentid={Uri.EscapeDataString(department)}&showallstatuses=true", cancellationToken);
+        if (result.Kind != FhirWriteOutcomeKind.Created)
+        {
+            return new EhrSearchOutcome(false, result.StatusCode, [], []);
+        }
+
+        return new EhrSearchOutcome(true, result.StatusCode, ToFhirEncounters(result.Body), []);
+    }
+
+    public async Task<EhrCreateOutcome> CreateAsync(string resourceType, string resourceJson, CancellationToken cancellationToken)
+    {
+        JsonObject? request;
+        try
+        {
+            request = JsonNode.Parse(resourceJson) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            request = null;
+        }
+
+        if (request is null || Text(request, "resourceType") != R.ResourceType)
+        {
+            // Not an athenaOne call: a FHIR create athena's FHIR API takes (QuestionnaireResponse).
+            return await _fhir.CreateAsync(resourceType, resourceJson, cancellationToken);
+        }
+
+        var operation = Text(request, R.Operation) ?? "request";
+        var patientId = AthenaPatientId(Text(request, R.Patient));
+        var path = Text(request, R.Path) ?? string.Empty;
+        if (path.Contains(R.PatientIdToken, StringComparison.Ordinal))
+        {
+            if (patientId is null)
+            {
+                return Refused("athena-patient-id-unrecognised");
+            }
+
+            path = path.Replace(R.PatientIdToken, patientId, StringComparison.Ordinal);
+        }
+
+        if (path.Contains(R.EncounterIdToken, StringComparison.Ordinal))
+        {
+            // A path segment, so an id only: '..' or a '/' would send the call to another athena endpoint.
+            if (EncounterId(Text(request, R.Encounter)) is not { } encounterId)
+            {
+                return Refused("athena-encounter-missing");
+            }
+
+            path = path.Replace(R.EncounterIdToken, encounterId, StringComparison.Ordinal);
+        }
+
+        string? department = null;
+        var fieldsSource = (request[R.Fields] as JsonObject ?? new JsonObject()).DeepClone().AsObject();
+        var jsonFieldsSource = (request[R.JsonFields] as JsonObject ?? new JsonObject()).DeepClone().AsObject();
+        var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            if (request[R.Department] is JsonValue flag && flag.TryGetValue<bool>(out var needsDepartment) && needsDepartment)
+            {
+                department = patientId is null ? Options.TargetDepartmentId : await DepartmentAsync(patientId, cancellationToken);
+                if (department is null)
+                {
+                    return RefusedUnlessCancelled("athena-department-unknown", cancellationToken);
+                }
+            }
+
+            // Each lookup's id replaces a value that is its placeholder exactly, never text inside another value: a
+            // field carrying clinical free text or a name that happens to contain the placeholder is sent as written.
+            foreach (var lookup in (request[R.Lookups] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+            {
+                var kind = Text(lookup, R.LookupKind) ?? string.Empty;
+                var name = Text(lookup, R.LookupName) ?? string.Empty;
+                var token = Text(lookup, R.LookupToken) ?? string.Empty;
+                if (token.Length == 0 || !HasPlaceholder(fieldsSource, token) && !HasPlaceholder(jsonFieldsSource, token))
+                {
+                    // Nowhere to put the id: the request was built without a placeholder for it.
+                    return Refused($"athena-{kind}-no-placeholder");
+                }
+
+                var id = await LookupAsync(kind, name, cancellationToken);
+                if (id is null)
+                {
+                    return RefusedUnlessCancelled($"athena-{kind}-not-found", cancellationToken);
+                }
+
+                resolved[token] = id;
+                ReplacePlaceholder(fieldsSource, token, id);
+                ReplacePlaceholder(jsonFieldsSource, token, id);
+            }
+
+            if (request[R.Existing] is JsonObject existing
+                && await ExistingCheckAsync(existing, patientId, department, resolved, cancellationToken) is { } stop)
+            {
+                return stop;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The department, reference and chart reads are GETs, which the send loop lets a cancel escape from. The
+            // write itself was not sent: the record is retried next run, not left for review as an unknown outcome.
+            return Refused(EhrWriteOutcomeCodes.CancelledBeforeSend);
+        }
+
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (name, value) in fieldsSource)
+        {
+            if (value is JsonValue scalar)
+            {
+                fields[name] = scalar.TryGetValue<string>(out var text) ? text : scalar.ToJsonString();
+            }
+        }
+
+        foreach (var (name, value) in jsonFieldsSource)
+        {
+            if (value is not null)
+            {
+                fields[name] = value.ToJsonString();
+            }
+        }
+
+        if (department is not null)
+        {
+            fields["departmentid"] = department;
+        }
+
+        var multipart = request[R.Multipart] is JsonValue m && m.TryGetValue<bool>(out var isMultipart) && isMultipart;
+        var result = await _fhir.Client.SendAsync(
+            new FhirRawWriteRequest(
+                Text(request, R.Method) ?? "POST",
+                $"{_apiBase}/{path}",
+                FormFields: fields,
+                Multipart: multipart,
+                Idempotent: false,
+                AddSourceQueryParameters: false),
+            _fhir.Source,
+            cancellationToken);
+
+        return Interpret(result, Text(request, R.IdField), operation, patientId, fields);
+    }
+
+    /// <summary>
+    /// A 2xx is created unless the body says otherwise (<c>success</c> false, or an <c>error</c>): the id comes from
+    /// the request's id field (a string, number or array, or an object inside a one-element array). An API that returns
+    /// no id (allergies, vitals) gets a stable synthetic one, so the ledger still records the write. A 409 means athena
+    /// holds the same data already.
+    /// </summary>
+    internal static EhrCreateOutcome Interpret(
+        FhirRawWriteResult result,
+        string? idField,
+        string operation,
+        string? patientId,
+        IReadOnlyDictionary<string, string> fields)
+    {
+        if (result.Kind != FhirWriteOutcomeKind.Created)
+        {
+            var kind = result.Kind == FhirWriteOutcomeKind.Rejected ? EhrCreateKind.Rejected : EhrCreateKind.Unknown;
+            var issues = result.StatusCode is { } status
+                ? new List<EhrOutcomeIssue> { new("error", "processing", $"athena-{status}", null) }
+                : result.Issues.Select(i => new EhrOutcomeIssue(i.Severity, i.Code, i.DetailCodes.FirstOrDefault(), null)).ToList();
+            return new EhrCreateOutcome(kind, result.StatusCode, null, issues);
+        }
+
+        JsonNode? body;
+        try
+        {
+            body = string.IsNullOrWhiteSpace(result.Body) ? null : JsonNode.Parse(result.Body);
+        }
+        catch (JsonException)
+        {
+            body = null;
+        }
+
+        var item = body is JsonArray array ? array.FirstOrDefault() as JsonObject : body as JsonObject;
+        var failed = item is not null
+            && ((item["success"] is JsonValue success && (success.TryGetValue<bool>(out var ok) ? !ok : string.Equals(success.ToString(), "false", StringComparison.OrdinalIgnoreCase)))
+                || item["error"] is not null);
+        if (failed)
+        {
+            return new EhrCreateOutcome(EhrCreateKind.Rejected, result.StatusCode, null, [new EhrOutcomeIssue("error", "processing", "athena-error", null)]);
+        }
+
+        var id = idField is null ? null : IdOf(item?[idField]);
+        if (id is null && idField is not null)
+        {
+            // athena said it worked and gave no id: something was filed, but this cannot say what.
+            return new EhrCreateOutcome(EhrCreateKind.Unknown, result.StatusCode, null, []);
+        }
+
+        id ??= SyntheticId(operation, patientId, fields);
+        return new EhrCreateOutcome(EhrCreateKind.Created, result.StatusCode, id, []);
+    }
+
+    /// <summary>The patient id the athenaOne calls carry. On a test server (a test run) the patient is the server's own
+    /// FHIR Patient, which <see cref="AthenaOneTestServer"/> reads by that id whatever its form: a server that also
+    /// holds copied records has non-numeric ids too.</summary>
+    private string? AthenaPatientId(string? targetPatientId) =>
+        PatientId(targetPatientId) ?? (Options.IsTestRun ? TestServerPatientId(targetPatientId) : null);
+
+    /// <summary>A FHIR id (letters, digits, '-' and '.', at most 64, not dots alone), without a leading <c>Patient/</c>.</summary>
+    internal static string? TestServerPatientId(string? targetPatientId)
+    {
+        var id = targetPatientId?.Trim() ?? string.Empty;
+        if (id.StartsWith("Patient/", StringComparison.Ordinal))
+        {
+            id = id["Patient/".Length..];
+        }
+
+        // An id of dots alone ('.', '..') would be a path segment in chart/{id}/..., not an id.
+        return id.Length is > 0 and <= 64
+            && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.')
+            && id.Any(c => c != '.')
+            ? id
+            : null;
+    }
+
+    /// <summary>The encounter id a request's path carries: a FHIR id (letters, digits, '-' and '.', at most 64, not dots
+    /// alone, so never a dot segment), athena's own numeric id included; null for anything else.</summary>
+    internal static string? EncounterId(string? encounterId)
+    {
+        var id = encounterId?.Trim() ?? string.Empty;
+        return id.Length is > 0 and <= 64
+            && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.')
+            && id.Any(c => c != '.')
+            ? id
+            : null;
+    }
+
+    /// <summary>A string value anywhere under <paramref name="node"/> that is <paramref name="token"/> exactly.</summary>
+    private static bool HasPlaceholder(JsonNode? node, string token) => node switch
+    {
+        JsonObject obj => obj.Any(p => HasPlaceholder(p.Value, token)),
+        JsonArray array => array.Any(item => HasPlaceholder(item, token)),
+        JsonValue value => value.TryGetValue<string>(out var text) && text == token,
+        _ => false,
+    };
+
+    /// <summary>Replaces every string value under <paramref name="node"/> that is <paramref name="token"/> exactly with
+    /// <paramref name="id"/>; text that only contains the token is left alone.</summary>
+    internal static void ReplacePlaceholder(JsonNode? node, string token, string id)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var key in obj.Select(p => p.Key).ToList())
+            {
+                if (obj[key] is JsonValue value && value.TryGetValue<string>(out var text) && text == token)
+                {
+                    obj[key] = id;
+                }
+                else
+                {
+                    ReplacePlaceholder(obj[key], token, id);
+                }
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            for (var i = 0; i < array.Count; i++)
+            {
+                if (array[i] is JsonValue value && value.TryGetValue<string>(out var text) && text == token)
+                {
+                    array[i] = id;
+                }
+                else
+                {
+                    ReplacePlaceholder(array[i], token, id);
+                }
+            }
+        }
+    }
+
+    /// <summary>athenaOne's patient id from a target patient id: athena's FHIR id <c>a-{practice}.E-{enterpriseid}</c>
+    /// (the number after "E-"), or a bare athena id (a patient this run created).</summary>
+    internal static string? PatientId(string? targetPatientId)
+    {
+        if (string.IsNullOrWhiteSpace(targetPatientId))
+        {
+            return null;
+        }
+
+        var id = targetPatientId.Trim();
+        if (id.StartsWith("Patient/", StringComparison.Ordinal))
+        {
+            id = id["Patient/".Length..];
+        }
+
+        var marker = id.LastIndexOf(".E-", StringComparison.Ordinal);
+        if (marker >= 0)
+        {
+            id = id[(marker + 3)..];
+        }
+
+        return id.Length > 0 && id.All(char.IsAsciiDigit) ? id : null;
+    }
+
+    /// <summary><c>https://{host}/v1/{practiceid}</c> from athena's FHIR base URL (<c>https://{host}/fhir/r4</c>).</summary>
+    internal static string ApiBase(string fhirBaseUrl, string practiceId)
+    {
+        var uri = new Uri(fhirBaseUrl);
+        var practice = practiceId.Trim();
+        var dash = practice.LastIndexOf('-');
+        if (!practice.All(char.IsAsciiDigit) && dash >= 0)
+        {
+            // A practice reference (Organization/a-1.Practice-195900) rather than the bare number.
+            practice = practice[(dash + 1)..];
+        }
+
+        return $"{uri.GetLeftPart(UriPartial.Authority)}/v1/{Uri.EscapeDataString(practice)}";
+    }
+
+    /// <summary>athenaOne encounters as minimal FHIR Encounters (id, status, period.start), the shape the writer's
+    /// encounter picker reads.</summary>
+    internal static IReadOnlyList<string> ToFhirEncounters(string? body)
+    {
+        JsonNode? root;
+        try
+        {
+            root = string.IsNullOrWhiteSpace(body) ? null : JsonNode.Parse(body);
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+
+        var encounters = root is JsonObject obj ? obj["encounters"] as JsonArray : root as JsonArray;
+        var result = new List<string>();
+        foreach (var encounter in encounters?.OfType<JsonObject>() ?? [])
+        {
+            if (IdOf(encounter["encounterid"]) is not { } id)
+            {
+                continue;
+            }
+
+            var status = (Text(encounter, "status") ?? string.Empty).ToUpperInvariant() switch
+            {
+                "OPEN" or "REVIEW" => "in-progress",
+                "CLOSED" => "finished",
+                _ => "cancelled",
+            };
+            var fhir = new JsonObject { ["resourceType"] = "Encounter", ["id"] = id, ["status"] = status };
+            if (Text(encounter, "encounterdate") is { } date
+                && DateTime.TryParseExact(date, "MM/dd/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            {
+                fhir["period"] = new JsonObject { ["start"] = parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) };
+            }
+
+            result.Add(fhir.ToJsonString());
+        }
+
+        return result;
+    }
+
+    /// <summary>The department a patient's chart is written in: the destination's, else the patient's own primary
+    /// department.</summary>
+    private async Task<string?> DepartmentAsync(string patientId, CancellationToken cancellationToken)
+    {
+        if (Options.TargetDepartmentId is { Length: > 0 } configured)
+        {
+            return configured;
+        }
+
+        if (_departments.TryGetValue(patientId, out var cached))
+        {
+            return cached;
+        }
+
+        string? department = null;
+        var result = await GetAsync($"patients/{patientId}", cancellationToken);
+        if (result.Kind == FhirWriteOutcomeKind.Created)
+        {
+            try
+            {
+                var root = string.IsNullOrWhiteSpace(result.Body) ? null : JsonNode.Parse(result.Body);
+                var patient = root is JsonArray array ? array.FirstOrDefault() as JsonObject : root as JsonObject;
+                department = IdOf(patient?["primarydepartmentid"]) ?? IdOf(patient?["departmentid"]);
+            }
+            catch (JsonException)
+            {
+                department = null;
+            }
+        }
+
+        if (IsDefinitive(result))
+        {
+            _departments[patientId] = department;
+        }
+
+        return department;
+    }
+
+    /// <summary>athena's id for an allergen or medication with exactly this name (case-insensitive), or null when none
+    /// or several match: a near match would file a different drug.</summary>
+    private async Task<string?> LookupAsync(string kind, string name, CancellationToken cancellationToken)
+    {
+        if (_lookups.TryGetValue((kind, name), out var cached))
+        {
+            return cached;
+        }
+
+        var (path, nameField, idField) = kind switch
+        {
+            R.AllergenLookup => ("reference/allergies", "allergenname", "allergenid"),
+            R.MedicationLookup => ("reference/medications", "medication", "medicationid"),
+            _ => (null, null, null),
+        };
+
+        string? id = null;
+        var definitive = true;
+        if (path is not null && name.Trim().Length >= 2)
+        {
+            var result = await GetAsync($"{path}?searchvalue={Uri.EscapeDataString(name.Trim())}", cancellationToken);
+            if (result.Kind == FhirWriteOutcomeKind.Created)
+            {
+                try
+                {
+                    var root = string.IsNullOrWhiteSpace(result.Body) ? null : JsonNode.Parse(result.Body);
+                    var matches = (root as JsonArray ?? new JsonArray())
+                        .OfType<JsonObject>()
+                        .Where(o => string.Equals(Text(o, nameField!)?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase))
+                        .Select(o => IdOf(o[idField!]))
+                        .OfType<string>()
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList();
+                    id = matches.Count == 1 ? matches[0] : null;
+                }
+                catch (JsonException)
+                {
+                    id = null;
+                }
+            }
+
+            definitive = IsDefinitive(result);
+        }
+
+        if (definitive)
+        {
+            _lookups[(kind, name)] = id;
+        }
+
+        return id;
+    }
+
+    /// <summary>
+    /// Reads the patient's chart list before an upsert (the allergy PUT replaces an entry with the same allergenid,
+    /// clinician-entered reactions and note included). An entry whose match field holds the resolved value means the
+    /// record is on the chart already: reported as <see cref="R.AlreadyOnChartCode"/>, which the writer records as
+    /// already at target, and nothing is sent. A read that fails refuses the record (retried next run) rather than
+    /// risk the overwrite. Null when the write may go ahead.
+    /// </summary>
+    private async Task<EhrCreateOutcome?> ExistingCheckAsync(
+        JsonObject existing,
+        string? patientId,
+        string? department,
+        IReadOnlyDictionary<string, string> resolved,
+        CancellationToken cancellationToken)
+    {
+        var path = Text(existing, R.ExistingPath) ?? string.Empty;
+        var list = Text(existing, R.ExistingList);
+        var match = Text(existing, R.ExistingMatch);
+        var value = Text(existing, R.ExistingValue);
+        if (path.Contains(R.PatientIdToken, StringComparison.Ordinal))
+        {
+            if (patientId is null)
+            {
+                return Refused("athena-patient-id-unrecognised");
+            }
+
+            path = path.Replace(R.PatientIdToken, patientId, StringComparison.Ordinal);
+        }
+
+        if (path.Length == 0 || match is null || value is null)
+        {
+            return Refused("athena-existing-check-invalid");
+        }
+
+        value = resolved.GetValueOrDefault(value, value);
+        if (department is not null)
+        {
+            path += $"{(path.Contains('?') ? '&' : '?')}departmentid={Uri.EscapeDataString(department)}";
+        }
+
+        var result = await GetAsync(path, cancellationToken);
+        if (result.Kind != FhirWriteOutcomeKind.Created)
+        {
+            return RefusedUnlessCancelled("athena-existing-check-failed", cancellationToken);
+        }
+
+        JsonNode? root;
+        try
+        {
+            root = string.IsNullOrWhiteSpace(result.Body) ? null : JsonNode.Parse(result.Body);
+        }
+        catch (JsonException)
+        {
+            return Refused("athena-existing-check-failed");
+        }
+
+        var entries = list is not null && root is JsonObject obj ? obj[list] as JsonArray : root as JsonArray;
+        var present = (entries ?? new JsonArray())
+            .OfType<JsonObject>()
+            .Any(entry => string.Equals(IdOf(entry[match]), value, StringComparison.Ordinal));
+        return present
+            ? new EhrCreateOutcome(EhrCreateKind.Rejected, null, null, [new EhrOutcomeIssue("information", "duplicate", R.AlreadyOnChartCode, null)])
+            : null;
+    }
+
+    private Task<FhirRawWriteResult> GetAsync(string relativePath, CancellationToken cancellationToken) =>
+        _fhir.Client.SendAsync(
+            new FhirRawWriteRequest("GET", $"{_apiBase}/{relativePath}", Idempotent: true, AddSourceQueryParameters: false),
+            _fhir.Source,
+            cancellationToken);
+
+    /// <summary>athena answered, so the answer holds for the rest of the run: a 2xx, or a 4xx about the request. Not an
+    /// unknown outcome (timeout, 5xx, 429 retries spent), a refusal made before sending (no token), or 401/403/408,
+    /// which say nothing about the patient or the name looked up.</summary>
+    private static bool IsDefinitive(FhirRawWriteResult result) =>
+        result.Kind == FhirWriteOutcomeKind.Created
+        || (result.Kind == FhirWriteOutcomeKind.Rejected && result.StatusCode is { } status && status is not (401 or 403 or 408));
+
+    /// <summary>A refusal made before anything was sent (no HTTP status), so the next run tries again.</summary>
+    private static EhrCreateOutcome Refused(string code) =>
+        new(EhrCreateKind.Rejected, null, null, [new EhrOutcomeIssue("error", "processing", code, null)]);
+
+    /// <summary>A department or reference read that the run's cancel cut short found nothing, but that says nothing
+    /// about athena: the writer is told the run was cancelled before sending, and stops (as the FHIR create path does).</summary>
+    private static EhrCreateOutcome RefusedUnlessCancelled(string code, CancellationToken cancellationToken) =>
+        Refused(cancellationToken.IsCancellationRequested ? EhrWriteOutcomeCodes.CancelledBeforeSend : code);
+
+    private static string SyntheticId(string operation, string? patientId, IReadOnlyDictionary<string, string> fields)
+    {
+        var content = string.Join("&", fields.OrderBy(f => f.Key, StringComparer.Ordinal).Select(f => $"{f.Key}={f.Value}"));
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)))[..16].ToLowerInvariant();
+        return $"{operation}:{patientId}:{hash}";
+    }
+
+    private static string? IdOf(JsonNode? node) => node switch
+    {
+        JsonValue value when value.TryGetValue<string>(out var text) && text.Length > 0 => text,
+        JsonValue value when value.TryGetValue<long>(out var number) => number.ToString(CultureInfo.InvariantCulture),
+        JsonArray array => array.Select(IdOf).FirstOrDefault(id => id is not null),
+        _ => null,
+    };
+
+    private static string? Text(JsonNode? node, string property) =>
+        (node as JsonObject)?[property] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+}

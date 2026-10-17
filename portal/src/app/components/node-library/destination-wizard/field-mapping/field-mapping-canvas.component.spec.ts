@@ -1,7 +1,11 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { of } from 'rxjs';
 import { FieldMappingCanvasComponent } from './field-mapping-canvas.component';
 import { ToastService } from '../../../../services/toast.service';
 import { DestinationSchemaService } from '../../../../services/destination-schema.service';
+import { TransformationRulesService } from './transformation-rules.service';
 
 /**
  * Regression coverage for the "Map Fields table card disappears after Save -> leave -> reopen" bug
@@ -17,8 +21,16 @@ describe('FieldMappingCanvasComponent — MySQL bare-name reopen fix', () => {
     await TestBed.configureTestingModule({
       imports: [FieldMappingCanvasComponent],
       providers: [
+        // The canvas renders field-mapping-list and the join popover, which inject TransformationRulesService
+        // and DeIdentificationProfileService (-> HttpClient) since 35cfaba9 / 3e0e95f8. Same setup as the
+        // v2 canvas spec and field-mapping-list.no-table-state.spec.ts.
+        provideHttpClient(),
+        provideHttpClientTesting(),
         { provide: ToastService, useValue: { show: () => {} } },
         { provide: DestinationSchemaService, useValue: {} },
+        { provide: TransformationRulesService, useValue: {
+            getNodeSchemas: () => of([]), getEffectiveRules: () => of([]), delete: () => of(void 0),
+          } },
       ],
     }).compileComponents();
 

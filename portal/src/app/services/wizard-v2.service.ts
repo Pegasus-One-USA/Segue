@@ -14,7 +14,7 @@ import { AUDIENCE_FIELD_CONFIG, EpicAudience } from '../components/epic-source-w
 import { EhrVendor } from '../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel, SourceConnectionRequest, AuthenticationTypeModel } from '../source-connections/models/source-connection.model';
-import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
+import { OAUTH_DEFAULT_URLS, absoluteJwksUrl } from '../core/api-endpoints';
 import { SOURCES } from '../data/sources-v2.data';
 
 /** EhrVendor (SourceSystemType) enum member name → SOURCES catalog id — duplicated from
@@ -449,8 +449,11 @@ export class WizardServiceV2 {
       sourceSystemType: this.ehrType(),
       baseUrl:          fields['FHIR base URL'],
       applicationType:  AUDIENCE_TO_APPLICATION_TYPE[audienceKey] ?? null,
-      // Null keeps whatever is saved; the form always sends a value, so this only matters for older nodes.
-      access:           (fields['Access'] as 'Read' | 'Write' | 'ReadWrite' | undefined) || null,
+      // A source node only reads: always null (Read on create, keep saved on update), even when an older node still
+      // carries an 'Access' / 'Vendor write APIs activated' field — so re-saving it can never downgrade a
+      // Write/ReadWrite connection or clear its activation. EHR write connections live on the Destination Connections page.
+      access:           null,
+      vendorWriteApisActivated: null,
       authentication: {
         authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
         clientId:           liveClientId,
@@ -475,7 +478,7 @@ export class WizardServiceV2 {
         // recover it from otherwise — see EhrVendorSourceFormComponent's liveJwksUrl remarks) shows back whatever URL
         // was actually registered with the EHR, hosted or externally-typed, instead of only ever recomputing
         // FHIRBridge's own hosted URL guess.
-        jwksUrl:                  liveAuthMethod === 'jwt' ? (fields['JWKS URL'] || null) : null,
+        jwksUrl:                  liveAuthMethod === 'jwt' ? (absoluteJwksUrl(fields['JWKS URL']) || null) : null,
         // athenahealth only — the backend builds the ah-practice reference from this bare practice id. Null for
         // every other vendor (EhrVendorSourceFormComponent only ever populates this field for Athenahealth).
         practiceId:               fields['Practice ID'] || null,

@@ -13,6 +13,12 @@ internal static class EhrWriteKeys
     /// <summary>The EHR environment: its FHIR base URL without a trailing slash, scheme and host lower-cased.</summary>
     public static string TargetKey(string targetBaseUrl) => Hash("target|" + NormalizeBaseUrl(targetBaseUrl));
 
+    /// <summary>A test server standing in for <paramref name="testedVendor"/>: keyed apart from the server's own writes
+    /// and from tests of other vendors, so testing as Epic does not mark records as written for a later test as
+    /// athena, and no test row is ever confused with a production write.</summary>
+    public static string TestTargetKey(string targetBaseUrl, string testedVendor) =>
+        Hash($"target|test|{testedVendor}|" + NormalizeBaseUrl(targetBaseUrl));
+
     /// <summary>The record's origin. <paramref name="sourceBaseUrl"/> is null when the run's source is not a single
     /// known FHIR server; the key then relies on the source id alone. <paramref name="clone"/> keys a clone-mode
     /// write apart from a normal one, so writing a record to its clone never counts as writing it for real.</summary>

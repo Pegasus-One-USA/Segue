@@ -14,7 +14,7 @@ import { AUDIENCE_FIELD_CONFIG, EpicAudience } from '../components/epic-source-w
 import { EhrVendor } from '../ehr-endpoints/models/ehr-endpoint.model';
 import { ISourceConnectionService } from '../source-connections/services/i-source-connection.service';
 import { SourceConnectionModel, SourceConnectionRequest, AuthenticationTypeModel } from '../source-connections/models/source-connection.model';
-import { OAUTH_DEFAULT_URLS } from '../core/api-endpoints';
+import { OAUTH_DEFAULT_URLS, absoluteJwksUrl } from '../core/api-endpoints';
 import { SOURCES } from '../data/sources.data';
 
 /** EhrVendor (SourceSystemType) enum member name → SOURCES catalog id — duplicated from
@@ -34,6 +34,10 @@ const EHR_VENDOR_TO_SOURCES_ID: Record<string, string> = {
 };
 
 export type WizardMode = 'canvas' | 'entity';
+
+/** What an entity-mode connection is being opened for: 'read' (Settings > Source Connections; sources only
+ *  read) or 'write' (an EHR write connection on the Destination Connections page; Backend System only, Access = Write). */
+export type WizardPurpose = 'read' | 'write';
 
 /** Fresh (keyVaultName, secretName) pair for a wizard-typed client secret, provisioned via
  *  ConfigurationService.WriteInlineClientSecretAsync (inlineClientSecret on save) — same fixed-vault +
@@ -116,6 +120,9 @@ export class WizardService {
   readonly wizardMode   = signal<WizardMode>('canvas');
   /** True while viewing (not editing) a SourceConnection from the entity-mode list page. */
   readonly readonlyMode = signal(false);
+  /** 'write' only while an EHR write connection is open from Destination Connections; every other open is 'read'.
+   *  Drives which access-related fields the vendor form shows and whether save() sends Access at all. */
+  readonly purpose      = signal<WizardPurpose>('read');
   /** The vendor/EHR selector value (SourceSystemType string). Used in both modes; entity mode seeds it from the DTO. */
   readonly ehrType      = signal<EhrVendor>('Epic');
   /** The SourceConnection id being edited in entity mode; null when creating new. */
@@ -127,6 +134,9 @@ export class WizardService {
   readonly entityDto    = signal<SourceConnectionModel | null>(null);
   /** Bumped after every successful entity-mode save so list pages can react via an effect() without a dialog. */
   readonly saved        = signal(0);
+  /** The connection the last successful entity-mode save returned, set just before `saved` is bumped — so a caller
+   *  that opened the form to create a connection on the go (an EHR Write-Back destination) can pick it at once. */
+  readonly lastSavedEntity = signal<SourceConnectionModel | null>(null);
   /** Emits once per save() call, after the create/update HTTP call actually settles — save() itself is
    *  fire-and-forget (subscribes internally and returns immediately), so a caller that needs to know the
    *  real outcome (e.g. keep a dialog open and let the user fix a validation error, rather than assuming
@@ -230,6 +240,7 @@ export class WizardService {
     // into this canvas-mode open — canvas mode is the default and must behave exactly as it always has.
     this.wizardMode.set('canvas');
     this.readonlyMode.set(false);
+    this.purpose.set('read');
     this.entityId.set(null);
     this.entityDto.set(null);
     // Canvas mode has no backend SourceConnection to restore a secret reference from yet (it's created later, at
@@ -272,9 +283,10 @@ export class WizardService {
   // ── open (entity mode — Source Connections CRUD page) ─────────────────────
   /** Opens the wizard against a persisted SourceConnection instead of a canvas node.
    *  Pass `dto: null` to create a new SourceConnection; pass an existing dto to view/edit it. */
-  openEntity(dto: SourceConnectionModel | null, opts?: { readonly?: boolean }): void {
+  openEntity(dto: SourceConnectionModel | null, opts?: { readonly?: boolean; purpose?: WizardPurpose }): void {
     this.wizardMode.set('entity');
     this.readonlyMode.set(!!opts?.readonly);
+    this.purpose.set(opts?.purpose ?? 'read');
     this.entityId.set(dto?.id ?? null);
     this.entityDto.set(dto);
     this.ehrType.set(dto?.sourceSystemType ?? 'Epic');
@@ -320,8 +332,10 @@ export class WizardService {
     );
     this.authMethod.set(AUTHENTICATION_TYPE_TO_AUTH_METHOD[dto?.authentication?.authenticationType ?? 'None'] ?? 'secret');
     this.authPlacement.set((dto?.authentication?.authPlacement as 'post' | 'basic') || 'post');
+    // A write connection is always server to server (Backend System); the form forces it for a new one too.
     this.epicAudience.set(
-      (dto?.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType]) || 'provider-ehr-launch'
+      (dto?.applicationType && APPLICATION_TYPE_TO_AUDIENCE[dto.applicationType])
+        || (this.purpose() === 'write' ? 'backend-system' : 'provider-ehr-launch')
     );
     this.redirectUri.set(dto?.interactive?.redirectUris?.[0] ?? OAUTH_DEFAULT_URLS.redirectUri);
     this.launchUrlWiz.set(dto?.interactive?.launchUrl ?? OAUTH_DEFAULT_URLS.launchUrl);
@@ -338,6 +352,7 @@ export class WizardService {
     this.store.editingNodeId.set(null);
     this.wizardMode.set('canvas');
     this.readonlyMode.set(false);
+    this.purpose.set('read');
     this.entityId.set(null);
     this.entityDto.set(null);
     this._unlockContentScroll();
@@ -505,13 +520,25 @@ export class WizardService {
       ? fields['Retrieval resource type'].split(',').map(s => s.trim()).filter(Boolean)
       : this.resources();
 
+    const writePurpose = this.purpose() === 'write';
+    // Editing from Destination Connections (write purpose) changes only the connection and its write settings. A
+    // Read & Write row may also feed scheduled source runs, which read the saved retrieval and scopes, so those
+    // round-trip unchanged instead of being cleared (retrieval) or recomputed (scopes) the way a source edit does.
+    const writeEditDto = writePurpose && this.wizardMode() === 'entity' ? this.entityDto() : null;
     const request: SourceConnectionRequest = {
       name:             fields['__name'],
       sourceSystemType: this.ehrType(),
       baseUrl:          fields['FHIR base URL'],
       applicationType:  AUDIENCE_TO_APPLICATION_TYPE[audienceKey] ?? null,
-      // Null keeps whatever is saved; the form always sends a value, so this only matters for older nodes.
-      access:           (fields['Access'] as 'Read' | 'Write' | 'ReadWrite' | undefined) || null,
+      // Sources only read: a read-purpose save never sends Access (null = Read on create, keep saved on update), so
+      // re-saving a source can never downgrade a Write/ReadWrite connection. A new write connection is created
+      // Write; editing one keeps whatever access it already has.
+      access:           writePurpose && !this.entityId() ? 'Write' : null,
+      vendorWriteApisActivated: writePurpose
+        ? (fields['Vendor write APIs activated'] === 'true' ? true : fields['Vendor write APIs activated'] === 'false' ? false : null)
+        : null,
+      // athenahealth write connections only. "" clears a saved value; read purpose never touches it (null).
+      departmentId:     writePurpose && fields['Department ID'] !== undefined ? fields['Department ID'].trim() : null,
       authentication: {
         authenticationType: AUTH_METHOD_TO_AUTHENTICATION_TYPE[liveAuthMethod] ?? 'OAuthClientCredentials',
         clientId:           liveClientId,
@@ -525,7 +552,9 @@ export class WizardService {
         // this stays correct even with zero resources (the common case for a brand-new source; real
         // resource-derived scopes get filled in later by EpicSourceConnectionScopeSyncService once a
         // workflow wires this source to a destination — see ehr-vendor-source-form.component.ts).
-        scopes:              this.scopeString().split(' ').filter(Boolean),
+        scopes:              writeEditDto?.authentication?.scopes?.length
+          ? [...writeEditDto.authentication.scopes]
+          : this.scopeString().split(' ').filter(Boolean),
         clientSecretKeyVaultName: clientSecretKeyVaultName,
         clientSecretName:         clientSecretName,
         inlineClientSecret:       typedClientSecret,
@@ -536,7 +565,7 @@ export class WizardService {
         // recover it from otherwise — see EhrVendorSourceFormComponent's liveJwksUrl remarks) shows back whatever URL
         // was actually registered with the EHR, hosted or externally-typed, instead of only ever recomputing
         // FHIRBridge's own hosted URL guess.
-        jwksUrl:                  liveAuthMethod === 'jwt' ? (fields['JWKS URL'] || null) : null,
+        jwksUrl:                  liveAuthMethod === 'jwt' ? (absoluteJwksUrl(fields['JWKS URL']) || null) : null,
         // athenahealth only — the backend builds the ah-practice reference from this bare practice id. Null for
         // every other vendor (EhrVendorSourceFormComponent only ever populates this field for Athenahealth).
         practiceId:               fields['Practice ID'] || null,
@@ -556,7 +585,9 @@ export class WizardService {
       // not connection-level — entity mode (Settings → Source Connections) manages only the reusable connection,
       // so it never persists a retrieval payload here regardless of what the audience would otherwise show in
       // canvas mode. See EhrVendorSourceFormComponent.showRetrievalSection, which hides the corresponding UI section.
-      retrieval: (this.wizardMode() === 'canvas' && audCfg.showRetrieval)
+      retrieval: writeEditDto
+        ? (writeEditDto.retrieval ?? null)
+        : (this.wizardMode() === 'canvas' && audCfg.showRetrieval)
         ? {
             retrievalMethod:        fields['Retrieval method key'] || 'search-rest',
             resourceTypes:          retrievalResourceTypes,
@@ -626,11 +657,13 @@ export class WizardService {
     const obs = id ? this.sourceConnectionSvc.update(id, request) : this.sourceConnectionSvc.create(request);
 
     obs.subscribe({
-      next: () => {
+      next: (model) => {
+        const noun = writePurpose ? 'EHR write connection' : 'Source Connection';
         this.toast.show(
-          'Source Connection saved',
-          id ? 'Source Connection updated successfully.' : 'Source Connection created successfully.'
+          `${noun} saved`,
+          id ? `${noun} updated successfully.` : `${noun} created successfully.`
         );
+        this.lastSavedEntity.set(model ?? null);
         this.saved.update(n => n + 1);
         this.saveOutcome$.next({ success: true });
         this.close();

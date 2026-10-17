@@ -20,6 +20,10 @@ public static partial class TabularSourceSettings
     public const string MaxRowsKey = "tab_maxRows";
     public const string TemplatesKey = "tab_templates";
 
+    /// <summary>The per-type entries (<see cref="TabularStreams"/>): each resource type with its own query or file and
+    /// template. A node without it is an older single-query node, run through <see cref="TemplatesKey"/>.</summary>
+    public const string StreamsKey = "tab_streams";
+
     public const string CsvKind = "csv";
     public const string SqlKind = "sql";
 
@@ -31,6 +35,7 @@ public static partial class TabularSourceSettings
 
     public const int MaxColumns = 200;
     public const int MaxTemplates = 10;
+    public const int MaxStreams = 30;
     public const int PreviewRows = 5;
 
     public static readonly IReadOnlyList<string> SqlEngines = ["sqlserver", "postgresql", "mysql"];
@@ -44,8 +49,15 @@ public static partial class TabularSourceSettings
     public static string? SourceBaseUrlFor(string? datasetKey)
     {
         var normalized = NormalizeDatasetKey(datasetKey);
-        return normalized is null ? null : "urn:fhirbridge:tabular:" + normalized;
+        return normalized is null ? null : SourceUrlPrefix + normalized;
     }
+
+    /// <summary>The run's source is a CSV / SQL Table data set (its identity is <see cref="SourceBaseUrlFor"/>'s), whose
+    /// templates are written by the person who knows the target, so they may carry the target's own ids.</summary>
+    public static bool IsTabularSource(string? sourceBaseUrl) =>
+        sourceBaseUrl is not null && sourceBaseUrl.StartsWith(SourceUrlPrefix, StringComparison.Ordinal);
+
+    private const string SourceUrlPrefix = "urn:fhirbridge:tabular:";
 
     /// <summary>Lower case letters, digits and hyphens, 3 to 64 characters; null when nothing usable is left.</summary>
     public static string? NormalizeDatasetKey(string? datasetKey)

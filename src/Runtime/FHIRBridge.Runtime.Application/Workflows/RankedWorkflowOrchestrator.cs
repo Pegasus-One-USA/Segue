@@ -24,6 +24,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     private readonly IWorkflowDefinitionStore? _workflowDefinitionStore;
     private readonly IBulkExportPauseRecorder? _bulkExportPauseRecorder;
     private readonly EhrDataDumpWriter? _ehrDataDumpWriter;
+    private readonly IActiveWorkflowRuns? _activeRuns;
     private readonly IEhrEndpointOverrideProvider? _ehrEndpointOverrideProvider;
     private readonly ILogger<RankedWorkflowOrchestrator> _logger;
 
@@ -40,6 +41,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IBulkExportPauseRecorder? bulkExportPauseRecorder = null,
         ILogger<RankedWorkflowOrchestrator>? logger = null,
         EhrDataDumpWriter? ehrDataDumpWriter = null,
+        IActiveWorkflowRuns? activeRuns = null,
         IEhrEndpointOverrideProvider? ehrEndpointOverrideProvider = null)
     {
         _graphValidator = graphValidator;
@@ -54,6 +56,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _bulkExportPauseRecorder = bulkExportPauseRecorder;
         _logger = logger ?? NullLogger<RankedWorkflowOrchestrator>.Instance;
         _ehrDataDumpWriter = ehrDataDumpWriter;
+        _activeRuns = activeRuns;
         _ehrEndpointOverrideProvider = ehrEndpointOverrideProvider;
     }
 
@@ -137,7 +140,15 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             workflowRun.Id, workflowDefinition.Id, workflowDefinition.Name, workflowDefinition.Version,
             orderedNodes.Count, context.TriggerType, context.TriggeredBy, targetNodeId, context.CorrelationId);
 
-        await PersistRunStartedAsync(workflowRun, cancellationToken);
+        // The Running row carries this process's lease from the start; the heartbeat renews it while the run is held
+        // in IActiveWorkflowRuns (see RunNodesAsync), so no instance mistakes it for a dead run.
+        if (_activeRuns is not null)
+        {
+            workflowRun.HoldLease(_activeRuns.InstanceId, DateTimeOffset.UtcNow + WorkflowRunLease.Duration);
+        }
+
+        // Only a lease the database holds is one another instance can see lapse, so only then is this run fenced.
+        var leasePersisted = await PersistRunStartedAsync(workflowRun, cancellationToken);
         await NotifyRunStatusAsync(workflowRun.Id, workflowDefinition.Id, "Running", DateTimeOffset.UtcNow, null, cancellationToken);
 
         await _auditRecorder.RecordAsync(new(
@@ -154,7 +165,8 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
         return await RunNodesAsync(
             workflowDefinition, effectiveDefinition, workflowRun, context, orderedNodes,
-            outputsByNodeId, skippedResourceTypesAcrossRun, cancellationToken);
+            outputsByNodeId, skippedResourceTypesAcrossRun, cancellationToken,
+            confirmedLeaseExpiresAt: leasePersisted ? workflowRun.LeaseExpiresAt : null);
     }
 
     /// <summary>Resumes a run that <see cref="RunNodesAsync"/> paused at <paramref name="nodeId"/> (a source node
@@ -198,7 +210,67 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         var pausedNode = effectiveDefinition.Nodes.FirstOrDefault(n => n.Id == nodeId)
             ?? throw new InvalidOperationException($"Node '{nodeId}' was not found on workflow '{workflowDefinition.Id}'.");
 
-        var context = DeserializeExecutionContext(contextJson, workflowRunId);
+        // A run another instance closed while it was paused (failed as interrupted, cancelled) is not run again.
+        if (WorkflowRunStatuses.IsTerminal(workflowRun.Status))
+        {
+            throw new WorkflowRunAlreadyClosedException(workflowRunId, workflowRun.Status.ToString());
+        }
+
+        // Running again, under this process's lease, before any node runs: the heartbeat then renews it and other
+        // instances see a live run, and the fence (IActiveWorkflowRuns) applies as it does to a fresh run. While the
+        // row still said AwaitingBulkExport, nothing renewed it, so a cancel or a close elsewhere never reached here.
+        workflowRun.ResumeAfterBulkExport();
+        if (_activeRuns is not null)
+        {
+            workflowRun.HoldLease(_activeRuns.InstanceId, DateTimeOffset.UtcNow + WorkflowRunLease.Duration);
+        }
+
+        var leasePersisted = await PersistRunStartedAsync(workflowRun, cancellationToken);
+
+        // From here until RunNodesAsync holds the run, nothing renews its lease: a failure in between (a malformed
+        // context or prior outputs, the dump or history write) would leave a Running row for the expiry sweep to close
+        // as "Interrupted", with the real error lost. So it fails the run here, with that error, before rethrowing.
+        WorkflowExecutionContext context;
+        ResumedRun resumed;
+        try
+        {
+            context = DeserializeExecutionContext(contextJson, workflowRunId);
+            resumed = await PrepareResumeAsync(
+                workflowRun, effectiveDefinition, pausedNode, context, priorNodeOutputsJson, resources,
+                skippedResourceTypeReasons, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await FailResumeAsync(workflowDefinition, workflowRun, exception);
+            throw;
+        }
+
+        return await RunNodesAsync(
+            workflowDefinition, effectiveDefinition, workflowRun, context, resumed.RemainingNodes,
+            resumed.OutputsByNodeId, resumed.SkippedResourceTypesAcrossRun, cancellationToken,
+            confirmedLeaseExpiresAt: leasePersisted ? workflowRun.LeaseExpiresAt : null);
+    }
+
+    /// <summary>What a resume restores before its remaining nodes run: the prior outputs with the paused node's
+    /// delivered resources, the nodes after it, and the skipped resource types carried so far.</summary>
+    private sealed record ResumedRun(
+        IReadOnlyCollection<WorkflowNode> RemainingNodes,
+        Dictionary<Guid, WorkflowNodeOutput> OutputsByNodeId,
+        List<string> SkippedResourceTypesAcrossRun);
+
+    /// <summary>Rebuilds the paused run from what was persisted at pause time and records the paused node's delivered
+    /// resources as its output (see <see cref="ResumeAfterBulkExportAsync"/>).</summary>
+    private async Task<ResumedRun> PrepareResumeAsync(
+        WorkflowRun workflowRun,
+        WorkflowDefinition effectiveDefinition,
+        WorkflowNode pausedNode,
+        WorkflowExecutionContext context,
+        string? priorNodeOutputsJson,
+        IReadOnlyList<FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope> resources,
+        IReadOnlyList<string>? skippedResourceTypeReasons,
+        CancellationToken cancellationToken)
+    {
+        var workflowRunId = workflowRun.Id;
         var orderedNodes = TopologicalSort(effectiveDefinition);
         var outputsByNodeId = DeserializePriorNodeOutputs(priorNodeOutputsJson);
         var skippedResourceTypesAcrossRun = new List<string>();
@@ -277,10 +349,71 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         }
 
         var remainingNodes = orderedNodes.SkipWhile(n => n.Id != pausedNode.Id).Skip(1).ToArray();
+        return new ResumedRun(remainingNodes, outputsByNodeId, skippedResourceTypesAcrossRun);
+    }
 
-        return await RunNodesAsync(
-            workflowDefinition, effectiveDefinition, workflowRun, context, remainingNodes,
-            outputsByNodeId, skippedResourceTypesAcrossRun, cancellationToken);
+    /// <summary>
+    /// A resume that failed after its run was made Running again but before <see cref="RunNodesAsync"/> held it: the
+    /// run is failed here with the real error, as RunNodesAsync would fail it. Left Running, nothing would renew its
+    /// lease, and the expiry sweep would close it as interrupted with the cause lost. A run another instance closed in
+    /// the meantime keeps its recorded status.
+    /// </summary>
+    private async Task FailResumeAsync(WorkflowDefinition workflowDefinition, WorkflowRun workflowRun, Exception exception)
+    {
+        _logger.LogError(
+            LogEvents.WorkflowRunFailed,
+            exception,
+            "Workflow run {WorkflowRunId} for {WorkflowId} '{WorkflowName}' could not resume after its bulk export: " +
+            "{FailureReason}",
+            workflowRun.Id, workflowDefinition.Id, workflowDefinition.Name, exception.Message);
+
+        workflowRun.Fail(exception.Message, DateTimeOffset.UtcNow);
+        await _auditRecorder.RecordAsync(new(
+            WorkflowAuditEventType.WorkflowRunFailed,
+            workflowDefinition.Id,
+            workflowRun.Id,
+            null,
+            null,
+            null,
+            null,
+            WorkflowDataContract.None,
+            WorkflowDataContract.None,
+            DateTimeOffset.UtcNow,
+            exception.Message), CancellationToken.None);
+
+        string? failureReferenceId = null;
+        if (_exceptionManager is not null)
+        {
+            var report = await _exceptionManager.CaptureAsync(
+                exception,
+                new ExceptionContext(
+                    Module: "Workflow",
+                    WorkflowId: workflowDefinition.Id.ToString(),
+                    ExecutionId: workflowRun.Id.ToString()),
+                CancellationToken.None);
+            failureReferenceId = report.ErrorReferenceId;
+        }
+
+        workflowRun.SetErrorReference(failureReferenceId);
+
+        var outcome = new PersistedOutcome(workflowRun.Status.ToString(), ClosedElsewhere: false);
+        try
+        {
+            outcome = await PersistOutcomeAsync(workflowRun, CancellationToken.None);
+        }
+        catch (Exception persistException)
+        {
+            _logger.LogError(persistException,
+                "Failed to persist failed workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
+                workflowRun.Id, workflowDefinition.Id);
+        }
+
+        // A run another instance already closed keeps that instance's reason; this failure's message and reference id
+        // are not on the row, so they are not pushed.
+        await NotifyRunStatusAsync(
+            workflowRun.Id, workflowDefinition.Id, outcome.Status, DateTimeOffset.UtcNow,
+            outcome.ClosedElsewhere ? null : exception.Message, CancellationToken.None,
+            outcome.ClosedElsewhere ? null : failureReferenceId);
     }
 
     /// <summary>Runs <paramref name="nodesToRun"/> in order against <paramref name="workflowRun"/>, shared by both a
@@ -294,8 +427,16 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         IReadOnlyCollection<WorkflowNode> nodesToRun,
         Dictionary<Guid, WorkflowNodeOutput> outputsByNodeId,
         List<string> skippedResourceTypesAcrossRun,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DateTimeOffset? confirmedLeaseExpiresAt = null)
     {
+        // Held for as long as this process executes the run, whichever entry point started it.
+        using var held = _activeRuns?.Hold(workflowRun.Id);
+        if (confirmedLeaseExpiresAt is { } leaseExpiresAt)
+        {
+            _activeRuns?.Confirm([workflowRun.Id], leaseExpiresAt);
+        }
+
         // Names the central error capture attaches to anything that fails beneath this run (workflow, then per node).
         var totalSteps = nodesToRun.Count;
         using var workflowErrorScope = FHIRBridge.Governance.ErrorContext.Push(
@@ -317,6 +458,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             foreach (var node in nodesToRun)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                // Before each node, not only on the heartbeat: a process that could not renew its lease stops before
+                // another instance may close the run, rather than racing it (see IActiveWorkflowRuns).
+                if (_activeRuns is not null && !_activeRuns.HoldsLease(workflowRun.Id, DateTimeOffset.UtcNow))
+                {
+                    throw new WorkflowRunLeaseLostException(workflowRun.Id);
+                }
+
                 stepNumber++;
 
                 var incomingOutputs = GetIncomingOutputs(effectiveDefinition, node, outputsByNodeId);
@@ -414,9 +563,9 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                             inputContract,
                             WorkflowDataContract.None,
                             DateTimeOffset.UtcNow), cancellationToken);
-                        await PersistRunAsync(workflowRun, cancellationToken);
+                        var pausedOutcome = await PersistOutcomeAsync(workflowRun, cancellationToken);
                         await NotifyRunStatusAsync(
-                            workflowRun.Id, workflowDefinition.Id, "AwaitingBulkExport", DateTimeOffset.UtcNow, null, cancellationToken);
+                            workflowRun.Id, workflowDefinition.Id, pausedOutcome.Status, DateTimeOffset.UtcNow, null, cancellationToken);
 
                         return new WorkflowRunResult(workflowRun, outputsByNodeId);
                     }
@@ -607,9 +756,11 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 WorkflowDataContract.None,
                 DateTimeOffset.UtcNow), cancellationToken);
 
-            await PersistRunAsync(workflowRun, cancellationToken);
+            var standing = await PersistOutcomeAsync(workflowRun, cancellationToken);
             await NotifyRunStatusAsync(
-                workflowRun.Id, workflowDefinition.Id, workflowRun.Status.ToString(), DateTimeOffset.UtcNow, workflowRun.ErrorMessage, cancellationToken, workflowRun.ErrorReferenceId);
+                workflowRun.Id, workflowDefinition.Id, standing.Status, DateTimeOffset.UtcNow,
+                standing.ClosedElsewhere ? null : workflowRun.ErrorMessage, cancellationToken,
+                standing.ClosedElsewhere ? null : workflowRun.ErrorReferenceId);
         }
         catch (FHIRBridge.Runtime.Domain.Exceptions.WorkflowRunCancelledException cancelException)
         {
@@ -648,22 +799,13 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             workflowRun.SetErrorReference(cancelReferenceId);
 
-            try
-            {
-                await PersistRunAsync(workflowRun, CancellationToken.None);
-            }
-            catch (Exception persistException)
-            {
-                // Not rethrown by design — see the matching remark in the generic failure branch below — but must
-                // still be logged: this is the terminal write for the run's history, so a silent failure here means
-                // the run is stuck showing "Running" in the DB with no trace of why anywhere, not even Seq.
-                _logger.LogError(persistException,
-                    "Failed to persist cancelled workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
-                    workflowRun.Id, workflowDefinition.Id);
-            }
+            // Not rethrown on a store failure by design — see the matching remark in the generic failure branch below.
+            var cancelledOutcome = await PersistTerminalOutcomeAsync(workflowRun, workflowDefinition.Id);
+            var cancelStands = !cancelledOutcome.ClosedElsewhere;
 
             await NotifyRunStatusAsync(
-                workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, cancelException.Message, CancellationToken.None, cancelReferenceId);
+                workflowRun.Id, workflowDefinition.Id, cancelledOutcome.Status, DateTimeOffset.UtcNow,
+                cancelStands ? cancelException.Message : null, CancellationToken.None, cancelStands ? cancelReferenceId : null);
 
             throw;
         }
@@ -707,19 +849,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
 
             workflowRun.SetErrorReference(cancelReferenceId);
 
-            try
-            {
-                await PersistRunAsync(workflowRun, CancellationToken.None);
-            }
-            catch (Exception persistException)
-            {
-                _logger.LogError(persistException,
-                    "Failed to persist cancelled workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
-                    workflowRun.Id, workflowDefinition.Id);
-            }
+            // A cancel signalled because another instance closed this run (the lease service's renewal found it
+            // closed) lands here too; the status recorded there is the one notified.
+            var userCancelledOutcome = await PersistTerminalOutcomeAsync(workflowRun, workflowDefinition.Id);
+            var userCancelStands = !userCancelledOutcome.ClosedElsewhere;
 
             await NotifyRunStatusAsync(
-                workflowRun.Id, workflowDefinition.Id, "Cancelled", DateTimeOffset.UtcNow, reason, CancellationToken.None, cancelReferenceId);
+                workflowRun.Id, workflowDefinition.Id, userCancelledOutcome.Status, DateTimeOffset.UtcNow,
+                userCancelStands ? reason : null, CancellationToken.None, userCancelStands ? cancelReferenceId : null);
 
             return new WorkflowRunResult(workflowRun, outputsByNodeId);
         }
@@ -777,23 +914,14 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             // Persist the failed run with its partial node-run timeline. Use None so the history is captured
             // even when the caller's token is the reason the run aborted. Best-effort: a store failure here
             // (e.g. a transient DB error) must not also suppress the "Failed" SignalR notify below, or the run
-            // would be stuck showing "Running" both in the DB and to any live client.
-            try
-            {
-                await PersistRunAsync(workflowRun, CancellationToken.None);
-            }
-            catch (Exception persistException)
-            {
-                // Not rethrown by design — see the remark above; NotifyRunStatusAsync still runs regardless — but
-                // must still be logged: this is the terminal write for the run's history, so a silent failure here
-                // means the run is stuck showing "Running" in the DB with no trace of why anywhere, not even Seq.
-                _logger.LogError(persistException,
-                    "Failed to persist failed workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
-                    workflowRun.Id, workflowDefinition.Id);
-            }
+            // would be stuck showing "Running" both in the DB and to any live client. A run another instance already
+            // closed notifies the status recorded there, not "Failed".
+            var failedOutcome = await PersistTerminalOutcomeAsync(workflowRun, workflowDefinition.Id);
+            var failureStands = !failedOutcome.ClosedElsewhere;
 
             await NotifyRunStatusAsync(
-                workflowRun.Id, workflowDefinition.Id, "Failed", DateTimeOffset.UtcNow, exception.Message, CancellationToken.None, failureReferenceId);
+                workflowRun.Id, workflowDefinition.Id, failedOutcome.Status, DateTimeOffset.UtcNow,
+                failureStands ? exception.Message : null, CancellationToken.None, failureStands ? failureReferenceId : null);
 
             throw;
         }
@@ -815,6 +943,58 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
         _ => -1,
     };
 
+    /// <summary>
+    /// Saves the outcome this run reached (success, partial success, a pause) and returns the status that stands. A
+    /// run another instance already closed (its lease lapsed there, and it was failed as interrupted or cancelled)
+    /// keeps the outcome recorded there: logged, not treated as a failure of this run, which would call Fail on an
+    /// aggregate that succeeded, record a second audit event and notify twice.
+    /// </summary>
+    private async Task<PersistedOutcome> PersistOutcomeAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await PersistRunAsync(workflowRun, cancellationToken);
+            return new PersistedOutcome(workflowRun.Status.ToString(), ClosedElsewhere: false);
+        }
+        catch (WorkflowRunAlreadyClosedException closed)
+        {
+            _logger.LogWarning(
+                "Workflow run {WorkflowRunId} reached {Outcome} here, but another instance had already closed it as " +
+                "{RecordedStatus}; the recorded status stands.",
+                workflowRun.Id, workflowRun.Status, closed.RecordedStatus);
+            return new PersistedOutcome(closed.RecordedStatus, ClosedElsewhere: true);
+        }
+    }
+
+    /// <summary>
+    /// The status that stands after a save, and whether the save was refused because another instance had already
+    /// closed the run. When it was, the push carries no message or reference id from this instance, even if the
+    /// recorded status happens to equal the one reached here: the row holds the other instance's reason, not ours.
+    /// </summary>
+    private readonly record struct PersistedOutcome(string Status, bool ClosedElsewhere);
+
+    /// <summary>
+    /// The cancel and failure branches' terminal save: the same step as <see cref="PersistOutcomeAsync"/>, so a run
+    /// another instance already closed keeps (and notifies) the status recorded there rather than this branch's own.
+    /// Any other store failure is logged and not rethrown — the branch still notifies — and its own status is returned.
+    /// </summary>
+    private async Task<PersistedOutcome> PersistTerminalOutcomeAsync(WorkflowRun workflowRun, Guid workflowDefinitionId)
+    {
+        try
+        {
+            return await PersistOutcomeAsync(workflowRun, CancellationToken.None);
+        }
+        catch (Exception persistException)
+        {
+            // This is the terminal write for the run's history, so a silent failure here would leave the run showing
+            // "Running" in the DB with no trace of why anywhere, not even Seq.
+            _logger.LogError(persistException,
+                "Failed to persist {Outcome} workflow run {WorkflowRunId} for workflow {WorkflowDefinitionId}.",
+                workflowRun.Status, workflowRun.Id, workflowDefinitionId);
+            return new PersistedOutcome(workflowRun.Status.ToString(), ClosedElsewhere: false);
+        }
+    }
+
     private Task PersistRunAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
         => _runStore is null
             ? Task.CompletedTask
@@ -832,11 +1012,11 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
     /// keeps this one write fully isolated, so its DbContext is created, used, and disposed before node execution
     /// ever starts.
     /// </remarks>
-    private async Task PersistRunStartedAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
+    private async Task<bool> PersistRunStartedAsync(WorkflowRun workflowRun, CancellationToken cancellationToken)
     {
         if (_runStore is null)
         {
-            return;
+            return false;
         }
 
         try
@@ -848,11 +1028,17 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
                 if (scopedRunStore is not null)
                 {
                     await scopedRunStore.SaveAsync(workflowRun, cancellationToken);
-                    return;
+                    return true;
                 }
             }
 
             await _runStore.SaveAsync(workflowRun, cancellationToken);
+            return true;
+        }
+        catch (WorkflowRunAlreadyClosedException)
+        {
+            // Not a transient failure to run through: the run is closed on record, so it must not start (or resume).
+            throw;
         }
         catch (Exception persistException)
         {
@@ -860,6 +1046,7 @@ public sealed class RankedWorkflowOrchestrator : IRankedWorkflowOrchestrator
             // PersistRunAsync call at the end of the run is the only other place this history is captured.
             _logger.LogError(persistException,
                 "Failed to persist the initial 'Running' placeholder for workflow run {WorkflowRunId}.", workflowRun.Id);
+            return false;
         }
     }
 

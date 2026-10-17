@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using FHIRBridge.Application.Abstractions.Destinations;
+using FHIRBridge.Integration.Fhir;
 using FHIRBridge.Runtime.Application.Abstractions.Connectors;
 using FHIRBridge.Runtime.Application.DTOs;
 using Microsoft.Extensions.Logging;
@@ -16,7 +18,13 @@ namespace FHIRBridge.Runtime.Infrastructure.Connectors;
 /// replayed allergy, problem or note a second time. Here a create is sent once, and retried only on 429 and on a 503
 /// that carries Retry-After, which a server sends instead of doing the work. Every other open outcome comes back as
 /// <see cref="FhirWriteOutcomeKind.OutcomeUnknown"/> for the caller to record and leave for a person. The HttpClient's
-/// own resilience handler is configured not to retry unsafe methods for the same reason (see the Runtime DI).</para>
+/// own resilience handler is configured not to retry unsafe methods for the same reason (see the Runtime DI). A
+/// cancellation that arrives before the request leaves (token, rate limiter, retry delay) is not an open outcome: it
+/// comes back as a refusal carrying <see cref="EhrWriteOutcomeCodes.CancelledBeforeSend"/>.</para>
+///
+/// <para><b>Patient-scoped searches follow next links</b> (up to <see cref="MaxPatientSearchPages"/> pages, on the
+/// connection's own host only, stopping on a page that does not advance), so an open encounter that is not on the
+/// first page is still found.</para>
 ///
 /// <para><b>PHI.</b> Request bodies, response bodies, identifier values and OperationOutcome diagnostics are never
 /// logged. Search URLs are logged with their query redacted.</para>
@@ -24,6 +32,13 @@ namespace FHIRBridge.Runtime.Infrastructure.Connectors;
 public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
 {
     private const string FhirJsonMediaType = "application/fhir+json";
+    private const string CancelledBeforeSendReason = "cancelled-before-send";
+
+    /// <summary>Page size asked for on a patient-scoped search (a vendor's URL builder may drop it, as eCW's does).</summary>
+    internal const int PatientSearchPageSize = 100;
+
+    /// <summary>Most pages read for one patient-scoped search.</summary>
+    internal const int MaxPatientSearchPages = 10;
 
     public async Task<FhirWriteResult> CreateAsync(
         string resourceType,
@@ -36,6 +51,10 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
         try
         {
             accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new FhirWriteResult(FhirWriteOutcomeKind.Rejected, null, null, null, null, [CancelledBeforeSendIssue()]);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -63,9 +82,12 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
         {
             if (exchange.RefusedBeforeSend)
             {
-                // Nothing left this process (open circuit, rate limiter): a refusal the next run may retry.
+                // Nothing left this process (open circuit, rate limiter, cancelled while waiting): a refusal the next
+                // run may retry.
                 _logger.LogWarning("{Source} create of {ResourceType} not sent ({Reason}).", SourceDisplayName, resourceType, exchange.FailureReason);
-                return new FhirWriteResult(FhirWriteOutcomeKind.Rejected, null, null, null, null, [NotSentIssue()]);
+                return new FhirWriteResult(
+                    FhirWriteOutcomeKind.Rejected, null, null, null, null,
+                    [exchange.FailureReason == CancelledBeforeSendReason ? CancelledBeforeSendIssue() : NotSentIssue()]);
             }
 
             _logger.LogWarning("{Source} create of {ResourceType}: outcome unknown ({Reason}).", SourceDisplayName, resourceType, exchange.FailureReason);
@@ -104,20 +126,195 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
         }
     }
 
+    public async Task<FhirRawWriteResult> SendAsync(
+        FhirRawWriteRequest request,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken)
+    {
+        string accessToken;
+        try
+        {
+            accessToken = await _accessTokenProvider.GetAccessTokenAsync(source, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // As CreateAsync: a run cancelled while the token was fetched sent nothing, and says so.
+            return new FhirRawWriteResult(FhirWriteOutcomeKind.Rejected, null, null, [CancelledBeforeSendIssue()]);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning("{Source} {Method} not sent: no access token ({ExceptionType}).", SourceDisplayName, request.Method, ex.GetType().Name);
+            return new FhirRawWriteResult(FhirWriteOutcomeKind.Rejected, null, null, [TokenIssue()]);
+        }
+
+        var requestUrl = request.AddSourceQueryParameters ? WithAdditionalQuery(request.Url, source) : request.Url;
+        var method = new HttpMethod(request.Method);
+        var exchange = await SendOnceOrOnRefusalAsync(
+            () => Authorize(new HttpRequestMessage(method, requestUrl) { Content = BuildContent(request) }, accessToken),
+            request.Idempotent,
+            source,
+            cancellationToken);
+
+        if (exchange.Response is not { } response)
+        {
+            if (exchange.RefusedBeforeSend)
+            {
+                _logger.LogWarning("{Source} {Method} {Url} not sent ({Reason}).", SourceDisplayName, request.Method, LoggedRequestUrl(requestUrl), exchange.FailureReason);
+                return new FhirRawWriteResult(
+                    FhirWriteOutcomeKind.Rejected, null, null,
+                    [exchange.FailureReason == CancelledBeforeSendReason ? CancelledBeforeSendIssue() : NotSentIssue()]);
+            }
+
+            _logger.LogWarning("{Source} {Method} {Url}: outcome unknown ({Reason}).", SourceDisplayName, request.Method, LoggedRequestUrl(requestUrl), exchange.FailureReason);
+            return new FhirRawWriteResult(FhirWriteOutcomeKind.OutcomeUnknown, null, null, []);
+        }
+
+        using (response)
+        {
+            var status = (int)response.StatusCode;
+            var body = await ReadBodyAsync(response, cancellationToken);
+            var issues = ParseIssues(body);
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("{Source} {Method} {Url} returned {StatusCode}.", SourceDisplayName, request.Method, LoggedRequestUrl(requestUrl), status);
+                return new FhirRawWriteResult(FhirWriteOutcomeKind.Created, status, body, issues);
+            }
+
+            if (issues.Count == 0 && (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden))
+            {
+                issues = [new FhirOperationOutcomeIssue("error", "security", DescribeAuthenticationChallenge(response) is { } challenge ? [challenge] : [], [])];
+            }
+
+            var refusedBeforeWork = status == 429
+                || (response.StatusCode == HttpStatusCode.ServiceUnavailable && response.Headers.RetryAfter is not null);
+            var kind = !request.Idempotent && !refusedBeforeWork && status >= 500
+                ? FhirWriteOutcomeKind.OutcomeUnknown
+                : FhirWriteOutcomeKind.Rejected;
+            _logger.LogWarning("{Source} {Method} {Url} {Outcome} ({StatusCode}).", SourceDisplayName, request.Method, LoggedRequestUrl(requestUrl), kind, status);
+            return new FhirRawWriteResult(kind, status, body, issues);
+        }
+    }
+
+    private static HttpContent? BuildContent(FhirRawWriteRequest request)
+    {
+        if (request.FormFields is { } fields)
+        {
+            if (!request.Multipart)
+            {
+                return new FormUrlEncodedContent(fields);
+            }
+
+            var multipart = new MultipartFormDataContent();
+            foreach (var (name, value) in fields)
+            {
+                multipart.Add(new StringContent(value, Encoding.UTF8), name);
+            }
+
+            return multipart;
+        }
+
+        return request.Body is null
+            ? null
+            : new StringContent(request.Body, Encoding.UTF8, request.ContentType ?? FhirJsonMediaType);
+    }
+
+    /// <summary>
+    /// A raw request's URL as it may be logged: scheme, host and path with every id segment replaced by a placeholder,
+    /// and the query redacted. athenaOne carries the patient's chart id in the path (<c>chart/12345/problems</c>), so
+    /// the path carries PHI as much as the query does. The segment after <c>chart</c> or <c>patients</c> is
+    /// <c>{patientid}</c> (unless it is the next word of the path, as in <c>chart/encounter/...</c>), the one after
+    /// <c>encounter</c> is <c>{encounterid}</c>, the one after a FHIR resource type is <c>{id}</c> (an operation such as
+    /// <c>$match</c> apart), and any other segment holding a digit, version segments (<c>v1</c>, <c>r4</c>) apart, is
+    /// <c>{id}</c>.
+    /// </summary>
+    internal static string LoggedRequestUrl(string requestUrl)
+    {
+        if (!Uri.TryCreate(requestUrl, UriKind.Absolute, out var uri))
+        {
+            return "[unparsed url]";
+        }
+
+        var segments = uri.AbsolutePath.Split('/');
+        var previous = string.Empty;
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = Uri.UnescapeDataString(segments[i]);
+            if (segment.Length == 0)
+            {
+                continue;
+            }
+
+            segments[i] = previous switch
+            {
+                "chart" or "patients" when !NonIdPathWords.Contains(segment) => "{patientid}",
+                "encounter" => "{encounterid}",
+                _ when IsResourceTypeSegment(previous) && segment[0] is not ('$' or '_') => "{id}",
+                _ when segment.Any(char.IsAsciiDigit) && !IsVersionSegment(segment) => "{id}",
+                _ => segments[i],
+            };
+            previous = segment;
+        }
+
+        return $"{uri.GetLeftPart(UriPartial.Authority)}{string.Join('/', segments)}{(uri.Query.Length > 1 ? "?[redacted]" : string.Empty)}";
+    }
+
+    /// <summary>athenaOne path words that follow <c>chart</c> or <c>patients</c> and are not an id.</summary>
+    private static readonly HashSet<string> NonIdPathWords = new(StringComparer.Ordinal) { "encounter", "configuration" };
+
+    /// <summary>A PascalCase word of letters (<c>Patient</c>, <c>Observation</c>). An all-capitals word such as
+    /// <c>FHIR</c> in Epic's <c>/api/FHIR/R4/</c> base is not a resource type, so the version after it is kept.</summary>
+    private static bool IsResourceTypeSegment(string segment) =>
+        segment.Length > 1
+        && char.IsAsciiLetterUpper(segment[0])
+        && segment.All(char.IsAsciiLetter)
+        && segment.Any(char.IsAsciiLetterLower);
+
+    /// <summary>An API or FHIR version segment: <c>v1</c>, <c>R4</c>, <c>R4B</c>, <c>STU3</c>, <c>DSTU2</c>.</summary>
+    private static bool IsVersionSegment(string segment)
+    {
+        var upper = segment.ToUpperInvariant();
+        var prefix = upper.StartsWith("DSTU", StringComparison.Ordinal) ? 4
+            : upper.StartsWith("STU", StringComparison.Ordinal) ? 3
+            : upper.Length > 0 && upper[0] is 'V' or 'R' ? 1
+            : 0;
+        if (prefix == 0 || upper.Length <= prefix)
+        {
+            return false;
+        }
+
+        var version = upper[prefix..];
+        if (version.EndsWith('B') && upper[0] == 'R')
+        {
+            version = version[..^1];
+        }
+
+        return version.Length > 0 && version.All(char.IsAsciiDigit);
+    }
+
     public Task<FhirSearchPage> SearchByIdentifierAsync(
         string resourceType,
         string system,
         string value,
         FhirSourceConfiguration source,
         CancellationToken cancellationToken) =>
-        SearchFirstPageAsync(resourceType, "identifier=" + Uri.EscapeDataString($"{system}|{value}"), source, cancellationToken);
+        SearchAsync(
+            resourceType,
+            $"{source.BaseUrl.TrimEnd('/')}/{resourceType}?identifier={Uri.EscapeDataString($"{system}|{value}")}",
+            maxPages: 1,
+            source,
+            cancellationToken);
 
     public Task<FhirSearchPage> SearchForPatientAsync(
         string resourceType,
         string patientId,
         FhirSourceConfiguration source,
         CancellationToken cancellationToken) =>
-        SearchFirstPageAsync(resourceType, "patient=" + Uri.EscapeDataString(patientId), source, cancellationToken);
+        SearchAsync(
+            resourceType,
+            BuildSearchUrl(source.BaseUrl, resourceType, PatientSearchPageSize, "patient=" + Uri.EscapeDataString(patientId)),
+            MaxPatientSearchPages,
+            source,
+            cancellationToken);
 
     public async Task<FhirPatientMatchResult> MatchPatientAsync(
         string patientJson,
@@ -246,9 +443,16 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
             aboutCandidates ? FhirPatientMatchKind.Ambiguous : FhirPatientMatchKind.Failed, null, status, issues);
     }
 
-    private async Task<FhirSearchPage> SearchFirstPageAsync(
+    /// <summary>
+    /// GETs <paramref name="firstUrl"/> and follows its next links, up to <paramref name="maxPages"/> pages. A next link
+    /// is followed only on the connection's own host (the token is never sent elsewhere), and paging stops on a link
+    /// already requested or a page that brings no new resource, the same guards the source reader uses (eCW offers a
+    /// next link even after its last page). A page that fails after the first ends the search with what was read.
+    /// </summary>
+    private async Task<FhirSearchPage> SearchAsync(
         string resourceType,
-        string query,
+        string firstUrl,
+        int maxPages,
         FhirSourceConfiguration source,
         CancellationToken cancellationToken)
     {
@@ -263,59 +467,89 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
             return new FhirSearchPage(false, null, [], [TokenIssue()]);
         }
 
-        var requestUrl = WithAdditionalQuery($"{source.BaseUrl.TrimEnd('/')}/{resourceType}?{query}", source);
-        var exchange = await SendOnceOrOnRefusalAsync(
-            () => Authorize(new HttpRequestMessage(HttpMethod.Get, requestUrl), accessToken),
-            idempotent: true,
-            source,
-            cancellationToken);
-
-        if (exchange.Response is not { } response)
+        var resources = new List<string>();
+        var seenIds = new HashSet<string>(StringComparer.Ordinal);
+        var requested = new HashSet<string>(StringComparer.Ordinal);
+        var issues = new List<FhirOperationOutcomeIssue>();
+        int? lastStatus = null;
+        string? nextUrl = WithAdditionalQuery(firstUrl, source);
+        for (var page = 0; page < Math.Max(1, maxPages) && nextUrl is not null; page++)
         {
-            _logger.LogWarning("{Source} search {Url} failed ({Reason}).", SourceDisplayName, RedactRequestUrl(requestUrl), exchange.FailureReason);
-            return new FhirSearchPage(false, null, [], []);
-        }
+            var requestUrl = nextUrl;
+            nextUrl = null;
+            requested.Add(requestUrl);
+            var exchange = await SendOnceOrOnRefusalAsync(
+                () => Authorize(new HttpRequestMessage(HttpMethod.Get, requestUrl), accessToken),
+                idempotent: true,
+                source,
+                cancellationToken);
 
-        using (response)
-        {
-            var status = (int)response.StatusCode;
-            var body = await ReadBodyAsync(response, cancellationToken);
-            var issues = ParseIssues(body);
-            if (!response.IsSuccessStatusCode)
+            if (exchange.Response is not { } response)
             {
-                _logger.LogWarning("{Source} search {Url} returned {StatusCode}.", SourceDisplayName, RedactRequestUrl(requestUrl), status);
-                return new FhirSearchPage(false, status, [], issues);
+                _logger.LogWarning("{Source} search {Url} failed ({Reason}).", SourceDisplayName, RedactRequestUrl(requestUrl), exchange.FailureReason);
+                return page == 0 ? new FhirSearchPage(false, null, [], []) : new FhirSearchPage(true, lastStatus, resources, issues);
             }
 
-            var resources = new List<string>();
-            if (!string.IsNullOrWhiteSpace(body))
+            using (response)
             {
-                try
+                var status = (int)response.StatusCode;
+                var body = await ReadBodyAsync(response, cancellationToken);
+                var pageIssues = ParseIssues(body);
+                if (!response.IsSuccessStatusCode)
                 {
-                    using var document = JsonDocument.Parse(body);
-                    if (document.RootElement.TryGetProperty("entry", out var entries) && entries.ValueKind == JsonValueKind.Array)
+                    _logger.LogWarning("{Source} search {Url} returned {StatusCode}.", SourceDisplayName, RedactRequestUrl(requestUrl), status);
+                    return page == 0 ? new FhirSearchPage(false, status, [], pageIssues) : new FhirSearchPage(true, lastStatus, resources, issues);
+                }
+
+                lastStatus = status;
+                issues.AddRange(pageIssues);
+                var newOnPage = 0;
+                if (!string.IsNullOrWhiteSpace(body))
+                {
+                    try
                     {
-                        foreach (var entry in entries.EnumerateArray())
+                        using var document = JsonDocument.Parse(body);
+                        if (document.RootElement.TryGetProperty("entry", out var entries) && entries.ValueKind == JsonValueKind.Array)
                         {
-                            if (entry.TryGetProperty("resource", out var resource)
-                                && resource.TryGetProperty("resourceType", out var type)
-                                && type.GetString() != "OperationOutcome")
+                            foreach (var entry in entries.EnumerateArray())
                             {
-                                resources.Add(resource.GetRawText());
+                                if (entry.TryGetProperty("resource", out var resource)
+                                    && resource.TryGetProperty("resourceType", out var type)
+                                    && type.GetString() != "OperationOutcome")
+                                {
+                                    var id = StringOf(resource, "id");
+                                    if (id is null || seenIds.Add(id))
+                                    {
+                                        resources.Add(resource.GetRawText());
+                                        newOnPage++;
+                                    }
+                                }
                             }
                         }
                     }
-                }
-                catch (JsonException)
-                {
-                    return new FhirSearchPage(false, status, [], issues);
-                }
-            }
+                    catch (JsonException)
+                    {
+                        return page == 0 ? new FhirSearchPage(false, status, [], pageIssues) : new FhirSearchPage(true, lastStatus, resources, issues);
+                    }
 
-            _logger.LogInformation("{Source} search {Url} returned {Count} resources.", SourceDisplayName, RedactRequestUrl(requestUrl), resources.Count);
-            return new FhirSearchPage(true, status, resources, issues);
+                    var next = FhirResourceParser.GetNextLink(body);
+                    if (next is not null && newOnPage > 0 && !requested.Contains(next) && SameOrigin(next, source.BaseUrl))
+                    {
+                        nextUrl = next;
+                    }
+                }
+
+                _logger.LogInformation("{Source} search {Url} returned {Count} resources.", SourceDisplayName, RedactRequestUrl(requestUrl), newOnPage);
+            }
         }
+
+        return new FhirSearchPage(true, lastStatus, resources, issues);
     }
+
+    private static bool SameOrigin(string url, string baseUrl) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var next)
+        && Uri.TryCreate(baseUrl, UriKind.Absolute, out var origin)
+        && Uri.Compare(next, origin, UriComponents.SchemeAndServer, UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) == 0;
 
     /// <summary>
     /// Sends a request built fresh for each attempt. Idempotent requests are retried like reads. A non-idempotent one
@@ -336,7 +570,16 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
 
         for (var attempt = 0; ; attempt++)
         {
-            await WaitForSourceThrottleAsync(source, cancellationToken);
+            try
+            {
+                await WaitForSourceThrottleAsync(source, cancellationToken);
+            }
+            catch (OperationCanceledException) when (!idempotent && cancellationToken.IsCancellationRequested)
+            {
+                // Still waiting for a turn: nothing was sent.
+                return new WriteExchange(null, CancelledBeforeSendReason, RefusedBeforeSend: true);
+            }
+
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             if (requestTimeoutSeconds > 0)
             {
@@ -391,7 +634,15 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
                 "{Source} {Method} returned {StatusCode}. Retrying attempt {Attempt}/{MaxRetryCount} after {DelayMs} ms.",
                 SourceDisplayName, request.Method, (int)response.StatusCode, attempt + 1, maxRetryCount, delay.TotalMilliseconds);
             response.Dispose();
-            await Task.Delay(delay, cancellationToken);
+            try
+            {
+                await Task.Delay(delay, cancellationToken);
+            }
+            catch (OperationCanceledException) when (!idempotent && cancellationToken.IsCancellationRequested)
+            {
+                // Only a refusal made before any work (429, 503 with Retry-After) is retried, so nothing was filed.
+                return new WriteExchange(null, CancelledBeforeSendReason, RefusedBeforeSend: true);
+            }
         }
     }
 
@@ -584,6 +835,9 @@ public abstract partial class FhirSourceConnectorBase : IFhirWriteClient
     private static FhirOperationOutcomeIssue TokenIssue() => new("error", "security", ["token-unavailable"], []);
 
     private static FhirOperationOutcomeIssue NotSentIssue() => new("error", "transient", ["not-sent"], []);
+
+    private static FhirOperationOutcomeIssue CancelledBeforeSendIssue() =>
+        new("error", "transient", [EhrWriteOutcomeCodes.CancelledBeforeSend], []);
 
     private sealed record WriteExchange(HttpResponseMessage? Response, string? FailureReason, bool RefusedBeforeSend = false);
 }

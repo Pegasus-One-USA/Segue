@@ -127,7 +127,15 @@ public sealed class AmbientErrorCaptureService : IHostedService, IDisposable
             // shutting down; whatever is still queued after the grace period is dropped
         }
 
-        _stopping?.Cancel();
+        // A host can dispose its singletons before stopping hosted services (the test server does); cancelling a disposed
+        // source would then fail shutdown, and there is nothing left to cancel.
+        try
+        {
+            _stopping?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     public void Dispose() => _stopping?.Dispose();

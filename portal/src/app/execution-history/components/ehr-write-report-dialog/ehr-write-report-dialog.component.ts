@@ -44,9 +44,12 @@ export class EhrWriteReportDialogComponent {
   readonly outcomes = EHR_WRITE_OUTCOMES;
   readonly totals = computed(() => ehrWriteTotals(this.report));
   readonly scope = ehrWriteScopeLabel(this.report.ScopeStatus);
-  readonly vendor = this.report.TargetVendor || 'the EHR';
+  /** A test run never reaches the vendor: its writes went to the Generic FHIR test server standing in for it. */
+  readonly vendor = this.report.TestRun
+    ? `the test server (as ${this.report.TargetVendor || 'the EHR'})`
+    : this.report.TargetVendor || 'the EHR';
 
-  readonly title = this.report.DryRun ? 'Dry-run report' : 'Write-back report';
+  readonly title = this.report.TestRun ? 'Test-run report' : this.report.DryRun ? 'Dry-run report' : 'Write-back report';
 
   /** What this run did, so the reader knows how to read the numbers below. A live run is "live" as soon as one
    *  selected type can be sent; types that are only counted are called out, as are refusals and unknown outcomes,
@@ -57,7 +60,7 @@ export class EhrWriteReportDialogComponent {
       return `Dry run: nothing was sent to ${this.vendor}. ${plural(totals.WouldWrite, 'record')} would be written by a live run.`;
     }
 
-    const parts = [`Live run: ${plural(totals.Written, 'record')} written to ${this.vendor}.`];
+    const parts = [`${this.report.TestRun ? 'Test run' : 'Live run'}: ${plural(totals.Written, 'record')} written to ${this.vendor}.`];
     if (totals.WouldWrite > 0) {
       // Counted rather than sent: a dry-run-only type, or on runs recorded before the release setting was removed, an
       // unreleased one. The per-type reasons below say which, so the headline stays neutral.

@@ -75,7 +75,7 @@ public sealed record ParentReferenceSpec(string ParentResourceType, string? Refe
 
 /// <summary>Ids of everything created, keyed by the canvas node id each entity was attached to.
 /// <see cref="SyncedScopesBySourceConnectionId"/> reports each referenced source connection's OAuth scopes as they
-/// stand right after this save — derived from every pipeline's destination resource selections, not just this
+/// stand right after this save — derived from the resource types every pipeline's source node reads, not just this
 /// one — so the portal can show the admin what actually changed rather than leaving it invisible.</summary>
 public sealed record WorkflowBuildResult(
     Guid WorkflowId,

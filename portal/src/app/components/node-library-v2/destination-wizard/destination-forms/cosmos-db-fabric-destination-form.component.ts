@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { buildConnectionMetadata } from '../../../../destination-connections/utils/destination-connection-secret.util';
 import { DestinationSchemaService } from '../../../../services/destination-schema.service';
 import { WizardDestinationFormApi } from './destination-form-api';
@@ -154,6 +154,11 @@ export class CosmosDbFabricDestinationFormComponent implements WizardDestination
   hasAdvancedError(): boolean {
     return ['authorityHost', 'managedIdentityClientId', 'partitionKeyPath']
       .some(name => this.showError(name));
+  }
+
+  /** The destination's name. The wizard hides it on Step 1 (only the connection is chosen there) and shows it on Review. */
+  nameControl(): FormControl<string | null> {
+    return this.cosmosForm.controls.name;
   }
 
   isValid(): boolean {

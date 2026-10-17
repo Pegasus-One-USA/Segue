@@ -4,9 +4,11 @@
 export interface EhrWriteReport {
   DryRun: boolean;
   CloneMode: boolean;
+  /** The writes went to a Generic FHIR test server standing in for TargetVendor, not to the vendor. */
+  TestRun: boolean;
   TargetVendor: string;
   RecordsReceived: number;
-  /** "verified", "missing:<types>" or "unknown". */
+  /** "verified", "missing:<types>", "unknown", or "test-server" for a test run. */
   ScopeStatus: string;
   Resources: EhrWriteResourceCounts[];
 }
@@ -53,6 +55,7 @@ export function parseEhrWriteReport(deliveryDetailJson: string | null | undefine
   return {
     DryRun: raw.DryRun === true,
     CloneMode: raw.CloneMode === true,
+    TestRun: raw.TestRun === true,
     TargetVendor: typeof raw.TargetVendor === 'string' ? raw.TargetVendor : '',
     RecordsReceived: count(raw.RecordsReceived),
     ScopeStatus: typeof raw.ScopeStatus === 'string' ? raw.ScopeStatus : 'unknown',
@@ -92,6 +95,7 @@ export function ehrWriteReasons(resource: EhrWriteResourceCounts): { code: strin
 /** Plain wording for the scope check: whether the EHR's token covers the types the run writes. */
 export function ehrWriteScopeLabel(scopeStatus: string): { text: string; ok: boolean } {
   if (scopeStatus === 'verified') return { text: 'Access verified for every type this run would write', ok: true };
+  if (scopeStatus === 'test-server') return { text: "Not checked: a test run never reaches the vendor, so the vendor's access does not apply", ok: true };
   if (scopeStatus.startsWith('missing:')) {
     return { text: `The EHR app is missing access for: ${scopeStatus.slice('missing:'.length).split(',').join(', ')}`, ok: false };
   }
@@ -106,11 +110,14 @@ const REASON_LABELS: Record<string, string> = {
   // Recorded both when the source is the target EHR itself and when the EHR answers a create with "duplicate".
   'already-in-ehr': 'Already in the EHR (read from it, or it reported a duplicate)',
   'live-write-not-supported': 'This EHR accepts dry runs only for this type',
+  'vendor-activation-required': "Dry run: the EHR vendor's write APIs are not marked as activated on this connection",
   // Recorded only by runs before the live-write release setting was removed.
   'live-write-not-released': 'Type was not released for live writes (older run)',
   'write-cap-reached': 'Max writes per run reached',
-  'not-selected': 'Type not selected in Data groups',
+  'not-selected': 'Type not selected under Resource types',
   'not-writable': 'This EHR does not accept this type',
+  'variant-not-enabled': 'A kind of record this destination has not ticked (tick it under its type in Resource types)',
+  'target-references-unmappable': "Needs the target EHR's own ids, which only a CSV / SQL Table source can give",
   'not-a-fhir-resource': 'Not a FHIR resource',
   'missing-id': 'Source record has no id',
   // Ledger
@@ -125,11 +132,12 @@ const REASON_LABELS: Record<string, string> = {
   'patient-unresolved': 'Patient could not be found in the EHR',
   'patient-not-in-ehr': 'Patient not in the EHR (create is off)',
   'patient-not-matched': 'Patient not found by identifier',
+  'patient-awaiting-mpi': 'Patient not found by identifier; waiting for the master patient index to match them',
   'patient-match-needs-review': 'Uncertain patient match, left for review',
   'patient-match-failed': 'Patient match failed',
   'patient-identifier-ambiguous': 'Identifier matches more than one patient',
   'patient-not-yet-created': 'Waiting for the patient to be created',
-  'patient-not-selected': 'Patient not selected in Data groups, so the patient cannot be created',
+  'patient-not-selected': 'Patient not selected under Resource types, so the patient cannot be created',
   'patient-not-created': 'Patient could not be created',
   'patient-created': 'Patient created earlier in this run',
   'patient-already-in-ehr': 'Patient already in the EHR',
@@ -145,6 +153,8 @@ const REASON_LABELS: Record<string, string> = {
   'patient-deceased-patient': 'Patient is deceased',
   // Visits
   'no-eligible-encounter': 'No suitable visit for this patient in the EHR',
+  'holder-encounter-not-enabled': 'Needs a telephone encounter, which this destination does not create (tick the history kind under Resource types to send)',
+  'holder-encounter-not-created': 'The telephone encounter could not be created (retried next run)',
   // Allergies and problems
   'not-active': 'Not active',
   'entered-in-error': 'Entered in error',
@@ -153,6 +163,26 @@ const REASON_LABELS: Record<string, string> = {
   'text-only-problem': 'Problem has text but no code',
   'missing-problem-name': 'Problem has no name',
   'missing-code': 'No code',
+  'not-an-encounter-diagnosis': 'Not a visit diagnosis',
+  'not-a-medical-history-item': 'Not a medical-history entry',
+  'missing-icd10-or-snomed-code': 'No ICD-10 or SNOMED code',
+  'missing-snomed-code': 'No SNOMED code (athena files problems by SNOMED only)',
+  'resolved-without-abatement-date': 'Resolved, but with no resolution date',
+  'unsupported-clinical-status': 'Clinical status the EHR does not accept',
+  'missing-condition-name': 'Condition has no name',
+  'missing-allergen-name': 'Allergy has no allergen name',
+  // Procedures, immunizations, medications, lab results
+  'not-a-surgical-procedure': 'Not a surgical procedure (only surgical history is sent)',
+  'missing-procedure-name': 'Procedure has no name',
+  'missing-cvx-code': 'No CVX vaccine code',
+  'missing-occurrence-date': 'No date given',
+  'medication-not-inline': 'Medication is a link to another record, not included',
+  'missing-rxnorm-or-ndc-code': 'No RxNorm or NDC code',
+  'missing-medication-name': 'Medication has no name',
+  'not-an-order': 'A proposal or plan, not a medication the patient takes',
+  'not-taken': 'Not taken',
+  'not-a-laboratory-result': 'Not a lab result',
+  'missing-test-name': 'Lab test has no name',
   // Vitals
   'not-a-vital-sign': 'Not a vital sign',
   'vital-signs-panel': 'A vitals panel, not a single reading',
@@ -164,6 +194,8 @@ const REASON_LABELS: Record<string, string> = {
   'effective-without-time': 'Has a date but no time',
   'effective-without-timezone': 'Time has no time zone',
   'blood-pressure-missing-component': 'Blood pressure missing a reading',
+  'vital-not-accepted-by-ecw': 'eClinicalWorks does not take this vital sign',
+  'vital-not-accepted-by-athena': 'athenahealth does not take this vital sign',
   'unable-to-assess': 'Marked unable to assess',
   // Notes
   'not-a-clinical-note': 'Not a clinical note',
@@ -178,11 +210,41 @@ const REASON_LABELS: Record<string, string> = {
   'note-content-not-base64': 'Note content is not valid base64',
   'note-format-not-supported': 'Note format not supported (plain text, HTML or RTF only)',
   'note-empty-after-conversion': 'Note is empty after conversion to text',
+  'note-author-not-configured': 'No note author set on the destination (eClinicalWorks needs one)',
+  // Patients created in athena
+  'target-department-not-configured': 'No athena department set on the destination for new patients',
   // Questionnaires
-  'not-completed': 'Questionnaire not completed',
+  'not-completed': 'Not completed',
   'in-progress': 'In progress',
   'missing-questionnaire': 'No questionnaire reference',
   'missing-answers': 'No answers',
+  'not-in-progress-or-completed': 'Neither in progress nor completed',
+  'missing-questionnaire-assignment': 'No questionnaire assignment (the appointment or series it was assigned through)',
+  // Epic's other APIs (lines and drains, imaging, radiotherapy, scanned and non-patient documents, referral messages)
+  'not-a-line-drain-airway': 'Not a line, drain or airway',
+  'not-an-imaging-characteristic': 'Not a CT dose finding',
+  'missing-imaging-report': 'No imaging report in the target EHR named',
+  'not-a-radiotherapy-volume': 'Not a radiotherapy volume',
+  'not-a-radiotherapy-summary': 'Not a radiotherapy course summary',
+  'missing-identifiers': 'Needs an official and a usual identifier',
+  'missing-last-updated': 'No last-updated time',
+  'missing-profile': 'No declared profile',
+  'missing-status': 'No status',
+  'intent-not-supported': 'Order intent the EHR does not accept',
+  'not-a-scanned-document': 'Not scanned document information',
+  'not-a-non-patient-document': 'Not a non-patient document',
+  'missing-identifier': 'No identifier',
+  'missing-document-type': 'No document type',
+  'missing-date': 'No date',
+  'missing-description': 'No description',
+  'missing-service-period': 'No service period',
+  'missing-related-record': 'Not linked to a group, account, vendor or contract in the target EHR',
+  'not-a-community-resource-message': 'Not a message on a community resource referral',
+  'not-in-progress': 'Not in progress',
+  'missing-sender': 'No sender',
+  'missing-recipient': 'No recipient',
+  'missing-sent-time': 'No time sent',
+  'missing-payload': 'No message text or attachment',
 };
 
 export function ehrWriteReasonLabel(code: string): string {
@@ -192,11 +254,16 @@ export function ehrWriteReasonLabel(code: string): string {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : code;
 }
 
+/** The run mode as the destination's Run mode names it: a test run is never a live run, even though it sends. */
+export function ehrWriteRunMode(report: EhrWriteReport): 'Dry run' | 'Test run' | 'Live run' {
+  return report.DryRun ? 'Dry run' : report.TestRun ? 'Test run' : 'Live run';
+}
+
 /** The report as plain text, for the row's Copy button. */
 export function ehrWriteReportToText(report: EhrWriteReport): string {
   const totals = ehrWriteTotals(report);
   const lines = [
-    `${report.DryRun ? 'Dry run' : 'Live run'}${report.CloneMode ? ' (clone mode)' : ''} to ${report.TargetVendor || 'EHR'}`,
+    `${ehrWriteRunMode(report)}${report.CloneMode ? ' (clone mode)' : ''}${report.TestRun ? ` on a FHIR test server, shaped as ${report.TargetVendor || 'the EHR'}` : ` to ${report.TargetVendor || 'EHR'}`}`,
     `Records received: ${report.RecordsReceived}`,
     ...EHR_WRITE_OUTCOMES.map(o => `${o.label}: ${totals[o.key]}`),
     `Access: ${ehrWriteScopeLabel(report.ScopeStatus).text}`,

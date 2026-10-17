@@ -77,6 +77,34 @@ public sealed class TabularSourcesController : ControllerBase
         CancellationToken cancellationToken) =>
         Ok(await _service.SaveSqlConnectionAsync(request, cancellationToken));
 
+    [HttpGet("sql-connections")]
+    [StandardPermission(PermissionGroupCode.TabularSources, PermissionActionCode.View, description: "List saved databases for CSV / SQL Table sources (names only, never connection strings).")]
+    [ProducesResponseType(typeof(IReadOnlyList<TabularSqlConnectionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListSqlConnections(CancellationToken cancellationToken) =>
+        Ok(await _service.ListSqlConnectionsAsync(cancellationToken));
+
+    [HttpPut("sql-connections/{id:guid}")]
+    [StandardPermission(PermissionGroupCode.TabularSources, PermissionActionCode.Edit, description: "Rename a saved database or replace its connection string.")]
+    [ProducesResponseType(typeof(TabularSqlConnectionDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateSqlConnection(
+        Guid id, [FromBody] UpdateTabularSqlConnectionRequest request, CancellationToken cancellationToken) =>
+        Ok(await _service.UpdateSqlConnectionAsync(id, request, cancellationToken));
+
+    [HttpDelete("sql-connections/{id:guid}")]
+    [StandardPermission(PermissionGroupCode.TabularSources, PermissionActionCode.Delete, description: "Delete a saved database from the list.")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteSqlConnection(Guid id, CancellationToken cancellationToken)
+    {
+        await _service.DeleteSqlConnectionAsync(id, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("sql-connections/{id:guid}/test")]
+    [StandardPermission(PermissionGroupCode.TabularSources, PermissionActionCode.Edit, description: "Test a saved database: connect, check the login can only read, run SELECT 1.")]
+    [ProducesResponseType(typeof(TabularSqlConnectionTestDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TestSqlConnection(Guid id, CancellationToken cancellationToken) =>
+        Ok(await _service.TestSqlConnectionAsync(id, cancellationToken));
+
     [HttpGet("template-presets")]
     [StandardPermission(PermissionGroupCode.TabularSources, PermissionActionCode.View, description: "List the starting row-to-FHIR templates.")]
     [ProducesResponseType(typeof(IReadOnlyList<TabularTemplatePresetDto>), StatusCodes.Status200OK)]
@@ -88,4 +116,11 @@ public sealed class TabularSourcesController : ControllerBase
     [ProducesResponseType(typeof(TabularPreviewDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Preview([FromBody] TabularPreviewRequest request, CancellationToken cancellationToken) =>
         Ok(await _service.PreviewAsync(request, cancellationToken));
+
+    // Edit, like preview: it uses the saved connection, and with Preview set it reads rows.
+    [HttpPost("check")]
+    [StandardPermission(PermissionGroupCode.TabularSources, PermissionActionCode.Edit, description: "Check each resource type's query or file against its connection, and optionally preview its first rows.")]
+    [ProducesResponseType(typeof(TabularCheckDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Check([FromBody] TabularCheckRequest request, CancellationToken cancellationToken) =>
+        Ok(await _service.CheckAsync(request, cancellationToken));
 }

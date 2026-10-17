@@ -150,6 +150,13 @@ public static class RbacSeedData
             "Execute a workflow using a source connection or destination with no dedicated permission group of its own.",
             PermissionGroupCode.SourceConnections,
             PermissionActionCode.Execute),
+        // A CSV / SQL Table source has no source connection, so /run checks this instead of a vendor's Execute.
+        // TabularSourcesController declares only View/Create/Edit/Delete, so without this seed the
+        // "HasPermission:tabularsources.execute" policy is never registered and /run throws "No policy found".
+        new(
+            "Execute a workflow whose source is a CSV / SQL Table.",
+            PermissionGroupCode.TabularSources,
+            PermissionActionCode.Execute),
 
         // Destination Connections module permissions. View/Deactivate/Delete already exist, auto-discovered
         // from ConfigurationCatalogController's/ConfigurationsController's own [StandardPermission] attributes

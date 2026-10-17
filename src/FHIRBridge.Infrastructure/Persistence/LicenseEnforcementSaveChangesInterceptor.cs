@@ -1,5 +1,6 @@
 using FHIRBridge.Application.Abstractions.Licensing;
 using FHIRBridge.Domain.Entities;
+using FHIRBridge.Domain.Enums;
 using FHIRBridge.Runtime.Domain.Workflows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -80,6 +81,17 @@ public sealed class LicenseEnforcementSaveChangesInterceptor : SaveChangesInterc
         // Pass 1: cheap in-memory scan only — no DB access. Matches AuditingSaveChangesInterceptor's own shape.
         foreach (var entry in context.ChangeTracker.Entries())
         {
+            // A write-only connection is not a source and is not counted against the source-connection quota or
+            // allow-list (see LicenseUsageCountsProvider), so giving an existing one read access is the moment it
+            // starts to count: checked here like a new connection.
+            if (entry is { State: EntityState.Modified, Entity: SourceConnection promoted }
+                && entry.Property(nameof(SourceConnection.Access)).OriginalValue is SourceConnectionAccess.Write
+                && promoted.Access != SourceConnectionAccess.Write)
+            {
+                (newSourceConnections ??= []).Add(promoted);
+                continue;
+            }
+
             if (entry.State != EntityState.Added)
             {
                 continue;
@@ -89,6 +101,10 @@ public sealed class LicenseEnforcementSaveChangesInterceptor : SaveChangesInterc
             {
                 case User:
                     newUserCount++;
+                    break;
+
+                // Write-only: an EHR Write-Back target, not a source (see above).
+                case SourceConnection { Access: SourceConnectionAccess.Write }:
                     break;
 
                 case SourceConnection sourceConnection:

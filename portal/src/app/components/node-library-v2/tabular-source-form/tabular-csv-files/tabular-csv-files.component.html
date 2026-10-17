@@ -1,0 +1,13 @@
+<div class="tab-field">
+  <label class="tab-label" for="tab-file">CSV files <span class="tab-req">*</span></label>
+  <input id="tab-file" type="file" accept=".csv,.txt,text/csv" (change)="onFileChosen($event)" [disabled]="busy()" />
+  @if (busy()) { <p class="tab-hint">Uploading…</p> }
+  @for (f of files(); track f.id) {
+    <p class="tab-hint">{{ f.fileName }} — {{ f.rowCount }} rows, columns: {{ f.columns.join(', ') }}</p>
+  }
+  @if (error(); as message) {
+    <p class="tab-error-banner" role="alert">{{ message }}</p>
+  }
+  <p class="tab-hint">Up to 10 MB and 50,000 rows each; the first line is the header. Files are stored encrypted.
+    Upload one file per resource type, or one file with a column that says which type each row is.</p>
+</div>

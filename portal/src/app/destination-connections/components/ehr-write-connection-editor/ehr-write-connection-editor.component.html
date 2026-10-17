@@ -1,0 +1,20 @@
+<!-- Same rule as Source Connections: the @switch wraps each vendor form tag directly so its ngOnInit (where the
+     prefill happens) runs on every open. -->
+@if (vendorFormOpen()) {
+  <div class="ewc-backdrop ewc-backdrop--form" tabindex="0" (click)="onVendorBackdropClick($event)" (keydown.escape)="wiz.close()">
+    <div class="ewc-form-panel" [class.ewc-form-panel--maximized]="formMaximized()">
+      @switch (wiz.ehrType()) {
+        @case ('Healow') { <app-healow-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+        @case ('Athenahealth') { <app-athenahealth-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+        @default { <app-epic-source-form [isMaximized]="formMaximized()" (cancelled)="wiz.close()" (closeAll)="wiz.close()" (toggleMaximizeRequest)="formMaximized.set(!formMaximized())" /> }
+      }
+    </div>
+  </div>
+}
+
+@if (genericFhirEditing()) {
+  <div class="ewc-backdrop" tabindex="0" (click)="onGenericFhirBackdropClick($event)" (keydown.escape)="closeGenericFhir()">
+    <app-generic-fhir-write-connection-form class="ewc-small-panel" [existing]="genericFhirExisting()"
+      [readonly]="genericFhirReadonly()" (saved)="onGenericFhirSaved($event)" (cancelled)="closeGenericFhir()" />
+  </div>
+}

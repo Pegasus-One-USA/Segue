@@ -353,6 +353,64 @@ public sealed class WorkflowSqlStoreTests
         }
     }
 
+    // PR #244 review, round 2: an outcome saved late never overwrites a run another instance already closed.
+    [Fact]
+    public async Task Run_store_does_not_save_a_late_outcome_over_a_run_closed_elsewhere_from_the_same_context()
+    {
+        var runId = Guid.NewGuid();
+        var run = new WorkflowRun(runId, Guid.NewGuid(), DateTimeOffset.UtcNow);
+
+        await using var executing = CreateContext();
+        var store = new SqlWorkflowRunStore(executing);
+        await store.SaveAsync(run, CancellationToken.None);
+
+        // Another instance closes it (the sweeper, through WorkflowRun.Fail).
+        await using (var sweeper = CreateContext())
+        {
+            var seen = await sweeper.WorkflowRuns.SingleAsync(r => r.Id == runId);
+            seen.Fail("Interrupted", DateTimeOffset.UtcNow);
+            await sweeper.SaveChangesAsync();
+        }
+
+        run.Succeed(DateTimeOffset.UtcNow);
+        var act = () => store.SaveAsync(run, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<FHIRBridge.Runtime.Application.Workflows.Storage.WorkflowRunAlreadyClosedException>())
+            .Which.RecordedStatus.Should().Be(nameof(WorkflowRunStatus.Failed));
+        await using var assertContext = CreateContext();
+        (await assertContext.WorkflowRuns.AsNoTracking().SingleAsync(r => r.Id == runId)).Status.Should().Be(WorkflowRunStatus.Failed);
+    }
+
+    [Fact]
+    public async Task Run_store_does_not_replace_a_run_closed_elsewhere_with_a_different_outcome()
+    {
+        var runId = Guid.NewGuid();
+        var placeholder = new WorkflowRun(runId, Guid.NewGuid(), DateTimeOffset.UtcNow);
+        await using (var context = CreateContext())
+        {
+            await new SqlWorkflowRunStore(context).SaveAsync(placeholder, CancellationToken.None);
+        }
+
+        await using (var sweeper = CreateContext())
+        {
+            var seen = await sweeper.WorkflowRuns.SingleAsync(r => r.Id == runId);
+            seen.Cancel("Cancelled: abandoned", DateTimeOffset.UtcNow);
+            await sweeper.SaveChangesAsync();
+        }
+
+        // The executing process saves from a scope that never tracked the run (as the orchestrator does).
+        var finished = new WorkflowRun(runId, placeholder.WorkflowDefinitionId, placeholder.StartedAt);
+        finished.Succeed(DateTimeOffset.UtcNow);
+        await using (var context = CreateContext())
+        {
+            var act = () => new SqlWorkflowRunStore(context).SaveAsync(finished, CancellationToken.None);
+            await act.Should().ThrowAsync<FHIRBridge.Runtime.Application.Workflows.Storage.WorkflowRunAlreadyClosedException>();
+        }
+
+        await using var assertContext = CreateContext();
+        (await assertContext.WorkflowRuns.AsNoTracking().SingleAsync(r => r.Id == runId)).Status.Should().Be(WorkflowRunStatus.Cancelled);
+    }
+
     [Fact]
     public async Task Run_store_replaces_an_AwaitingBulkExport_placeholder_once_the_resume_completes()
     {

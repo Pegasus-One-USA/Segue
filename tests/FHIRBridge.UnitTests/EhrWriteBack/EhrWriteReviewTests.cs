@@ -51,9 +51,9 @@ public sealed class EhrWriteReviewTests
     [Theory]
     [InlineData(SourceSystemType.Healow)]
     [InlineData(SourceSystemType.Athenahealth)]
-    public void Eclinicalworks_and_athenahealth_types_stay_dry_run_only(SourceSystemType vendor)
+    public void Eclinicalworks_and_athenahealth_types_never_go_live_without_vendor_activation(SourceSystemType vendor)
     {
-        EhrWriteCapabilities.For(vendor).Should().NotBeEmpty().And.OnlyContain(c => !c.LiveWriteSupported);
+        EhrWriteCapabilities.For(vendor).Should().NotBeEmpty().And.OnlyContain(c => !c.IsLive(false));
     }
 
     [Theory]

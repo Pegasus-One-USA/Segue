@@ -234,6 +234,88 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
         firstEndpoint.Should().Be(secondEndpoint);
     }
 
+    // Epic's Medication ids are 66 characters, so the Medication is written under a replacement id; every
+    // MedicationRequest naming it by the original id used to be refused (not in the batch) or written dangling.
+    private const string EpicMedicationId = "eAMyTcggmIulnQ2tTBjDzeMxAPhGFRQec80WL2RjqMGrsblT3hZoNDiMmVQiqZHKE3";
+
+    private static MappedDestinationRecord MedicationRequestFor(string medicationId) =>
+        Record($$$"""{"resourceType":"MedicationRequest","id":"mr-1","medicationReference":{"reference":"Medication/{{{medicationId}}}"}}""",
+            sourceResourceId: "mr-1", resourceType: "MedicationRequest");
+
+    [Fact]
+    public async Task A_reference_to_a_resource_with_an_invalid_id_points_at_the_id_that_resource_is_written_under()
+    {
+        EpicMedicationId.Length.Should().Be(66);
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none"}""");
+        var medication = Record($$"""{"resourceType":"Medication","id":"{{EpicMedicationId}}"}""", sourceResourceId: EpicMedicationId, resourceType: "Medication");
+
+        var result = await writer.WriteAsync(destination, Mapping(), [MedicationRequestFor(EpicMedicationId), medication], Context(), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+        var puts = handler.Requests.Where(r => r.Request.Method == HttpMethod.Put).ToList();
+        puts.Select(p => p.Request.RequestUri!.AbsolutePath).Should().HaveCount(2);
+        var medicationPut = puts.Single(p => p.Request.RequestUri!.AbsolutePath.StartsWith("/Medication/", StringComparison.Ordinal));
+        var medicationId = medicationPut.Request.RequestUri!.AbsolutePath["/Medication/".Length..];
+        medicationId.Should().MatchRegex("^[0-9a-f-]{36}$");
+        puts.IndexOf(medicationPut).Should().BeLessThan(
+            puts.FindIndex(p => p.Request.RequestUri!.AbsolutePath.StartsWith("/MedicationRequest/", StringComparison.Ordinal)),
+            because: "the Medication is ordered before the request that references it");
+        puts.Single(p => p.Request.RequestUri!.AbsolutePath == "/MedicationRequest/mr-1").Body
+            .Should().Contain($"\"reference\":\"Medication/{medicationId}\"").And.NotContain(EpicMedicationId);
+    }
+
+    [Fact]
+    public async Task A_missing_resource_with_an_invalid_id_is_fetched_from_the_source_by_its_own_id()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none","dest_autoFetchMissingReferences":"true"}""");
+        var fetched = new List<string>();
+        Task<string?> Fetch(string type, string id, CancellationToken ct)
+        {
+            fetched.Add($"{type}/{id}");
+            return Task.FromResult<string?>($$"""{"resourceType":"{{type}}","id":"{{id}}"}""");
+        }
+
+        var result = await writer.WriteAsync(destination, Mapping(), [MedicationRequestFor(EpicMedicationId)], Context(Fetch), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+        fetched.Should().Equal($"Medication/{EpicMedicationId}");
+        var puts = handler.Requests.Where(r => r.Request.Method == HttpMethod.Put).Select(r => r.Request.RequestUri!.AbsolutePath).ToList();
+        puts.Should().HaveCount(2).And.OnlyContain(path => !path.Contains(EpicMedicationId));
+        var medicationId = puts.Single(p => p.StartsWith("/Medication/", StringComparison.Ordinal))["/Medication/".Length..];
+        handler.Requests.Single(r => r.Request.RequestUri!.AbsolutePath == "/MedicationRequest/mr-1").Body
+            .Should().Contain($"\"reference\":\"Medication/{medicationId}\"");
+    }
+
+    [Fact]
+    public async Task A_resource_with_an_invalid_id_already_at_the_destination_is_found_under_its_replacement_id()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none"}""");
+        handler.RespondWith = (request, _) =>
+        {
+            if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/Medication")
+            {
+                // Answer the existence check with whatever id was asked for: present at the destination.
+                var askedFor = Uri.UnescapeDataString(request.RequestUri.Query.Split("_id=")[1].Split('&')[0]);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent($$$"""{"resourceType":"Bundle","entry":[{"resource":{"resourceType":"Medication","id":"{{{askedFor}}}"}}]}"""),
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), [MedicationRequestFor(EpicMedicationId)], Context(), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+        var check = handler.Requests.Single(r => r.Request.Method == HttpMethod.Get).Request.RequestUri!.Query;
+        check.Should().NotContain(EpicMedicationId, because: "the destination only knows the replacement id");
+        handler.Requests.Should().ContainSingle(r => r.Request.Method == HttpMethod.Put);
+    }
+
     [Fact]
     public async Task An_id_within_the_64_character_limit_using_only_valid_characters_is_left_unchanged()
     {
@@ -427,7 +509,8 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
         result.Count.Should().Be(2);
         result.WrittenResourceIds.Should().BeEquivalentTo(new[] { "p1", "p3" });
         result.RecordErrors.Should().ContainSingle();
-        result.RecordErrors!.Single().Should().Be("Patient/p2: Referenced resource Organization/xyz does not exist");
+        // The issue code, never the server's diagnostics text: that can echo submitted (patient) values.
+        result.RecordErrors!.Single().Should().Be("Patient/p2: 422 Unprocessable Entity — invalid");
     }
 
     [Fact]
@@ -599,7 +682,7 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
     }
 
     [Fact]
-    public async Task Transaction_mode_fails_the_whole_write_when_the_outer_response_is_non_success()
+    public async Task Transaction_mode_fails_the_write_when_the_outer_response_is_non_success()
     {
         var (writer, handler, _) = CreateWriter();
         handler.RespondWith = (_, _) => new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
@@ -621,12 +704,14 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
                 sourceResourceId: "child1", resourceType: "Observation"),
         };
 
-        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+        var act = () => writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
 
-        result.Count.Should().Be(0);
-        result.RecordErrors.Should().ContainSingle(e =>
-            e.Contains("Observation/parent1") && e.Contains("Observation/child1")
-            && e.Contains("Referenced resource Observation/child1 does not exist"));
+        // Nothing was written, so the write fails rather than reporting a success with 0 written.
+        var failure = (await act.Should().ThrowAsync<InvalidOperationException>()).Which.Message;
+        failure.Should().Contain("accepted none of the 2 record(s)")
+            .And.Contain("Observation/parent1").And.Contain("Observation/child1")
+            .And.Contain("422 Unprocessable Entity — invalid")
+            .And.NotContain("does not exist");
     }
 
     [Fact]
@@ -1192,6 +1277,136 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
     /// of HTTP traffic; <see cref="LastRequest"/>/<see cref="LastRequestBody"/> stay derived from the same list so
     /// every pre-existing single-request test keeps working unmodified.
     /// </summary>
+    // ---- PR #244 review ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Individual_mode_fails_the_write_when_the_destination_rejects_every_record()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (_, _) => new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+        {
+            Content = new StringContent("""{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"invalid"}]}"""),
+        };
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"p1"}""", sourceResourceId: "p1"),
+            Record("""{"resourceType":"Patient","id":"p2"}""", sourceResourceId: "p2"),
+        };
+
+        var act = () => writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*accepted none of the 2 record(s)*Patient/p1*");
+    }
+
+    [Theory]
+    [InlineData(
+        """{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"invalid","details":{"text":"Smith is not valid","coding":[{"code":"MSG_BAD_VALUE","display":"Smith"}]},"expression":["Patient.name[0].family"],"diagnostics":"The value 'Smith' is invalid"}]}""",
+        "invalid (MSG_BAD_VALUE) at Patient.name[0].family")]
+    [InlineData(
+        """{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"invalid","expression":["Patient.name.where(family='Smith')"]}]}""",
+        "invalid")]
+    [InlineData(
+        """{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"Smith, John","diagnostics":"Smith"}]}""",
+        "422 Unprocessable Entity")]
+    public async Task A_rejection_is_reported_by_code_and_path_and_never_by_the_servers_text(string outcome, string expectedReason)
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.RequestUri!.AbsolutePath.EndsWith("/p1", StringComparison.Ordinal)
+            ? new HttpResponseMessage(HttpStatusCode.UnprocessableEntity) { Content = new StringContent(outcome) }
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"p1"}""", sourceResourceId: "p1"),
+            Record("""{"resourceType":"Patient","id":"p2"}""", sourceResourceId: "p2"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.RecordErrors.Should().ContainSingle()
+            .Which.Should().Be($"Patient/p1: the destination rejected it (422): {expectedReason} — record was not written.")
+            .And.NotContain("Smith");
+    }
+
+    [Fact]
+    public async Task An_unusable_destinations_error_carries_the_outcome_codes_not_its_body()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (_, _) => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        {
+            Content = new StringContent("""{"resourceType":"OperationOutcome","issue":[{"severity":"fatal","code":"exception","diagnostics":"Failed to index family 'Smith'"}]}"""),
+        };
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+
+        var act = () => writer.WriteAsync(
+            destination, Mapping(), [Record("""{"resourceType":"Patient","id":"p1"}""", sourceResourceId: "p1")], Context(), CancellationToken.None);
+
+        var message = (await act.Should().ThrowAsync<HttpRequestException>()).Which.Message;
+        message.Should().Contain("returned 500").And.Contain(": exception").And.NotContain("Smith");
+    }
+
+    [Fact]
+    public async Task An_absolute_source_reference_to_an_invalid_id_points_at_the_id_that_resource_is_written_under()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none"}""");
+        var medication = Record($$"""{"resourceType":"Medication","id":"{{EpicMedicationId}}"}""", sourceResourceId: EpicMedicationId, resourceType: "Medication");
+        var request = Record(
+            $$$"""{"resourceType":"MedicationRequest","id":"mr-1","medicationReference":{"reference":"{{{EpicBase}}}/Medication/{{{EpicMedicationId}}}"}}""",
+            sourceResourceId: "mr-1", resourceType: "MedicationRequest");
+
+        var result = await writer.WriteAsync(destination, Mapping(), [request, medication], Context(sourceBaseUrl: EpicBase), CancellationToken.None);
+
+        result.RecordErrors.Should().BeNull();
+        var medicationId = handler.Requests
+            .Select(r => r.Request.RequestUri!.AbsolutePath)
+            .Single(path => path.StartsWith("/Medication/", StringComparison.Ordinal))["/Medication/".Length..];
+        handler.Requests.Single(r => r.Request.RequestUri!.AbsolutePath == "/MedicationRequest/mr-1").Body
+            .Should().Contain($"\"reference\":\"Medication/{medicationId}\"").And.NotContain(EpicMedicationId);
+    }
+
+    // Round 2, item 9: the not-written set and the references checked against it are both keyed by the id a resource
+    // is written under (TryParseReference maps a reference through DestinationId), so a rejected resource whose source
+    // id is invalid still blocks the records that reference it.
+    [Fact]
+    public async Task A_record_referencing_a_rejected_resource_with_an_invalid_id_is_not_sent()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.RequestUri!.AbsolutePath.StartsWith("/Medication/", StringComparison.Ordinal)
+            ? new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+            {
+                Content = new StringContent("""{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"invalid"}]}"""),
+            }
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination("""{"dest_fhirAuthType":"none"}""");
+        var medication = Record($$"""{"resourceType":"Medication","id":"{{EpicMedicationId}}"}""", sourceResourceId: EpicMedicationId, resourceType: "Medication");
+        var other = Record("""{"resourceType":"Patient","id":"p1"}""", sourceResourceId: "p1");
+
+        var result = await writer.WriteAsync(
+            destination, Mapping(), [MedicationRequestFor(EpicMedicationId), medication, other], Context(), CancellationToken.None);
+
+        result.WrittenResourceIds.Should().Equal("p1");
+        result.RecordErrors.Should().Contain(e => e.StartsWith("MedicationRequest/mr-1:") && e.Contains("not written to the destination in this run"));
+        handler.Requests.Should().NotContain(r => r.Request.RequestUri!.AbsolutePath.StartsWith("/MedicationRequest/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_absolute_reference_to_another_server_is_left_as_it_is()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var destination = Destination("""{"dest_fhirAuthType":"none"}""");
+        var elsewhere = $"https://other-hospital.org/fhir/Medication/{EpicMedicationId}";
+        var request = Record(
+            $$$"""{"resourceType":"MedicationRequest","id":"mr-1","medicationReference":{"reference":"{{{elsewhere}}}"}}""",
+            sourceResourceId: "mr-1", resourceType: "MedicationRequest");
+
+        await writer.WriteAsync(destination, Mapping(), [request], Context(sourceBaseUrl: EpicBase), CancellationToken.None);
+
+        handler.Requests.Single(r => r.Request.RequestUri!.AbsolutePath == "/MedicationRequest/mr-1").Body
+            .Should().Contain(elsewhere);
+    }
+
     private sealed class CapturingHandler : HttpMessageHandler
     {
         public List<(HttpRequestMessage Request, string? Body)> Requests { get; } = new();
@@ -1319,5 +1534,216 @@ public sealed class MappedFhirRepositoryDestinationWriterTests
 
         result.RecordErrors.Should().BeNullOrEmpty();
         handler.Requests.Should().ContainSingle();
+    }
+
+    // ---- One resource the destination rejects no longer fails the whole write ---------------------------------
+    // Seen live: Epic -> HAPI, two Observations of the same patient referencing each other (focus one way, a
+    // reference back the other). Both are "in the batch", so the pre-write check is satisfied, but whichever is PUT
+    // first points at one HAPI doesn't have yet: "HAPI-1094: Resource Observation/... not found, specified in path:
+    // Observation.focus". That 400 used to throw and fail the run. Synthetic ids only — no patient data.
+
+    /// <summary>
+    /// A HAPI-like destination that enforces referential integrity on write: a PUT whose body references a
+    /// relative <c>Type/id</c> it hasn't stored yet is refused with HAPI's own 400 OperationOutcome.
+    /// </summary>
+    private static Func<HttpRequestMessage, string?, HttpResponseMessage> ReferentialIntegrityServer(HashSet<string> stored) =>
+        (request, body) =>
+        {
+            if (request.Method != HttpMethod.Put)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"resourceType":"Bundle","type":"searchset","total":0}"""),
+                };
+            }
+
+            var resource = System.Text.Json.Nodes.JsonNode.Parse(body!)!.AsObject();
+            var resourceType = resource["resourceType"]!.GetValue<string>();
+            var self = $"{resourceType}/{resource["id"]!.GetValue<string>()}";
+            foreach (var (path, reference) in References(resource, resourceType))
+            {
+                if (reference != self && !stored.Contains(reference))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                    {
+                        Content = new StringContent(
+                            $$"""{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","expression":["{{path}}"],"diagnostics":"HAPI-1094: Resource {{reference}} not found, specified in path: {{path}}"}]}"""),
+                    };
+                }
+            }
+
+            stored.Add(self);
+            return new HttpResponseMessage(HttpStatusCode.Created);
+        };
+
+    private static IEnumerable<(string Path, string Reference)> References(System.Text.Json.Nodes.JsonNode? node, string path)
+    {
+        switch (node)
+        {
+            case System.Text.Json.Nodes.JsonObject obj:
+                foreach (var (key, value) in obj)
+                {
+                    if (key == "reference" && value is System.Text.Json.Nodes.JsonValue text)
+                    {
+                        yield return (path, text.GetValue<string>());
+                    }
+                    else
+                    {
+                        foreach (var found in References(value, $"{path}.{key}"))
+                        {
+                            yield return found;
+                        }
+                    }
+                }
+
+                break;
+            case System.Text.Json.Nodes.JsonArray array:
+                foreach (var item in array)
+                {
+                    foreach (var found in References(item, path))
+                    {
+                        yield return found;
+                    }
+                }
+
+                break;
+        }
+    }
+
+    [Fact]
+    public async Task Individual_mode_skips_and_reports_an_observation_whose_focus_the_destination_rejects_and_writes_the_rest()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var stored = new HashSet<string>();
+        handler.RespondWith = ReferentialIntegrityServer(stored);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"pat-1"}""", sourceResourceId: "pat-1"),
+            // obs-a.focus -> obs-b and obs-b.derivedFrom -> obs-a: each needs the other to exist first.
+            Record("""{"resourceType":"Observation","id":"obs-a","subject":{"reference":"Patient/pat-1"},"focus":[{"reference":"Observation/obs-b"}]}""",
+                sourceResourceId: "obs-a", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-b","subject":{"reference":"Patient/pat-1"},"derivedFrom":[{"reference":"Observation/obs-a"}]}""",
+                sourceResourceId: "obs-b", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-c","subject":{"reference":"Patient/pat-1"}}""",
+                sourceResourceId: "obs-c", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        // Everything else is written; the write is a partial success, not a failure.
+        stored.Should().BeEquivalentTo("Patient/pat-1", "Observation/obs-c");
+        result.Count.Should().Be(2);
+        result.WrittenResourceIds.Should().BeEquivalentTo(new[] { "pat-1", "obs-c" });
+
+        // Whichever of the pair went first is reported with the issue code and the path it names...
+        result.RecordErrors.Should().HaveCount(2);
+        result.RecordErrors.Should().ContainSingle(e =>
+            e.Contains("the destination rejected it (400)")
+            && e.Contains("processing at Observation.")
+            && !e.Contains("HAPI-1094")
+            && e.Contains("record was not written"));
+        // ...and the other one is never sent, so it can't be written pointing at a resource that isn't there.
+        result.RecordErrors.Should().ContainSingle(e =>
+            e.Contains("references Observation/obs-") && e.Contains("not written to the destination in this run"));
+        handler.Requests.Count(r => r.Request.Method == HttpMethod.Put && r.Request.RequestUri!.AbsolutePath.Contains("/Observation/obs-"))
+            .Should().Be(2, "the rejected Observation and obs-c are sent; the one depending on the rejected one is not");
+    }
+
+    [Fact]
+    public async Task Individual_mode_does_not_send_a_record_that_references_one_the_destination_rejected()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.Method != HttpMethod.Put
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            : request.RequestUri!.AbsolutePath.EndsWith("/Observation/obs-bad", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+                {
+                    Content = new StringContent(
+                        """{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"invalid","expression":["Observation.status"],"diagnostics":"Observation.status: minimum required = 1, but only found 0"}]}"""),
+                }
+                : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"obs-bad"}""", sourceResourceId: "obs-bad", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-panel","hasMember":[{"reference":"Observation/obs-bad"}]}""",
+                sourceResourceId: "obs-panel", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-ok","status":"final"}""", sourceResourceId: "obs-ok", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(1);
+        result.WrittenResourceIds.Should().Equal("obs-ok");
+        result.RecordErrors.Should().HaveCount(2);
+        result.RecordErrors.Should().Contain(e =>
+            e.StartsWith("Observation/obs-bad:") && e.Contains("(422): invalid at Observation.status") && !e.Contains("minimum required"));
+        result.RecordErrors.Should().Contain(e =>
+            e.StartsWith("Observation/obs-panel:") && e.Contains("references Observation/obs-bad"));
+        handler.Requests.Should().NotContain(r => r.Request.RequestUri!.AbsolutePath.EndsWith("/Observation/obs-panel", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task Individual_mode_still_fails_the_write_when_the_destination_itself_is_unusable(HttpStatusCode status)
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.Method == HttpMethod.Put
+            ? new HttpResponseMessage(status)
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Patient","id":"pat-1"}""", sourceResourceId: "pat-1"),
+            Record("""{"resourceType":"Patient","id":"pat-2"}""", sourceResourceId: "pat-2"),
+        };
+
+        var act = () => writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        await act.Should().ThrowAsync<HttpRequestException>().WithMessage($"*returned {(int)status}*");
+        handler.Requests.Count(r => r.Request.Method == HttpMethod.Put).Should().Be(1, "the first failure stops the write");
+    }
+
+    [Fact]
+    public async Task Individual_mode_still_fails_the_write_when_the_destination_cannot_be_reached()
+    {
+        var (writer, handler, _) = CreateWriter();
+        handler.RespondWith = (request, _) => request.Method == HttpMethod.Put
+            ? throw new HttpRequestException("Connection refused")
+            : new HttpResponseMessage(HttpStatusCode.OK);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+
+        var act = () => writer.WriteAsync(
+            destination, Mapping(), [Record("""{"resourceType":"Patient","id":"pat-1"}""", sourceResourceId: "pat-1")],
+            Context(), CancellationToken.None);
+
+        await act.Should().ThrowAsync<HttpRequestException>().WithMessage("*Connection refused*");
+    }
+
+    [Fact]
+    public async Task Individual_mode_with_no_rejections_reports_no_errors_and_counts_every_record()
+    {
+        var (writer, handler, _) = CreateWriter();
+        var stored = new HashSet<string>();
+        handler.RespondWith = ReferentialIntegrityServer(stored);
+        var destination = Destination(connectionMetadataJson: null, target: "http://hapi.example.test/fhir");
+        var records = new[]
+        {
+            Record("""{"resourceType":"Observation","id":"obs-a","focus":[{"reference":"Observation/obs-b"}]}""",
+                sourceResourceId: "obs-a", resourceType: "Observation"),
+            Record("""{"resourceType":"Observation","id":"obs-b"}""", sourceResourceId: "obs-b", resourceType: "Observation"),
+        };
+
+        var result = await writer.WriteAsync(destination, Mapping(), records, Context(), CancellationToken.None);
+
+        result.Count.Should().Be(2);
+        result.RecordErrors.Should().BeNull();
+        result.WrittenResourceIds.Should().BeNull();
+        stored.Should().BeEquivalentTo("Observation/obs-a", "Observation/obs-b");
     }
 }

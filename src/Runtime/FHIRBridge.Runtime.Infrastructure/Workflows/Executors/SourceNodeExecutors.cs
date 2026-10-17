@@ -1,4 +1,5 @@
 using FHIRBridge.Application.DTOs;
+using FHIRBridge.Application.Services.Workflows;
 using FHIRBridge.Observability.Logging;
 using Microsoft.Extensions.Logging;
 using FHIRBridge.Domain.Fhir;
@@ -279,8 +280,9 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // node's own, per-workflow declaration of what it fetches — two workflows can share one SourceConnection
         // (and so one set of granted scopes) while each still fetching a different, deliberately narrower or wider
         // subset. Takes priority over anything resolved from the connection below, since that's connection-wide and
-        // can't express a per-workflow difference the way this node-level field can — but only when no reachable
-        // destination declares its own selection (see the resolution chain further down).
+        // can't express a per-workflow difference the way this node-level field can. A node carrying the portal's
+        // "Resource types declared" marker has its list narrowed to the destinations' selections; on an unmarked
+        // (legacy) node, a reachable destination's own selection replaces it (see the resolution chain further down).
         var configuredResources = ParseCommaSeparatedResourceTypes(ReadStringConfiguration(node, "Resources"));
 
         // Option A: prefer a real SourceConnection referenced by id (base URL + auth + token resolved live at run time).
@@ -449,22 +451,21 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         // silently defaulting to "Patient" here previously meant a misconfigured node would quietly under-fetch
         // instead of failing the run, so this now fails loudly and tells the caller what to configure.
         //
-        // A reachable destination's own "dest_resources" selection outranks all of the above: the destination wizard's
-        // data-group picker is the one place an admin actually chooses what a workflow moves, and the record of what's
-        // ever written anywhere. The source node's "Resources" field, by contrast, is a snapshot taken whenever the
-        // source form was last saved — and for a Backend System connection it's a hidden control nothing ever
-        // resyncs (EpicSourceConnectionScopeSyncService updates the connection's scopes from dest_resources, but not
-        // this per-node copy). Intersecting with that snapshot let a stale "Patient" silently drop an Observation the
-        // destination had since selected, with no skip ever reported. Using dest_resources directly still never
-        // fetches a type the session isn't authorized for: the granted-scope check in the extraction loop below turns
-        // any such type into a reported skip rather than a request.
+        // What the destinations selected ("dest_resources") then decides the final list, in one of two ways:
+        // - A node that declares its types (the portal's "Resource types declared" marker, WorkflowNodeResourceTypes):
+        //   its list is what the workflow may read and each destination chooses a subset of it, so the list is only
+        //   narrowed — a type no destination chose is never fetched, and a destination can never add one (the save
+        //   endpoints reject that).
+        // - A node saved before sources declared their types: the destinations' selection is used as it is. Its
+        //   "Resources" is a snapshot taken whenever the source form was last saved — for a Backend System connection a
+        //   hidden control nothing ever resyncs — and intersecting with it let a stale "Patient" silently drop an
+        //   Observation the destination had since selected, with no skip reported. Using dest_resources directly still
+        //   never fetches a type the session isn't authorized for: the granted-scope check in the extraction loop below
+        //   turns any such type into a reported skip rather than a request.
+        // Either way a run with no reachable destination selection keeps the source-side list unchanged.
         IReadOnlyCollection<string> resourceTypes;
         var destinationResourceTypes = await GetDestinationResourceTypesAsync(node, cancellationToken);
-        if (destinationResourceTypes.Count > 0)
-        {
-            resourceTypes = destinationResourceTypes;
-        }
-        else if (configuredResources is { Count: > 0 })
+        if (configuredResources is { Count: > 0 })
         {
             resourceTypes = configuredResources;
         }
@@ -482,18 +483,73 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
         }
         else
         {
-            throw new InvalidOperationException(
-                $"Source node '{node.Id}' ({node.NodeType}) has no resolvable FHIR resource type: no reachable " +
-                "destination's own resource selection, no 'Resources'/'resourceType' node configuration, no " +
-                "connection-level ResourceTypes, and no SMART scopes to derive one from. Configure at least one " +
-                "resource type for this node or its destination.");
+            // Last resort before failing outright: a legacy source with no resource-type config of its own (e.g.
+            // Generic FHIR, which has no OAuth scopes to derive from at all) still has a real answer when a reachable
+            // destination declares its own "dest_resources".
+            resourceTypes = destinationResourceTypes.Count > 0
+                ? destinationResourceTypes
+                : throw new InvalidOperationException(
+                    $"Source node '{node.Id}' ({node.NodeType}) has no resource types to read: no reachable " +
+                    "destination's own resource selection, no 'Resources'/'resourceType' node configuration, no " +
+                    "connection-level ResourceTypes, and no SMART scopes to derive one from. Open the source node and " +
+                    "choose its resource types to read.");
+        }
+
+        var readable = resourceTypes;
+        var declaresResourceTypes = WorkflowNodeResourceTypes.ReadSourceDeclared(node.NodeType, node.ConfigurationJson) is not null;
+        resourceTypes = declaresResourceTypes || destinationResourceTypes.Count == 0
+            ? RestrictToDestinationResourceTypes(readable, destinationResourceTypes)
+            : destinationResourceTypes;
+
+        // A declared source none of whose types a reachable destination chose (it feeds a destination alongside another
+        // source that supplies those types) has nothing to read. An empty list must never reach the fetch: a
+        // System/Group $export with no _type exports every type the client is authorized for, and a search silently
+        // fetches nothing. The node is skipped instead, with the reason reported on the run.
+        if (resourceTypes.Count == 0)
+        {
+            var skipReason =
+                $"{node.NodeType}: nothing read — none of this source's resource types ({string.Join(", ", readable)}) " +
+                $"is selected by a destination it feeds ({string.Join(", ", destinationResourceTypes)}).";
+            _logger.LogWarning(
+                LogEvents.ResourceTypeSkipped,
+                "Source node {NodeId} read nothing from {SourceName}: none of its resource types [{ResourceTypes}] is " +
+                "selected by a destination it feeds [{DestinationResourceTypes}].",
+                node.Id, source.Name, string.Join(", ", readable), string.Join(", ", destinationResourceTypes));
+
+            return new WorkflowNodeOutput(
+                node.Id,
+                node.NodeType,
+                new ResourceBatch([]),
+                WorkflowDataContract.ResourceBatch,
+                new Dictionary<string, object?>
+                {
+                    ["executor"] = GetType().Name,
+                    ["resourceType"] = string.Empty,
+                    ["count"] = 0,
+                    ["skippedResourceTypes"] = new[] { skipReason },
+                });
+        }
+
+        var useBulkExport = string.Equals(source.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase)
+            && _bulkExportClient is not null;
+
+        // Patient anchors the search: its ids scope every patient-compartment type below. A destination that writes,
+        // say, only AllergyIntolerance and Condition from a source that reads Patient too must not lose that anchor,
+        // or the compartment searches run unscoped (Epic answers 403). Patient is still searched in that case but
+        // never handed on, since no destination chose it.
+        var patientOnlyForCohort = !useBulkExport
+            && !resourceTypes.Contains("Patient", StringComparer.OrdinalIgnoreCase)
+            && readable.Contains("Patient", StringComparer.OrdinalIgnoreCase)
+            && resourceTypes.Any(PatientCompartmentResourceTypes.IsSupported);
+        var handedOnResourceTypes = resourceTypes;
+        if (patientOnlyForCohort)
+        {
+            resourceTypes = ["Patient", .. resourceTypes];
         }
 
         // A source configured for bulk export ($export) pulls each resource type via the Bulk Data flow instead of a
         // paged search — same downstream envelope projection, so the rest of the DAG is identical. Every other source
-        // (and any bulk-configured source when no bulk client is wired) keeps using search — unchanged behavior.
-        var useBulkExport = string.Equals(source.RetrievalMethod, "bulk-export", StringComparison.OrdinalIgnoreCase)
-            && _bulkExportClient is not null;
+        // (and any bulk-configured source when no bulk client is wired) keeps using search — unchanged behavior (see useBulkExport above).
 
         // Fail with the actual reason rather than letting a Group-only vendor answer a Group-less kick-off with a
         // vendor-specific error that names neither the scope nor the missing id (Epic returns a FHIR "Invalid FHIR
@@ -898,6 +954,12 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             skippedResourceTypes.AddRange(extractionDiagnostics.DrainIncompleteReasons());
         }
 
+        if (patientOnlyForCohort)
+        {
+            resources.RemoveAll(resource => string.Equals(resource.ResourceType, "Patient", StringComparison.OrdinalIgnoreCase));
+            syncedResourceTypes.RemoveAll(type => string.Equals(type, "Patient", StringComparison.OrdinalIgnoreCase));
+        }
+
         if (source.MaxRecords is { } maxRecords && resources.Count > maxRecords)
         {
             resources.RemoveRange(maxRecords, resources.Count - maxRecords);
@@ -938,7 +1000,7 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
             new Dictionary<string, object?>
             {
                 ["executor"] = GetType().Name,
-                ["resourceType"] = string.Join(',', resourceTypes),
+                ["resourceType"] = string.Join(',', handedOnResourceTypes),
                 ["count"] = resources.Count,
                 // Per-type breakdown of the combined "count" above — without this, a multi-resource-type source
                 // node's execution history can only ever say "extracted 501 resources total", leaving no way to
@@ -1257,12 +1319,27 @@ public abstract class SourceNodeExecutor : WorkflowNodeExecutorBase
                 .Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>
+    /// Narrows <paramref name="resourceTypes"/>, a source node's declared list, to what its downstream destinations
+    /// selected (<paramref name="destinationResourceTypes"/>, from <see cref="GetDestinationResourceTypesAsync"/>),
+    /// keeping the source's order. Only ever removes types nothing downstream wants, never adds one the source does
+    /// not read. With no reachable destination selection it returns <paramref name="resourceTypes"/> unchanged. The
+    /// source node's declared list stays the record of what is read; the destinations only choose from it.
+    /// </summary>
+    private static IReadOnlyCollection<string> RestrictToDestinationResourceTypes(
+        IReadOnlyCollection<string> resourceTypes,
+        IReadOnlyList<string> destinationResourceTypes) =>
+        destinationResourceTypes.Count == 0
+            ? resourceTypes
+            : resourceTypes.Where(type => destinationResourceTypes.Contains(type, StringComparer.OrdinalIgnoreCase)).ToList();
+
+    /// <summary>
     /// Every FHIR resource type any destination reachable from this source node has declared via its own
-    /// wizard-authored "dest_resources" field — unioned across all such destinations, in first-seen order. The
-    /// first and highest-priority entry in <see cref="ExecuteAsync"/>'s resource-type resolution chain: when this is
-    /// non-empty it IS the list this node fetches, ahead of the node's own "Resources" snapshot or anything resolved
-    /// from the connection. Returns an empty list (never throws) when there's no workflow store, no workflow
-    /// definition, or no reachable destination with a selection — the caller then falls back to the source side.
+    /// wizard-authored "dest_resources" field, unioned across all such destinations in first-seen order. Used three
+    /// ways by <see cref="ExecuteAsync"/>'s resource-type resolution: it narrows the list of a source node that
+    /// declares its types (<see cref="RestrictToDestinationResourceTypes"/>); it IS the list for a node saved before
+    /// sources declared their types, ahead of that node's possibly stale "Resources" snapshot; and it is the last
+    /// resort for a legacy node with nothing of its own to read. Returns an empty list (never throws) when there's no
+    /// workflow store, no workflow definition, or no reachable destination with a selection.
     /// <para>
     /// Purely what the wizard's "dest_resources" field lists — no types are added beyond that. A type outside the
     /// Patient compartment (Practitioner, Organization, Location, ...) that isn't checked here is genuinely excluded

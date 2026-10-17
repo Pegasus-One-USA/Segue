@@ -17,6 +17,7 @@ import {
 } from '../../services/workflow-api.service';
 import { ToastService } from '../../services/toast.service';
 import { NewWorkflowDialogComponent } from '../../components/shared/new-workflow-dialog/new-workflow-dialog.component';
+import { LiveEhrWriteBadgeComponent } from '../../components/shared/live-ehr-write-badge/live-ehr-write-badge.component';
 import { RunStatusHubService } from '../../services/run-status-hub.service';
 import { PermissionService } from '../../auth/services/permission.service';
 import { AuthStore } from '../../auth/store/auth.store';
@@ -28,7 +29,9 @@ import {
   resourceTypeOptions,
 } from '../../data/connection-type-labels.util';
 import { PhaseConfigService } from '../../services/phase-config.service';
+import { EhrLiveWriteCheckService } from '../../services/ehr-live-write-check.service';
 import { DialogService } from '../../core/services/dialog.service';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../core/components/confirm-dialog/confirm-dialog.component';
 import { ExecuteV2DialogComponent, ExecuteV2DialogData } from './execute-v2-dialog/execute-v2-dialog.component';
 import {
   IntegrationDetails,
@@ -62,7 +65,7 @@ type FilterCategory = 'status' | 'audience' | 'source' | 'destination' | 'lastRu
 @Component({
   selector: 'app-workflow-list',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule, RouterLink, NewWorkflowDialogComponent],
+  imports: [CommonModule, DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule, RouterLink, NewWorkflowDialogComponent, LiveEhrWriteBadgeComponent],
   templateUrl: './workflow-list.component.html',
   styleUrl: './workflow-list.component.scss',
 })
@@ -76,6 +79,7 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
   private readonly permissions = inject(PermissionService);
   private readonly phaseCfg = inject(PhaseConfigService);
   private readonly authStore = inject(AuthStore);
+  private readonly liveWriteCheck = inject(EhrLiveWriteCheckService);
 
   // ── RBAC: workflow.view (the route guard already reached here) only grants VIEW access — these four
   // are what actually gate each action-specific button/menu-item below, kept independent of one another
@@ -503,6 +507,37 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.confirmLiveWrite(row, () => this.dispatchRun(row, mode));
+  }
+
+  /** A live EHR write-back that has not run yet asks first, whichever button starts the run: records written into an
+   *  EHR cannot be taken back. Runs <paramref name="proceed"/> at once when the workflow writes nothing live. */
+  private confirmLiveWrite(row: WorkflowSummary, proceed: () => void): void {
+    this.busyId.set(row.workflowId);
+    this.liveWriteCheck.firstLiveWrite(row.workflowId, row.liveEhrWriteTargets).subscribe(ehr => {
+      this.busyId.set(null);
+      if (!ehr) {
+        proceed();
+        return;
+      }
+      this.customDialog
+        .open<ConfirmDialogComponent, ConfirmDialogData, boolean>(ConfirmDialogComponent, {
+          width: '440px',
+          data: {
+            title: `Write into ${ehr} now?`,
+            message: `"${row.name}" writes records into ${ehr}. Records written cannot be undone.`,
+            confirmLabel: 'Run',
+            danger: true,
+          },
+        })
+        .afterClosed()
+        .subscribe(confirmed => {
+          if (confirmed) proceed();
+        });
+    });
+  }
+
+  private dispatchRun(row: WorkflowSummary, mode: 'sync' | 'async'): void {
     if (mode === 'async') {
       this.runAsync(row);
       return;
@@ -565,21 +600,23 @@ export class WorkflowListComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.customDialog
-      .open<ExecuteV2DialogComponent, ExecuteV2DialogData, boolean>(ExecuteV2DialogComponent, {
-        width: '640px',
-        disableClose: true,
-        data: { workflowId: row.workflowId, workflowName: row.name },
-      })
-      .afterClosed()
-      .subscribe(started => {
-        if (!started) return;
-        this.summaries.update(rows =>
-          rows.map(w =>
-            w.workflowId === row.workflowId ? { ...w, lastRun: 'Running', lastRunAt: new Date().toISOString() } : w,
-          ),
-        );
-      });
+    this.confirmLiveWrite(row, () =>
+      this.customDialog
+        .open<ExecuteV2DialogComponent, ExecuteV2DialogData, boolean>(ExecuteV2DialogComponent, {
+          width: '640px',
+          disableClose: true,
+          data: { workflowId: row.workflowId, workflowName: row.name },
+        })
+        .afterClosed()
+        .subscribe(started => {
+          if (!started) return;
+          this.summaries.update(rows =>
+            rows.map(w =>
+              w.workflowId === row.workflowId ? { ...w, lastRun: 'Running', lastRunAt: new Date().toISOString() } : w,
+            ),
+          );
+        }),
+    );
   }
 
   onViewData(row: WorkflowSummary): void {

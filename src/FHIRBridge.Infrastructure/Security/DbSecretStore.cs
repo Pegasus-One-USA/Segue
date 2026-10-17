@@ -90,6 +90,20 @@ public sealed class DbSecretStore : ISecretWriter, IAppSecretMetadataProvider
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteSecretAsync(SecretReference secretReference, CancellationToken cancellationToken)
+    {
+        var row = await _dbContext.ProvisionedSecrets.FirstOrDefaultAsync(
+            s => s.KeyVaultName == secretReference.KeyVaultName && s.SecretName == secretReference.SecretName,
+            cancellationToken);
+        if (row is null)
+        {
+            return;
+        }
+
+        _dbContext.ProvisionedSecrets.Remove(row);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     /// <summary>Whether a value exists and when it was last written — never decrypts <c>ProtectedValue</c>.</summary>
     public async Task<ProvisionedSecretMetadata> GetMetadataAsync(
         SecretReference secretReference, CancellationToken cancellationToken)

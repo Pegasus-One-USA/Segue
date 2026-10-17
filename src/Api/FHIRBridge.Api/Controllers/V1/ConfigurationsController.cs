@@ -68,6 +68,12 @@ public sealed class ConfigurationsController : ControllerBase
         var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Create);
         if (denied is not null) return denied;
 
+        denied = await AuthorizeWriteAccessAsync(request, savedAllowsWrite: false, PermissionActionCode.Create);
+        if (denied is not null) return denied;
+
+        denied = await AuthorizeVendorWriteActivationAsync(request, savedActivation: false);
+        if (denied is not null) return denied;
+
         var sourceConnection = await _configurationService.AddSourceConnectionAsync(request, cancellationToken);
 
         return Created($"/api/v1/source-connections/{sourceConnection.Id}", sourceConnection);
@@ -76,13 +82,60 @@ public sealed class ConfigurationsController : ControllerBase
     [HttpPut("source-connections/{sourceConnectionId:guid}")]
     [DynamicSourceSystemPermission(typeof(SourceSystemType), PermissionActionCode.Edit, description: "Add or edit a source connection.")]
     [ProducesResponseType(typeof(SourceConnectionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpdateSourceConnection(
         Guid sourceConnectionId,
         [FromBody] CreateSourceConnectionRequest request,
+        [FromServices] FHIRBridge.Runtime.Application.Workflows.Storage.IWorkflowDefinitionStore workflowStore,
         CancellationToken cancellationToken)
     {
         var denied = await this.AuthorizePermissionAsync(_authorizationService, request.SourceSystemType, PermissionActionCode.Edit);
         if (denied is not null) return denied;
+
+        // A missing connection skips the checks below that compare with the saved row and falls through to the
+        // service, which answers 404.
+        var saved = await _configurationService.GetSourceConnectionByIdAsync(sourceConnectionId, cancellationToken);
+        if (saved is not null)
+        {
+            // The vendor right is checked against the saved connection too: otherwise a request naming another vendor
+            // would let a role edit (and re-vendor) a connection of a vendor it has no right to.
+            if (saved.SourceSystemType != request.SourceSystemType)
+            {
+                denied = await this.AuthorizePermissionAsync(_authorizationService, saved.SourceSystemType, PermissionActionCode.Edit);
+                if (denied is not null) return denied;
+            }
+
+            denied = await AuthorizeWriteAccessAsync(request, saved.Access.AllowsWrite(), PermissionActionCode.Edit);
+            if (denied is not null) return denied;
+
+            denied = await AuthorizeVendorWriteActivationAsync(request, saved.VendorWriteApisActivated);
+            if (denied is not null) return denied;
+
+            // Changing a write connection's write-side settings (access, department, activation) or where its writes
+            // go (vendor, base URL, token endpoint, credentials) needs the EHR Write-Back edit right as well. A source
+            // form's re-save that keeps the endpoint and credentials never needs it.
+            if (SourceConnectionWriteSide.UpdateChangesWriteSide(saved, request))
+            {
+                denied = await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, PermissionActionCode.Edit);
+                if (denied is not null) return denied;
+            }
+
+            // Dropping write access stops every write-back over the connection, as deleting it does, so the same
+            // in-use rule as DELETE applies: a stale screen or a direct call can't pull it from under a workflow.
+            if (saved.Access.AllowsWrite() && request.Access is { } access && !access.AllowsWrite())
+            {
+                var inUse = await FHIRBridge.Api.Workflows.WorkflowEndpoints.FindEhrWriteConnectionUsageAsync(
+                    workflowStore, _configurationRepository, cancellationToken);
+                if (inUse.Contains(sourceConnectionId))
+                {
+                    return Conflict(new
+                    {
+                        message = "This connection is still used by an EHR Write-Back destination or workflow. Point those at " +
+                                  "another connection, or remove them, before turning off its write access.",
+                    });
+                }
+            }
+        }
 
         var sourceConnection = await _configurationService.UpdateSourceConnectionAsync(
             sourceConnectionId,
@@ -470,4 +523,24 @@ public sealed class ConfigurationsController : ControllerBase
 
         return Ok(route);
     }
+
+    /// <summary>Giving a connection write access lets EHR Write-Back destinations write into the EHR over its
+    /// credentials, so on top of the vendor's own permission it needs the EHR Write-Back right: Create when the
+    /// connection is created able to write, Edit when an update turns write access on. An update that leaves Access
+    /// out (null keeps the saved value) or keeps a connection that already writes able to write does not.</summary>
+    private async Task<IActionResult?> AuthorizeWriteAccessAsync(
+        CreateSourceConnectionRequest request,
+        bool savedAllowsWrite,
+        PermissionActionCode action) =>
+        request.Access is { } access && access.AllowsWrite() && !savedAllowsWrite
+            ? await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, action)
+            : null;
+
+    /// <summary>Turning on a connection's vendor write APIs takes its eCW / athenaOne write-back types off dry run for
+    /// every destination that writes over it, so it needs the EHR Write-Back edit right, the same right that takes a
+    /// destination off dry run. Saving a connection that already had it on does not.</summary>
+    private async Task<IActionResult?> AuthorizeVendorWriteActivationAsync(CreateSourceConnectionRequest request, bool savedActivation) =>
+        request.VendorWriteApisActivated is true && !savedActivation
+            ? await this.AuthorizePermissionAsync(_authorizationService, DestinationType.EhrWriteBack, PermissionActionCode.Edit)
+            : null;
 }

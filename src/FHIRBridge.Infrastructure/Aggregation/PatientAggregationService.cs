@@ -123,10 +123,16 @@ public sealed class PatientAggregationService : IPatientAggregationService
                 throw new SourceConnectionUnavailableException($"Source connection '{id}' is disabled.");
             }
 
+            // A write-only connection is an EHR Write-Back target; its client id may not be registered for reads.
+            if (!requested.Access.AllowsRead())
+            {
+                throw new SourceConnectionUnavailableException($"Source connection '{id}' is write-only and cannot be read from.");
+            }
+
             return requested;
         }
 
-        var enabled = sourceConnections.Where(x => x.IsEnabled).ToList();
+        var enabled = sourceConnections.Where(x => x.IsEnabled && x.Access.AllowsRead()).ToList();
         return enabled.Count switch
         {
             0 => throw new SourceConnectionUnavailableException("There is no enabled source connection."),

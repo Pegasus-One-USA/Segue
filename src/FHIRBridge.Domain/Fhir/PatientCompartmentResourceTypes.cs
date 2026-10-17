@@ -50,7 +50,12 @@ public static class PatientCompartmentResourceTypes
         "Provenance",
         "QuestionnaireResponse",
         "RelatedPerson",
-        "Task"
+        "Task",
+        // Payer and goal data. All three are R4 patient-compartment members with a `patient` search parameter, and
+        // Epic refuses an unscoped search for them (Coverage: 59108 "A required element is missing", beneficiary).
+        "Coverage",
+        "ExplanationOfBenefit",
+        "Goal"
     ];
 
     private static readonly IReadOnlyDictionary<string, string> Normalized =

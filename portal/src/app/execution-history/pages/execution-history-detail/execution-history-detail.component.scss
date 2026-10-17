@@ -185,6 +185,11 @@
   mat-icon { font-size: 18px; height: 18px; width: 18px; flex-shrink: 0; }
 
   &.small { font-size: 12.5px; padding: 8px 12px; margin-bottom: 12px; }
+
+  &.warning-banner {
+    background: var(--color-warning-soft); color: var(--color-warning-strong);
+    border-color: var(--color-warning-strong);
+  }
 }
 
 .lineage-tabs {

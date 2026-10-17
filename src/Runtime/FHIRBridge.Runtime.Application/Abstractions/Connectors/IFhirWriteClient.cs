@@ -45,4 +45,14 @@ public interface IFhirWriteClient
         string patientJson,
         FhirSourceConfiguration source,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sends one vendor request over the connection's token: an eClinicalWorks transaction Bundle, an athenaOne REST
+    /// call. A non-idempotent request follows <see cref="CreateAsync"/>'s rules (sent once; retried only on 429 and on
+    /// a 503 with Retry-After); an idempotent one is retried like a read.
+    /// </summary>
+    Task<FhirRawWriteResult> SendAsync(
+        FhirRawWriteRequest request,
+        FhirSourceConfiguration source,
+        CancellationToken cancellationToken);
 }

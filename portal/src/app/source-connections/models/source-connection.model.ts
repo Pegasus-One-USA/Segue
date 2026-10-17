@@ -91,6 +91,11 @@ export interface SourceConnectionModel {
   modifiedBy?: string | null;
   /** What the connection may be used for (SourceConnectionAccess). Older API builds omit it: treat as Read. */
   access?: SourceConnectionAccessModel | null;
+  /** The practice has the vendor's contracted / proprietary write APIs turned on (eCW, athenaOne). */
+  vendorWriteApisActivated?: boolean | null;
+  /** athenahealth write connections only — the default department write-backs file into. A write-back
+   *  destination node's own Department ID, when set, still wins. Null for every other connection. */
+  departmentId?: string | null;
 }
 
 /** Matches CreateSourceConnectionRequest's expected body shape for both create (POST) and update (PUT). */
@@ -104,10 +109,20 @@ export interface SourceConnectionRequest {
   retrieval?: SourceRetrievalConfigurationModel | null;
   /** Null keeps the saved value on update and means Read on create (see CreateSourceConnectionRequest.Access). */
   access?: SourceConnectionAccessModel | null;
+  /** Null keeps the saved value on update, false on create. Turning it on needs the EHR Write-Back edit right. */
+  vendorWriteApisActivated?: boolean | null;
+  /** athenahealth write connections only. On update: null keeps the saved value, "" clears it, a value sets it.
+   *  The server ignores it for a connection without write access. */
+  departmentId?: string | null;
 }
 
 /** Matches the backend's SourceConnectionAccess enum (serialized as a string). */
 export type SourceConnectionAccessModel = 'Read' | 'Write' | 'ReadWrite';
+
+/** The list endpoints' `access` filter: 'read' = Read or ReadWrite rows, 'write' = Write or ReadWrite rows.
+ *  Omitted = every row. Sources only read and EHR write connections only write, so the Source Connections page asks for
+ *  'read' and the Destination Connections page for 'write'. */
+export type SourceConnectionAccessFilter = 'read' | 'write';
 
 /** Matches the API's GeneratedSigningKeyDto shape exactly (see GeneratedSigningKeyDto.cs). The private key itself
  *  is never returned — only what's needed to wire it into SourceAuthenticationModel on save. */
@@ -136,6 +151,7 @@ export interface SourceConnectionFilter {
   sourceSystemType?: EhrVendor;
   applicationType?: ApplicationTypeModel;
   isEnabled?: boolean;
+  access?: SourceConnectionAccessFilter;
   sortBy?: SourceSortColumn;
   sortOrder?: SortOrder;
   page: number;

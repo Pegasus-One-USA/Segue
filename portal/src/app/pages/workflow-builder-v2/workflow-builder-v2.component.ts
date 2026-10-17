@@ -6,6 +6,7 @@ import { HasUnsavedChanges } from '../../core/guards/has-unsaved-changes';
 import { UnsavedChangesRegistryService } from '../../core/services/unsaved-changes-registry.service';
 import { BlockingConfirmService } from '../../core/services/blocking-confirm.service';
 import { PipelineStoreV2 } from '../../services/pipeline-v2.store';
+import { findDestinationTypesOutsideSource } from '../../services/upstream-source-v2.util';
 import { TransformationRulesService } from '../../components/node-library-v2/destination-wizard/field-mapping/transformation-rules.service';
 import { DeIdentificationProfileService } from '../../destination-connections/services/deidentification-profile.service';
 import type { LegacyMappingRow } from '../../components/node-library-v2/destination-wizard/field-mapping/field-mapping-model';
@@ -17,10 +18,16 @@ import { WorkflowBuildAssemblerServiceV2 } from '../../services/workflow-build-a
 import { SOURCES } from '../../data/sources-v2.data';
 import { TRANSFORMS } from '../../data/transforms-v2.data';
 import { SQL_FAMILY_DESTINATION_TYPES } from '../../models/transform-v2.model';
+import { LiveEhrSaveConfirmService } from '../../services/live-ehr-save-confirm.service';
+import {
+  LiveEhrWriteTarget,
+  liveEhrWriteTargetsOfCanvas,
+  liveEhrWriteTargetsOfDefinition,
+} from '../../services/live-ehr-write-targets.util';
 
 import { Source } from '../../models/source.model';
 import { CanvasNode, SourceNode, TransformNode, MergeNode, isSourceNode } from '../../models/node-v2.model';
-import { APP_ORIGIN } from '../../core/api-endpoints';
+import { hostedJwksUrl, isHostedJwksUrl } from '../../core/api-endpoints';
 /** V2's chain steps in canonical canvas order — Source → Mapping → Transformation →
  *  De-identification → Destination. Mirrors ApplicabilityServiceV2.CHAIN_STEP_IDS. */
 const CHAIN_STEP_IDS: string[] = ['field-mapping', 'transformation', 'deidentification'];
@@ -68,6 +75,11 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
   private readonly blockingConfirm = inject(BlockingConfirmService);
   private readonly permissions = inject(PermissionService);
   private readonly unsavedChangesRegistry = inject(UnsavedChangesRegistryService);
+  private readonly liveEhrSaveConfirm = inject(LiveEhrSaveConfirmService);
+
+  /** The live EHR writes in the last saved version of this workflow (none for a brand-new one). Save asks before it
+   *  adds live EHR writing that is not in here; see LiveEhrSaveConfirmService. */
+  private savedLiveEhrTargets: LiveEhrWriteTarget[] = [];
 
   constructor() {
     this.unsavedChangesRegistry.register(() => this.hasUnsavedChanges(), undefined, () => this.isSaveInProgress());
@@ -341,6 +353,17 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       return;
     }
 
+    // Same rule the server applies on save: a destination may only write types its upstream source reads. Caught
+    // here so the builder names the destination and the types instead of round-tripping for the same rejection.
+    const typeMismatch = findDestinationTypesOutsideSource(this.store.nodes(), this.store.edges(), (node) =>
+      this.graphMapper.savedDisplayName(node).trim() || node.id,
+    );
+    if (typeMismatch) {
+      this.workflowStatus.set(typeMismatch.message);
+      this.toast.error('Cannot save workflow', typeMismatch.message);
+      return;
+    }
+
     const name = this.workflowName().trim();
     const existingId = this.currentWorkflowId();
     const isLaunch = !!this.graphMapper.findLaunchSourceId();
@@ -371,13 +394,27 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     // future gap in assemble()'s own detection), routing it to the plain save would silently persist the secret
     // in plaintext node config while leaving the backing connection's Key Vault reference untouched. Never let
     // that happen — force the provisioning path whenever an unresolved secret is present, regardless of hasSpecs.
-    if (hasSpecs || this.hasUnresolvedSecrets()) {
-      this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
-      return;
-    }
+    const provisions = hasSpecs || this.hasUnresolvedSecrets();
 
-    // No wizard-drawn specs → plain design save.
-    this.saveWorkflow(name, existingId, isLaunch);
+    // Saving a new live EHR write asks first: from then on every run writes into the EHR, scheduled and triggered
+    // runs included. Cancel saves nothing and leaves the canvas as it is.
+    this.liveEhrSaveConfirm
+      .confirmSave(this.savedLiveEhrTargets, liveEhrWriteTargetsOfCanvas(this.store.nodes()))
+      .subscribe(confirmed => {
+        if (!confirmed) return;
+        if (provisions) {
+          this.buildWorkflow({ ...request, workflowId: existingId ?? undefined });
+          return;
+        }
+
+        // No wizard-drawn specs → plain design save.
+        this.saveWorkflow(name, existingId, isLaunch);
+      });
+  }
+
+  /** After a save succeeds: what is on the canvas now is the last saved version. */
+  private markLiveEhrTargetsSaved(): void {
+    this.savedLiveEhrTargets = liveEhrWriteTargetsOfCanvas(this.store.nodes());
   }
 
   /** True if any canvas node holds a freshly typed secret (source Client Secret, destination password/secret/
@@ -407,6 +444,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
       next: result => {
         this.currentWorkflowId.set(result.workflowId);
         this.workflowIdInput.set(result.workflowId);
+        this.markLiveEhrTargetsSaved();
         const synced =
           Object.keys(result.sourceConnectionIds).length +
           Object.keys(result.destinationIds).length +
@@ -495,14 +533,13 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
 
       if (!isGeneratedOrImportedBackendKey) continue;
 
+      // A hosted URL saved without its origin (older Settings forms built it from an empty apiBase) is a
+      // placeholder too: it is replaced by the absolute one the EHR can actually fetch.
       const existingJwksUrl = (fields['JWKS URL'] ?? '').trim();
-      const isPlaceholder =
-        !existingJwksUrl ||
-        (existingJwksUrl.startsWith(`${APP_ORIGIN}/api/v1/source-connections/`) &&
-          existingJwksUrl.endsWith('/.well-known/jwks.json'));
+      const isPlaceholder = !existingJwksUrl || isHostedJwksUrl(existingJwksUrl);
       if (!isPlaceholder) continue;
 
-      const jwksUrl = `${APP_ORIGIN}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+      const jwksUrl = hostedJwksUrl(sourceConnectionId);
       if (existingJwksUrl !== jwksUrl) {
         this.store.updateNode(nodeId, { fields: { ...fields, 'JWKS URL': jwksUrl } } as Partial<CanvasNode>);
         anyCorrected = true;
@@ -547,6 +584,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
     this.workflowApi.load(id).subscribe({
       next: workflow => {
         this.graphMapper.loadDefinition(workflow);
+        this.savedLiveEhrTargets = liveEhrWriteTargetsOfDefinition(workflow.nodes);
         this.currentWorkflowId.set(workflow.id);
         this.workflowName.set(workflow.name);
         this.workflowDescription.set(workflow.description ?? '');
@@ -1159,6 +1197,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
         this.workflowStatus.set('Saving workflow...');
         this.workflowApi.save(request, workflowId).subscribe({
           next: saved => {
+            this.markLiveEhrTargetsSaved();
             this.currentWorkflowId.set(saved.id);
             this.workflowIdInput.set(saved.id);
             this.workflowName.set(saved.name);
@@ -1293,6 +1332,7 @@ export class WorkflowBuilderV2Component implements OnInit, HasUnsavedChanges {
    *  ngOnInit/onReset), not after a save (see finishSave). */
   private resetCanvasAndWorkflowState(): void {
     this.store.reset();
+    this.savedLiveEhrTargets = [];
     this.currentWorkflowId.set(null);
     this.workflowName.set('');
     // Otherwise the freshly-blanked name field reads as invalid immediately — nameTouched stays true from

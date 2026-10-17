@@ -239,6 +239,7 @@ public static class DependencyInjection
             services.AddSingleton<ISystemSettingRepository, InMemorySystemSettingRepository>();
             services.AddSingleton<IEhrWriteLedgerRepository, InMemoryEhrWriteLedgerRepository>();
             services.AddSingleton<ITabularSourceFileRepository, InMemoryTabularSourceFileRepository>();
+            services.AddSingleton<ITabularSqlConnectionRepository, InMemoryTabularSqlConnectionRepository>();
             // These had no no-database registration, so every screen that used one failed in this profile.
             services.AddSingleton<ITransformationRuleRepository, InMemoryTransformationRuleRepository>();
             services.AddSingleton<IDeIdentificationProfileRepository, InMemoryDeIdentificationProfileRepository>();
@@ -352,6 +353,7 @@ public static class DependencyInjection
             services.AddScoped<IResourceTypeCriteriaRepository, EfResourceTypeCriteriaRepository>();
             services.AddScoped<IEhrWriteLedgerRepository, EfEhrWriteLedgerRepository>();
             services.AddScoped<ITabularSourceFileRepository, EfTabularSourceFileRepository>();
+            services.AddScoped<ITabularSqlConnectionRepository, EfTabularSqlConnectionRepository>();
             services.AddScoped<IDeIdentificationProfileSeeder, DeIdentificationProfileSeeder>();
             services.AddScoped<IUserAccessRepository, EfUserAccessRepository>();
             services.AddScoped<IConfiguredPipelineRunRepository, EfConfiguredPipelineRunRepository>();
@@ -569,13 +571,49 @@ public static class DependencyInjection
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicClinicalNoteWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicVitalSignWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicPatientWriteProfile>();
+        // Epic's other incoming creates, each a variant a destination enables (Phase 7).
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicLinesDrainsAirwaysWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicImagingCharacteristicsWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicRadiotherapyVolumeWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicRadiotherapySummaryProcedureWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicRadiotherapySummaryServiceRequestWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicDocumentInformationWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicNonPatientDocumentWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicCommunityResourceMessageWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Epic.EpicPatientEnteredQuestionnaireWriteProfile>();
+        // eClinicalWorks (contracted Create APIs, sent as transaction Bundles).
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowAllergyIntoleranceWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowConditionWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowEncounterDiagnosisWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowMedicalHistoryWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowSurgicalHistoryWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowImmunizationWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowMedicationRequestWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowMedicationStatementWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowVitalSignWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowPatientWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Healow.HealowClinicalNoteWriteProfile>();
+        // athenahealth (proprietary athenaOne REST API; QuestionnaireResponse stays on FHIR).
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Athenahealth.AthenaOneAllergyWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Athenahealth.AthenaOneProblemWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Athenahealth.AthenaOneVitalSignWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Athenahealth.AthenaOneLabResultWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Athenahealth.AthenaOneMedicationRequestWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Athenahealth.AthenaOneMedicationStatementWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Athenahealth.AthenaOneImmunizationWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Athenahealth.AthenaOneClinicalNoteWriteProfile>();
+        services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.Athenahealth.AthenaOnePatientWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.UsCore.HealowQuestionnaireResponseWriteProfile>();
         services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile, Destinations.EhrWriteBack.UsCore.AthenahealthQuestionnaireResponseWriteProfile>();
+        // Generic FHIR R4: one plain-create profile per type it takes.
+        foreach (var resourceType in FHIRBridge.Domain.Fhir.EhrWriteCapabilities.GenericFhirResourceTypes)
+        {
+            services.AddSingleton<Destinations.EhrWriteBack.IEhrWriteProfile>(new Destinations.EhrWriteBack.GenericFhir.GenericFhirWriteProfile(resourceType));
+        }
+
         services.AddSingleton<Destinations.EhrWriteBack.EhrWriteProfileRegistry>();
+        // No master patient index yet; the MPI replaces this registration (see IEhrTargetPatientMatcher).
+        services.TryAddSingleton<FHIRBridge.Application.Abstractions.Destinations.IEhrTargetPatientMatcher, Destinations.EhrWriteBack.UnavailableEhrTargetPatientMatcher>();
         services.AddSingleton<IEhrCloneModePolicy, Destinations.EhrWriteBack.SettingsEhrCloneModePolicy>();
         // Tabular sources (CSV upload / SQL query → FHIR). Scoped: it reads the request's repository and secrets.
         services.AddScoped<Application.Abstractions.Tabular.ITabularRowReader, Tabular.TabularRowReader>();

@@ -1,5 +1,6 @@
 using FHIRBridge.Governance;
 using FHIRBridge.Runtime.Application.Workflows;
+using FHIRBridge.Runtime.Application.Workflows.Audit;
 using FHIRBridge.Runtime.Application.Workflows.Catalog;
 using FHIRBridge.Runtime.Application.Workflows.Storage;
 using FHIRBridge.Runtime.Domain.Workflows;
@@ -503,6 +504,310 @@ public sealed class RankedWorkflowOrchestratorTests
         result.WorkflowRun.Status.Should().Be(WorkflowRunStatus.Succeeded);
         result.WorkflowRun.NodeRuns.Should().HaveCount(3);
         result.WorkflowRun.NodeRuns.Should().OnlyContain(nodeRun => nodeRun.Status == WorkflowRunStatus.Succeeded);
+    }
+
+    // ---- PR #244 re-review ---------------------------------------------------------------------------------------
+
+    private static IWorkflowNodeExecutor[] PassThroughExecutors(Action? onDeIdentification = null) =>
+    [
+        new PayloadExecutor(WorkflowNodeTypes.EpicSource, WorkflowDataContract.ResourceBatch, _ => "bundle"),
+        new PayloadExecutor(WorkflowNodeTypes.DeIdentification, WorkflowDataContract.DeIdentifiedBatch, inputs =>
+        {
+            onDeIdentification?.Invoke();
+            return inputs.Single().Payload;
+        }),
+        new PayloadExecutor(WorkflowNodeTypes.Mapping, WorkflowDataContract.MappedRecordBatch, inputs => inputs.Single().Payload),
+        new PayloadExecutor(WorkflowNodeTypes.SqlServerDestination, WorkflowDataContract.DestinationWriteResult, inputs => inputs.Single().Payload),
+    ];
+
+    [Fact]
+    public async Task A_run_another_instance_closed_keeps_the_recorded_outcome_and_is_not_failed_here()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("closed-elsewhere");
+        var audit = new InMemoryWorkflowAuditRecorder();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors()),
+            auditRecorder: audit,
+            runStore: new ClosedElsewhereRunStore());
+
+        var result = await orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        result.WorkflowRun.Status.Should().Be(WorkflowRunStatus.Succeeded, because: "Fail is never called on a run that succeeded");
+        audit.Events.Should().NotContain(e => e.EventType == WorkflowAuditEventType.WorkflowRunFailed);
+    }
+
+    // PR #244 review: the cancel and failure branches notify the status another instance recorded, not their own.
+    [Fact]
+    public async Task A_failure_on_a_run_another_instance_closed_notifies_the_recorded_status()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("fail-closed-elsewhere");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new InvalidOperationException("boom"))),
+            runStore: new ClosedElsewhereRunStore(nameof(WorkflowRunStatus.Cancelled)),
+            runStatusNotifier: notifier);
+
+        var act = () => orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("boom");
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Cancelled));
+        terminal.ErrorMessage.Should().BeNull();
+        notifier.Events.Should().NotContain(e => e.Status == nameof(WorkflowRunStatus.Failed));
+    }
+
+    [Fact]
+    public async Task A_cancel_on_a_run_another_instance_closed_notifies_the_recorded_status()
+    {
+        // The lease heartbeat cancels a run another instance already failed as interrupted.
+        var workflow = BuildValidSourceToSqlWorkflow("cancel-closed-elsewhere");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new OperationCanceledException())),
+            runStore: new ClosedElsewhereRunStore(nameof(WorkflowRunStatus.Failed)),
+            runStatusNotifier: notifier);
+
+        await orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Failed));
+        terminal.ErrorMessage.Should().BeNull("'Cancelled by user request.' is not what happened to this run");
+        notifier.Events.Should().NotContain(e => e.Status == nameof(WorkflowRunStatus.Cancelled));
+    }
+
+    // PR #244 review: a run another instance closed with the SAME status this branch reached still holds that
+    // instance's reason, so the push must not carry this branch's message or reference id.
+    [Fact]
+    public async Task A_failure_on_a_run_another_instance_already_failed_pushes_no_message_or_reference()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("fail-failed-elsewhere");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new InvalidOperationException("boom"))),
+            runStore: new ClosedElsewhereRunStore(nameof(WorkflowRunStatus.Failed)),
+            exceptionManager: new RecordingExceptionManager(),
+            runStatusNotifier: notifier);
+
+        var act = () => orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("boom");
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Failed));
+        terminal.ErrorMessage.Should().BeNull("the row holds the other instance's interrupted reason, not 'boom'");
+        terminal.ErrorReferenceId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_cancel_on_a_run_another_instance_already_cancelled_pushes_no_message_or_reference()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("cancel-cancelled-elsewhere");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new OperationCanceledException())),
+            runStore: new ClosedElsewhereRunStore(nameof(WorkflowRunStatus.Cancelled)),
+            exceptionManager: new RecordingExceptionManager(),
+            runStatusNotifier: notifier);
+
+        await orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Cancelled));
+        terminal.ErrorMessage.Should().BeNull("the run was cancelled as abandoned elsewhere, not by user request");
+        terminal.ErrorReferenceId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_failure_that_saves_pushes_its_message_and_reference()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("fail-saved");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new InvalidOperationException("boom"))),
+            runStore: new InMemoryWorkflowRunStore(),
+            exceptionManager: new RecordingExceptionManager(),
+            runStatusNotifier: notifier);
+
+        var act = () => orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Failed));
+        terminal.ErrorMessage.Should().Be("boom");
+        terminal.ErrorReferenceId.Should().Be("ERR-TEST-000001");
+    }
+
+    [Fact]
+    public async Task A_cancel_that_saves_notifies_cancelled_with_its_reason()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("cancel-saved");
+        var notifier = new RecordingRunStatusNotifier();
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => throw new OperationCanceledException())),
+            runStore: new InMemoryWorkflowRunStore(),
+            runStatusNotifier: notifier);
+
+        await orchestrator.ExecuteAsync(workflow, CreateContext());
+
+        var terminal = notifier.Events.Last();
+        terminal.Status.Should().Be(nameof(WorkflowRunStatus.Cancelled));
+        terminal.ErrorMessage.Should().Be("Cancelled by user request.");
+    }
+
+    private sealed class RecordingRunStatusNotifier : IRunStatusNotifier
+    {
+        public List<RunStatusChangedEvent> Events { get; } = [];
+
+        public Task NotifyAsync(RunStatusChangedEvent statusEvent, CancellationToken cancellationToken)
+        {
+            Events.Add(statusEvent);
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task A_resumed_run_is_running_again_under_this_processs_lease()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("resume-lease");
+        var sourceNodeId = workflow.Nodes.Single(n => n.NodeType == WorkflowNodeTypes.EpicSource).Id;
+        var runStore = new InMemoryWorkflowRunStore();
+        var active = new ActiveWorkflowRuns();
+        var pausedRun = new WorkflowRun(Guid.NewGuid(), workflow.Id, DateTimeOffset.UtcNow, correlationId: "resume-lease");
+        pausedRun.AwaitBulkExport();
+        await runStore.SaveAsync(pausedRun, CancellationToken.None);
+        WorkflowRunStatus? statusWhileRunning = null;
+        string? ownerWhileRunning = null;
+        var heldWhileRunning = false;
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() =>
+            {
+                statusWhileRunning = pausedRun.Status;
+                ownerWhileRunning = pausedRun.LeaseOwner;
+                heldWhileRunning = active.Snapshot().Contains(pausedRun.Id);
+            })),
+            runStore: runStore,
+            workflowDefinitionStore: new StubWorkflowDefinitionStore(workflow),
+            activeRuns: active);
+
+        await orchestrator.ResumeAfterBulkExportAsync(
+            pausedRun.Id, sourceNodeId, priorNodeOutputsJson: null, contextJson: null,
+            [new FHIRBridge.Runtime.Domain.ValueObjects.ResourceEnvelope("Patient", "p1", "{\"resourceType\":\"Patient\"}", null, null)],
+            cancellationToken: CancellationToken.None);
+
+        statusWhileRunning.Should().Be(WorkflowRunStatus.Running, because: "the heartbeat renews (and fences) only a Running row");
+        ownerWhileRunning.Should().Be(active.InstanceId);
+        heldWhileRunning.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_resume_that_fails_before_its_nodes_run_fails_the_run_with_the_real_error()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("resume-bad-context");
+        var sourceNodeId = workflow.Nodes.Single(n => n.NodeType == WorkflowNodeTypes.EpicSource).Id;
+        var runStore = new InMemoryWorkflowRunStore();
+        var pausedRun = new WorkflowRun(Guid.NewGuid(), workflow.Id, DateTimeOffset.UtcNow);
+        pausedRun.AwaitBulkExport();
+        await runStore.SaveAsync(pausedRun, CancellationToken.None);
+        var nodeRan = false;
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(PassThroughExecutors(() => nodeRan = true)),
+            runStore: runStore,
+            workflowDefinitionStore: new StubWorkflowDefinitionStore(workflow),
+            activeRuns: new ActiveWorkflowRuns());
+
+        var act = () => orchestrator.ResumeAfterBulkExportAsync(
+            pausedRun.Id, sourceNodeId, priorNodeOutputsJson: null, contextJson: "{ not json",
+            [], cancellationToken: CancellationToken.None);
+
+        await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+        nodeRan.Should().BeFalse();
+        var saved = await runStore.GetAsync(pausedRun.Id, CancellationToken.None);
+        saved!.Status.Should().Be(WorkflowRunStatus.Failed, because: "left Running, the expiry sweep would close it as interrupted");
+        saved.ErrorMessage.Should().NotBe(WorkflowRunLease.InterruptedReason);
+    }
+
+    [Fact]
+    public async Task A_paused_run_closed_elsewhere_is_not_resumed()
+    {
+        var workflow = BuildValidSourceToSqlWorkflow("resume-closed");
+        var sourceNodeId = workflow.Nodes.Single(n => n.NodeType == WorkflowNodeTypes.EpicSource).Id;
+        var runStore = new InMemoryWorkflowRunStore();
+        var calls = new List<string>();
+        var closed = new WorkflowRun(Guid.NewGuid(), workflow.Id, DateTimeOffset.UtcNow);
+        closed.Cancel("Cancelled: abandoned", DateTimeOffset.UtcNow);
+        await runStore.SaveAsync(closed, CancellationToken.None);
+        var orchestrator = new RankedWorkflowOrchestrator(
+            new WorkflowGraphValidator(),
+            new WorkflowNodeExecutorRegistry(new IWorkflowNodeExecutor[]
+            {
+                new RecordingExecutor(WorkflowNodeTypes.EpicSource, calls, WorkflowDataContract.ResourceBatch),
+                new RecordingExecutor(WorkflowNodeTypes.DeIdentification, calls, WorkflowDataContract.DeIdentifiedBatch),
+                new RecordingExecutor(WorkflowNodeTypes.Mapping, calls, WorkflowDataContract.MappedRecordBatch),
+                new RecordingExecutor(WorkflowNodeTypes.SqlServerDestination, calls, WorkflowDataContract.DestinationWriteResult),
+            }),
+            runStore: runStore,
+            workflowDefinitionStore: new StubWorkflowDefinitionStore(workflow));
+
+        var act = () => orchestrator.ResumeAfterBulkExportAsync(
+            closed.Id, sourceNodeId, priorNodeOutputsJson: null, contextJson: null, [], cancellationToken: CancellationToken.None);
+
+        await act.Should().ThrowAsync<WorkflowRunAlreadyClosedException>();
+        calls.Should().BeEmpty();
+        closed.Status.Should().Be(WorkflowRunStatus.Cancelled);
+    }
+
+    /// <summary>Refuses every terminal save, as the SQL store does when another instance closed the run first.</summary>
+    private sealed class ClosedElsewhereRunStore : IWorkflowRunStore
+    {
+        private readonly InMemoryWorkflowRunStore _inner = new();
+        private readonly string _recordedStatus;
+
+        public ClosedElsewhereRunStore(string recordedStatus = nameof(WorkflowRunStatus.Failed))
+        {
+            _recordedStatus = recordedStatus;
+        }
+
+        public Task SaveAsync(WorkflowRun workflowRun, CancellationToken cancellationToken) =>
+            WorkflowRunStatuses.IsTerminal(workflowRun.Status)
+                ? throw new WorkflowRunAlreadyClosedException(workflowRun.Id, _recordedStatus)
+                : _inner.SaveAsync(workflowRun, cancellationToken);
+
+        public Task<WorkflowRun?> GetAsync(Guid workflowRunId, CancellationToken cancellationToken) => _inner.GetAsync(workflowRunId, cancellationToken);
+
+        public Task<int> ExpireStaleValidatedAsync(DateTimeOffset olderThanUtc, CancellationToken cancellationToken) =>
+            _inner.ExpireStaleValidatedAsync(olderThanUtc, cancellationToken);
+
+        public Task<WorkflowLeaseRenewal> RenewLeasesAsync(IReadOnlyCollection<Guid> runIds, string owner, DateTimeOffset expiresAt, CancellationToken cancellationToken) =>
+            _inner.RenewLeasesAsync(runIds, owner, expiresAt, cancellationToken);
+
+        public Task<int> FailExpiredRunsAsync(DateTimeOffset now, DateTimeOffset legacyStartedBefore, string reason, CancellationToken cancellationToken) =>
+            _inner.FailExpiredRunsAsync(now, legacyStartedBefore, reason, cancellationToken);
+
+        public Task<bool> RequestCancellationAsync(Guid workflowRunId, DateTimeOffset requestedAt, CancellationToken cancellationToken) =>
+            _inner.RequestCancellationAsync(workflowRunId, requestedAt, cancellationToken);
+
+        public Task<bool> CancelAbandonedAsync(Guid workflowRunId, DateTimeOffset now, DateTimeOffset legacyStartedBefore, string reason, CancellationToken cancellationToken) =>
+            _inner.CancelAbandonedAsync(workflowRunId, now, legacyStartedBefore, reason, cancellationToken);
+
+        public Task<WorkflowRun?> FindValidatedAsync(Guid workflowDefinitionId, string correlationId, CancellationToken cancellationToken) =>
+            _inner.FindValidatedAsync(workflowDefinitionId, correlationId, cancellationToken);
+
+        public Task<IReadOnlyCollection<WorkflowRun>> ListByDefinitionAsync(Guid workflowDefinitionId, CancellationToken cancellationToken) =>
+            _inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
+
+        public Task<IReadOnlyCollection<WorkflowRun>> ListRecentAsync(int count, CancellationToken cancellationToken) =>
+            _inner.ListRecentAsync(count, cancellationToken);
+
+        public Task<IReadOnlyDictionary<WorkflowRunStatus, int>> GetStatusCountsAsync(CancellationToken cancellationToken) =>
+            _inner.GetStatusCountsAsync(cancellationToken);
     }
 
     private static WorkflowDefinition BuildValidSourceToSqlWorkflow(string name)

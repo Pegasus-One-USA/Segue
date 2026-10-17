@@ -7,6 +7,15 @@
 > **Living plan:** the Claude Doc "Epic FHIR R4 Write-Back — Implementation Plan"
 > (https://claude.ai/code/artifact/5cd4f8a3-f740-49b6-bd65-930953a45762) holds the full design, the workflow-builder
 > behaviour and the decisions still open. This file records the verified Epic facts the implementation depends on.
+>
+> **Set-up changed 2026-10-08 / 09 — see [21 — Source / destination consistency](21-source-destination-consistency.md)
+> and the [admin guide](../user-guide/ehr-write-back.md).** Write connections are now created and listed under
+> **Destination Connections** (Epic, eClinicalWorks, athenahealth, FHIR test server); source forms have no Access
+> field and only read. The destination is one tile per EHR (Epic, eClinicalWorks, athenahealth). Its one
+> **Connection** dropdown decides the run: an EHR connection is live, a test server is a test run; Dry run is a
+> checkbox under Options, offered only when the System Setting is on (off by default). It is still saved as
+> `dest_dryRun` + `dest_testAsVendor`. Where sections below say "Access", "Dry run" or "Test as", read them in that light;
+> section 16 summarises the differences.
 
 Everything below comes from Epic's own published material, fetched 2026-09-30: the sandbox R4 CapabilityStatement
 (software "Epic August 2026"), the sandbox SMART configuration, the interface catalog at open.epic.com, and each
@@ -25,17 +34,21 @@ Epic R4 accepts bridge-style writes for **five resource types**, plus `Patient/$
 | Observation.Create (Vital Signs) (963) | Backend, Clinician, Patient | Yes for backend/clinician calls — existing, not closed, not a future appointment | Chart flowsheets | **In** |
 | Patient.Create (Demographics) (930) | Backend, Clinician | n/a | A new patient, **or an existing one** when Epic finds a certain match | **In, opt-in only** |
 | Patient.$match (10423) | Backend, Clinician, Patient (not MyChart) | n/a | Nothing filed; at most one certain match | **In** (resolution) |
-| Observation.Create / .Update (Lines, Drains, Airways) (962 / 974) | Backend, Clinician, Patient | Yes, not closed | LDA flowsheet | Deferred — spec contradicts itself on required elements |
-| DocumentReference.Create / .Update (Document Information) (10050 / 10051) | Backend, Clinician, Patient | Sometimes | Scan metadata | Out — Hyperdrive scan workflow only |
-| DocumentReference.Create (Non-Patient Document Information) (10303) | Backend, Clinician, Patient | n/a | Tapestry non-patient documents | Out |
-| QuestionnaireResponse.Create (Patient-Entered) (10023) | Backend, Clinician | n/a | Answers a questionnaire Epic already assigned | Out — needs Epic questionnaire/question ids and an existing assignment |
-| Communication.Create (Community Resource) (10090) | Backend, Clinician | Yes | Community-referral message | Out — referral messaging only |
+| Observation.Create (Lines, Drains, Airways) (962) | Backend, Clinician, Patient | Yes, not closed | LDA flowsheet | **In, Phase 7, opt-in** (section 14) |
+| DocumentReference.Create (Document Information) (10050) | Backend, Clinician, Patient | Sometimes | Scan metadata | **In, Phase 7, opt-in** — Epic: Hyperdrive scan workflow only |
+| DocumentReference.Create (Non-Patient Document Information) (10303) | Backend, Clinician, Patient | n/a | Tapestry non-patient documents | **In, Phase 7, opt-in, CSV / SQL only** |
+| QuestionnaireResponse.Create (Patient-Entered) (10023) | Backend, Clinician | n/a | Answers a questionnaire Epic already assigned | **In, Phase 7, opt-in, CSV / SQL only** — needs Epic questionnaire/question ids and the assignment |
+| Communication.Create (Community Resource) (10090) | Backend, Clinician | Yes | Community-referral message | **In, Phase 7, opt-in, CSV / SQL only** |
+| BodyStructure.Create (Radiotherapy Volume) (11040) | Backend, Clinician, Patient | n/a | Radiotherapy planning volume | **In, Phase 7, opt-in** |
+| Procedure.Create / ServiceRequest.Create (External Radiotherapy Summary) (11048 / 11044) | Backend, Clinician, Patient | n/a | Delivered / prescribed radiotherapy course | **In, Phase 7, opt-in** |
+| Observation.Create (DICOM Image Characteristics) (11224) | Backend, Clinician, Patient | n/a | CT dose finding on an imaging report | **In, Phase 7, opt-in, CSV / SQL only** |
+| CriteriaReview.Create (1009), ReviewCollection.Create (1026) | — | — | Utilization management | Out — Epic proprietary, not FHIR (`IsFhir: false` in the catalog) |
 | Goal.Create (Patient) (878) | STU3 only | n/a | Received document | Out — no R4 create |
 
 **How the list was enumerated.** Every R4 entry in Epic's interface catalog (639 interfaces) that is not a plain
-Read or Search was listed. All other R4 write APIs belong to CDS Hooks (unsigned orders, encounter diagnoses),
-Radiotherapy (BodyStructure, ServiceRequest, Procedure), DICOM (Observation), Prior Auth (ServiceRequest,
-MedicationRequest, Claim) or Community Resource (Task) workflows, and are out. `DiagnosticReport` update and
+Read or Search was listed. All other R4 write APIs belong to CDS Hooks (unsigned orders, encounter diagnoses), Prior
+Auth (ServiceRequest, MedicationRequest, Claim) or Community Resource (Task) workflows, and are out. (Radiotherapy and
+DICOM were out until Phase 7.) `DiagnosticReport` update and
 `ConceptMap` create appear in the CapabilityStatement but have no public spec.
 
 ## 2. Platform facts that constrain the design
@@ -251,7 +264,8 @@ report `already-in-ehr`.
 2. the destination selects the type in Data groups (`dest_resources`);
 3. the code supports live writes for the type (`EhrWriteCapability.LiveWriteSupported`): Epic AllergyIntolerance
    (945), Condition problem-list item (949) and DocumentReference clinical note (1046); vitals and patients were
-   added in Phase 3 (section 9). No eClinicalWorks or athenahealth type is live-capable yet.
+   added in Phase 3 (section 9). eClinicalWorks and athenahealth types are live-capable since Phase 6, and need a fourth
+   condition: the write connection's vendor write APIs are marked as activated (section 13.2).
 
 There is no installation-wide release list. Until 2026-10-03 a third key, the system setting
 `EhrWriteBack:LiveWriteTypes`, had to list each type before it could go live; it was removed at the product owner's
@@ -368,7 +382,8 @@ ledger compares is computed on the shaped note.
 
 ## 10. Phase 4 — non-FHIR sources (CSV / SQL Table)
 
-A new Runtime source node, **CSV / SQL Table** (`TabularSourceNode`, portal tile `tabular`), reads rows and builds
+A new Runtime source node, **CSV / SQL Table** (`TabularSourceNode`; since `3b3f294f` the portal tiles **SQL
+database** `tabular-sql` and **CSV file** `tabular-csv`), reads rows and builds
 FHIR resources from templates. Its output is an ordinary `ResourceBatch`, so the EHR write-back writer, FHIR
 destinations and FHIR transforms take it unchanged.
 
@@ -378,20 +393,29 @@ destinations and FHIR transforms take it unchanged.
   only encrypted (`TabularSourceFiles.EncryptedContent`, AES-GCM through `IPhiFieldEncryptor`). It is deleted for
   real, not soft-deleted. The node keeps only the file id.
 - **SQL query** on SQL Server, PostgreSQL or MySQL. The connection string is stored as a secret
-  (`POST api/v1/tabular-sources/sql-connections`, vault `tabular-sources`); the node keeps only the reference.
-  Only one `SELECT` / `WITH … SELECT` is accepted, with comments stripped, no `;` between statements and no
-  data- or schema-changing keywords. It runs in a transaction that is always rolled back, declared `READ ONLY` on
-  PostgreSQL and MySQL. A read-only login is still the recommended setup.
+  (`POST api/v1/tabular-sources/sql-connections`, vault `tabular-sources`); the node keeps only the reference, and
+  a run or preview uses a reference only if it is one that endpoint created (`tabular-sources` vault, name
+  `tabular-sql-{engine}-{id}` for the same engine), so a node can never be pointed at another connection's secret.
+  `TabularSqlGuard` reads the query in one pass, recognising literals, quoted identifiers and comments the way the
+  engine does (MySQL backslash escapes, PostgreSQL dollar quotes), and checks the copy without comments or literal
+  content: one `SELECT` / `WITH … SELECT`, no `;` between statements, no data- or schema-changing keyword, and none
+  of `OPENQUERY`, `OPENROWSET`, `OPENDATASOURCE` or `dblink`, which run text on another server. The query runs as
+  written. It runs in a transaction that is always rolled back, declared `READ ONLY` on PostgreSQL and MySQL; SQL
+  Server has no read-only transaction, so a SQL Server login that can insert, update, delete, alter, execute or is
+  sysadmin is refused before the query runs (use a `db_datareader`-only user).
 
 **Templates** (`tab_templates`, `TabularFhirTemplateEngine`): FHIR JSON with `{{column}}` placeholders and
-formats `number`, `integer`, `boolean`, `date`, `datetime`, `base64` (note text), `lower`, `upper`. An element
+formats `number`, `integer`, `boolean`, `date`, `datetime`, `base64` (note text), `lower`, `upper` (any case,
+`{{dob|Date}}`; inside text, `"born {{dob|date}}"`, the format applies too). A template with `{{` or `}}` that is not a
+readable placeholder is refused when saved, so placeholder text never reaches a resource. An element
 whose column is empty is dropped, along with objects and arrays left empty, so one template serves rows that fill
 different columns. Presets for Patient, AllergyIntolerance, Condition (problem-list item), Observation (vital sign)
 and DocumentReference (clinical note) use conventional column names. A resource repeated on several rows with the
 same id (a patient on each of their allergy rows) is kept once. `POST api/v1/tabular-sources/preview` renders the
 first five rows and lists the columns the templates read that the table lacks.
 
-**Identity for write-back.** A required **dataset key** (`tab_datasetKey`) becomes the source's stand-in base URL,
+**Identity for write-back.** A **dataset key** (`tab_datasetKey`; made by the portal since `3b3f294f`, see doc 21,
+section 4) becomes the source's stand-in base URL,
 `urn:fhirbridge:tabular:<key>`, which the destination executor hands the writer for a Tabular upstream. The ledger
 keys every record on it, so uploading a corrected copy of the file, or cloning the workflow, does not file rows
 again. There is no source to fetch a missing patient from, so for write-back the rows must build the Patient too
@@ -410,11 +434,29 @@ it in place of the per-vendor check; no license allow-list applies, since it nam
 feed a Mapping node into a SQL or file destination: mapping profiles are keyed on a source connection, which a
 Tabular source does not have.
 
+**One query or file per resource type (2026-10-08).** A source now names the resource types it reads
+(`tab_streams`): each type has its own SQL query, or its own CSV file with an optional "only rows where column =
+value" filter, and its own template, so every query can use plain column names and there is no wide `UNION` table.
+The results become one batch (the same resource from two types is kept once). An older node (`tab_query` /
+`tab_fileId` + `tab_templates`) still runs unchanged, and opens in the form as one entry per template reading that
+same query or file. **Check** (`POST api/v1/tabular-sources/check`) verifies every entry without reading a row: SQL
+Server describes the query (`sp_describe_first_result_set`), PostgreSQL and MySQL run it inside `LIMIT 0` under the
+same read-only rules; a missing table, view or column, or a syntax error, comes back in the database's own words
+(only those error codes are passed on), and template columns the query does not return are listed. A CSV entry is
+checked against the header recorded at upload. The form saves only after a check of the current settings passed.
+**Saved databases** (`TabularSqlConnections`, migration `AddTabularSqlConnections`) are listed by name under Source
+Connections (rows of type "SQL database": New, Test, Edit, Delete; one list since `9abd43cf`, doc 21) and picked in
+any workflow; the connection string stays
+a secret, and replacing it rewrites the same secret, so every workflow using that database follows.
+
 **Gate.** "A CSV of allergies lands in the Epic sandbox through the same writer, unchanged" is covered offline by
 `TabularSourceTests.A_csv_of_allergies_reaches_the_ehr_write_back_writer_unchanged` (patient matched by
 `$match`, allergy would be written). The sandbox run is pending Epic's return.
 
 ## 11. Phase 5a — eClinicalWorks (Healow), dry run only
+
+> Superseded by section 13 (2026-10-06): eCW types are now live-capable once the connection's vendor write APIs
+> are activated, are sent as transaction Bundles, and include notes, immunizations, medications and history.
 
 **Discovery (2026-10-02, practice `JAFJCD`, `https://fhir4.healow.com/fhir/r4/JAFJCD`).** The certified FHIR server
 (eCW FHIR Facade 1.6) declares one write in its CapabilityStatement: QuestionnaireResponse create. Its SMART
@@ -450,6 +492,8 @@ there, then set the verified types `liveWriteSupported: true`; destinations that
 
 ## 12. Phase 5b — athenahealth: QuestionnaireResponse only, dry run
 
+> Superseded by section 13 (2026-10-06): the clinical types are now written through athenaOne.
+
 **Discovery (2026-10-02, preview `https://api.preview.platform.athenahealth.com/fhir/r4`).** The certified FHIR R4
 API is read and search plus one create, **QuestionnaireResponse**. Two operations also write: FamilyMemberHistory
 `$batch-write` and MeasureReport `$submit-care-gaps`; their definitions are not readable anonymously (403). The SMART
@@ -478,11 +522,240 @@ write-back is wanted, together with an athenaOne (non-FHIR) channel for the clin
 **To go live with athena:** verify QuestionnaireResponse create against the preview environment with a
 questionnaire athena defines, then set `liveWriteSupported: true` for QuestionnaireResponse.
 
-## 13. Sources
+## 13. Phase 6 — eClinicalWorks and athenahealth as targets, every EHR-to-EHR combination
+
+**Built 2026-10-06 on `feature/ehr-write-back-multi-vendor`.** Supersedes the "dry run only" parts of sections 11 and
+12. Every write-back path now goes through the same writer, ledger and report; what differs per target is the
+capability table, the write profiles and the channel that sends.
+
+### 13.1 What each target accepts
+
+| Target | Types | Sent as | Live when |
+|---|---|---|---|
+| Epic | Patient (opt-in), AllergyIntolerance, Condition problem, DocumentReference note, Observation vitals | FHIR `POST /{type}` | not a dry run (unchanged) |
+| eClinicalWorks | Patient (opt-in), AllergyIntolerance, Condition problem, Condition encounter diagnosis, Condition medical history (opt-in), Procedure surgical history (opt-in), Immunization (historical), MedicationRequest / MedicationStatement → MedicationStatement, Observation vitals, DocumentReference note | FHIR **transaction Bundle** `POST {base}` (eCW's contracted Create APIs) | not a dry run **and** the connection's *Vendor write APIs activated* is on |
+| athenahealth | Patient (opt-in), AllergyIntolerance, Condition problem, Observation vitals (open encounter), Observation lab result, MedicationRequest / MedicationStatement, Immunization, DocumentReference note | athenaOne REST `/v1/{practiceid}/…` (form / multipart) | not a dry run **and** *Vendor write APIs activated* is on |
+| eCW, athena | QuestionnaireResponse | FHIR create | dry run only (needs eCW's Backend-Questionnaire app / an athena-defined questionnaire) |
+
+Sources are unchanged: Epic, eClinicalWorks, athenahealth (and CSV / SQL Table, section 10) all feed any target. The
+nine EHR-to-EHR pairs are the same code path; a pair whose source and target are the same server still writes only
+in clone mode (section 9).
+
+Left out on purpose: orders and prescriptions (eCW MedicationRequest orders need a prescriber), ServiceRequest,
+referrals, Coverage, Appointment, ChargeItem, Task and Communication. They are workflow actions in the target EHR,
+not chart records copied from another EHR. Epic's remaining create APIs came in Phase 7 (section 14).
+
+### 13.2 The contract switch
+
+`SourceConnection.VendorWriteApisActivated` (migration `AddVendorWriteApisActivated`, both providers) records that the
+practice behind a write connection has the vendor's non-public write APIs turned on: eCW's contracted Create APIs
+activated for the practice, or the athenaOne API enabled for the app. Capabilities that need it carry
+`RequiresVendorActivation`; `EhrWriteCapability.IsLive(activated)` decides. Until it is on, a live run of those types
+counts them as *would write* with the reason `vendor-activation-required`, exactly like a dry run.
+
+- Shown on the connection form (Access section) for a Write / Read & Write connection of a vendor that has such types.
+- Turning it on needs **ehrwriteback.edit** (checked in `ConfigurationsController` only when it changes from off to
+  on, so saving an activated connection does not need it).
+- Dropping the connection's write access clears it.
+
+### 13.3 Patient matching
+
+eCW and athena have no certain-only `$match`. After the ledger and an exact identifier search, the resolver asks
+`IEhrTargetPatientMatcher` — the master patient index being built separately. Until the MPI registers its
+implementation, `UnavailableEhrTargetPatientMatcher` answers "no index" and the record waits as
+`patient-awaiting-mpi`; nothing is guessed. The MPI's contract is on the interface: `Certain` only for one sure
+patient (target id), `None` only when it knows the patient has no record there (which lets an opted-in destination
+create one), `Ambiguous` to manual review. Epic keeps `$match`.
+
+### 13.4 Variants and holder encounters
+
+A vendor may list one resource type several times, once per API (`EhrWriteCapabilities.FindAll`). The writer tries
+the variants in table order and uses the first whose profile does not skip the record as another variant (skip
+reasons `not-a-…` / `not-an-…`). eCW files Conditions this way: problem-list item → Problems API, encounter-diagnosis →
+Encounter Diagnosis API, `medical-history` (or SNOMED 435871000124102) → Medical History API; a health concern matches
+none and is skipped. athena splits Observations into vital signs and lab results.
+
+eCW medical and surgical history are filed only on an open telephone encounter, which eCW will not create for us.
+`CreatesHolderEncounter` capabilities are skipped (`holder-encounter-not-enabled`) unless the destination turns on
+`dest_createHolderEncounter` (in the wizard, by ticking the Medical history or Surgical history kind under its type). Then the channel creates one telephone encounter
+per patient in each EHR, **at send time**, after the ledger, the write cap, the live check and the record's own ledger
+claim — so a dry run, a run whose history items are all already written, or a record another run claimed first,
+creates none. The encounter has its own ledger row (resource type `Encounter`, keyed by the target patient, not by any
+source record): once written, later runs file onto the same encounter. A refused create skips the items for this run
+(`holder-encounter-not-created`) and the next run tries again; a create with an unknown outcome (a timeout) is
+recorded as Unknown and the items wait (`holder-encounter-unknown`, then `holder-encounter-awaiting-review`) until a
+reviewer resolves that row on EHR Write Review, so an encounter that did land is never created twice. If the create
+stops the run (a cancel, a lost lease), the record's claim is settled as a refusal with no HTTP status, so it is
+retried rather than left waiting for review. The content hash is taken before the encounter is bound, so it is the
+same on every run.
+
+### 13.5 eClinicalWorks specifics (from eCW's published Create API pages, 2026-08-07)
+
+- Every write is a transaction Bundle POSTed to the base URL (`EcwEhrWriteChannel`). The answer is a
+  transaction-response Bundle: `entry[0].response.status` "1" with `location` `Type/id` is created; any other status is
+  eCW's error code, reported as the vendor code (202 *patient already exists* is already at target). eCW's codes
+  overlap HTTP's (201 *multiple patients found*, 202), so a bare 2xx number is an error, never a success.
+- Problems and encounter diagnoses send ICD-10-CM codings first, then SNOMED, nothing else; resolved problems need
+  `abatementDateTime`. Medical history and surgical history send `code.text` only.
+- Medications: RxNorm or NDC **and** the medication's text; a source MedicationRequest is filed as a MedicationStatement
+  (reconciliation). Immunizations are historical (`primarySource` false) and need CVX.
+- Vitals: eCW's LOINC list only, UCUM on blood-pressure components, **no encounter** — eCW files the reading on the
+  appointment whose time matches `effectiveDateTime`, else under Vitals Notes.
+- Notes: needs the destination's *Note author* (eCW practitioner id) and an existing encounter of the patient. The text
+  goes as an HL7 v2 message in the attachment (`text/hl7v2`), built like eCW's sample: ORU^R01 from PROG, OBR with the
+  encounter id and a section, OBX TX with the text (HL7-escaped, line breaks as `\.br\`). Deterministic per note.
+- Most creates land in eCW's **App Data** tab for a user to reconcile; notes go straight into the Progress Note.
+- UNCONFIRMED until a contracted practice runs it: the note's section names per note type, whether PID-3 takes the
+  eCW FHIR patient id, the exact scope strings eCW provisions, and the success HTTP status.
+
+### 13.6 athenahealth specifics (from athena's API reference)
+
+- `AthenaOneEhrWriteChannel` sends to `https://{host}/v1/{practiceid}/…` with the connection's own token; the write
+  connection requests `athena/service/Athenanet.MDP.*` alongside its FHIR scopes
+  (`EhrWriteVendorProfile.ProprietaryApiScope`, which the granted-scope check also uses). Search by identifier and
+  QuestionnaireResponse stay on FHIR. Patient ids are athena's FHIR ids `a-{practice}.E-{id}` (the number after `E-`).
+- Profiles shape an `AthenaOneWriteRequest` description (method, path, form / JSON fields, lookups, id field); the
+  channel adds `departmentid` (the destination's *Department id*, else the patient's primary department), resolves
+  lookups, sends once, and reads the new id. A 409 is already at target; a refusal is reported as `athena-{status}`
+  without athena's error text, which can echo what was sent.
+- Allergies (`PUT chart/{id}/allergies`, an upsert) and medications (`POST chart/{id}/medications`) need athena's own
+  allergen / medication id, looked up by **exact** name (`/reference/allergies`, `/reference/medications`); no exact
+  single match refuses the record before anything is sent (`athena-allergen-not-found`, retried next run).
+- Problems need SNOMED (`missing-snomed-code` otherwise); lab results go one analyte per document with LOINC, value,
+  units, range and abnormal flag; immunizations need a numeric CVX and a full date; notes go as a clinical document
+  (`documentdata`) in the subclass that fits the LOINC type; new patients need the destination's *Department id*.
+- Encounters for vitals come from athenaOne (`chart/{id}/encounters`): OPEN and REVIEW count as open.
+- UNCONFIRMED until a preview run: the vitals element format and `VITALS.*` ids (inferred from GET responses — check
+  `GET /chart/configuration/vitals` first), whether a clinical document is accepted with text only, duplicate
+  behaviour of problems / medications / vaccines / documents, and that one token serves FHIR and `/v1`.
+
+### 13.7 To go live
+
+**athenahealth (preview practice 195900 is available now):** give the write connection's app the athenaOne API
+(2-legged, `athena/service/Athenanet.MDP.*`), dry run a workflow, check the UNCONFIRMED items above against preview,
+then tick *Vendor write APIs activated* on the connection and run one live write per type.
+
+**eClinicalWorks:** contract the Create APIs (interop@eclinicalworks.com), have a practice activate the app (Admin >
+Product Activation > FHIR APIs > Backend/Bulk Access Apps), add the write scopes eCW provisions to the connection, dry
+run, then tick *Vendor write APIs activated* and run one live write per type.
+
+## 14. Phase 7 — Generic FHIR target, test runs, and Epic's remaining create APIs
+
+**Built 2026-10-07 on `feature/ehr-write-back-multi-vendor`.** Write-back is no longer only EHR to EHR: the source is
+any of Epic, eClinicalWorks, athenahealth or a CSV / SQL Table data set (section 10), and the target is any of Epic,
+eClinicalWorks, athenahealth or a Generic FHIR R4 server. A Generic FHIR server can also stand in for one of the three
+EHRs, so every write can be rehearsed end to end before it is pointed at the real one.
+
+### 14.1 Generic FHIR R4 as a target
+
+- `EhrWriteCapabilities.GenericFhir`: `EhrWriteCapabilities.GenericFhirResourceTypes` as plain creates, all live, no
+  contract switch, no encounter; Patient is opt-in like everywhere else. Patients resolve by identifier, then
+  `Patient/$match` where the server has it (HAPI only with MDM on; otherwise `patient-match-failed`).
+- `GenericFhirWriteProfile` (one per type) copies the record and drops what belongs to the source server: `id`,
+  `meta` (declared profiles kept), the narrative, and the record's encounter. Every other literal reference (a
+  practitioner, an organisation, a medication) loses its `reference` and keeps its `display` / `identifier`, or gets
+  the display "{Type} reference not transferred": a source id names nothing on another server, and a server that
+  checks references would refuse the whole record. Contained (`#`) references stay. The patient is bound to the
+  server's own.
+- A Generic FHIR connection gets an **Access** field (Read / Write / Read & Write) on its form; Write makes it a
+  write-back target. It has no authentication (anonymous, as the Generic FHIR source already was). *Since
+  `7424a2a7` the Access field is gone from the source form; a FHIR server write connection is created under
+  Destination Connections → New → FHIR test server (doc 21, section 5); the FHIR server destination tile was removed
+in `f84029f3`, and saved plain FHIR server nodes still run.*
+
+### 14.2 Test runs ("Test as")
+
+`dest_testAsVendor` = `Epic`, `Healow` or `Athenahealth` on an EHR Write-Back destination whose connection is Generic
+FHIR (`EhrWriteCapabilities.TestServerType`; the executor and `ConfigurationService` refuse it on any other, so a test
+run can never reach a real EHR). The executor builds the TESTED vendor's channel over the test server's connection,
+and the writer runs exactly the vendor's path — capabilities, variants, profiles, encounter rules, ledger, write cap,
+report — with five differences:
+
+| | Real write | Test run |
+|---|---|---|
+| Contract switch (eCW, athena) | must be on | counts as on (nothing reaches the vendor) |
+| Dry-run-only types (eCW, athena QuestionnaireResponse) | never sent | sent, so they are rehearsed before being allowed live |
+| Patients | ledger, identifier, then `$match` (Epic) or the MPI (eCW, athena) | ledger and identifier only; not found = not on the test server, created when the destination opts in |
+| Ledger key | the EHR's base URL | the test server's base URL **and** the tested vendor (`EhrWriteKeys.TestTargetKey`), so testing as Epic and then as athena on one server both write, and no test row is ever mistaken for a production write |
+| Report | `TargetVendor`, scope checked | `TestRun: true`, `ScopeStatus: test-server` |
+
+What reaches the test server, per vendor:
+
+- **Epic** — the same `POST /{type}` Epic gets.
+- **eClinicalWorks** — the same transaction Bundle (`EcwEhrWriteChannel`); HAPI answers `201 Created` with
+  `Patient/1/_history/1`, which the channel already reads. The telephone holder encounter is created there too.
+- **athenahealth** — athenaOne is REST, not FHIR, so its calls go through `AthenaOneTestServer`, an in-process
+  stand-in the athenaOne channel cannot tell apart: `POST patients` registers a FHIR Patient from the form fields; every
+  other write is stored as a FHIR `Basic` (code system `urn:fhirbridge:athenaone-test`, code = the API, e.g.
+  `problems`; one extension per form field, exactly as sent; subject = the patient); `GET patients/{id}` reads the test
+  server's patient (department `1`); `GET chart/{id}/encounters` maps the test server's Encounters to athena's
+  statuses; allergen and medication lookups always find the name asked for. Practice id `1`. Patients are the test
+  server's own, by their FHIR id: numeric like athenaOne's, or not (a server that also holds records copied with their
+  source ids).
+
+**What a test run does not prove:** the vendor's own validation (Epic's open-encounter and duplicate rules, eCW's
+status "1", athena's field rules), organisation-specific codes (Epic flowsheet ids), and athena's reference lists. One
+real sandbox or preview write per vendor is still the last step.
+
+### 14.3 Epic's remaining create APIs
+
+Built from each spec (`fhir.epic.com/Specifications/Api?id=<id>`, read 2026-10-07; profiles in
+`EpicOptInWriteProfiles.cs`). Each is a **variant the destination must enable** (`EhrWriteCapability.RequiresVariantOptIn`,
+`dest_enabledVariants`) on top of selecting the type, so no existing destination starts sending something new; until
+enabled a record is reported `variant-not-enabled`. Epic's vitals and clinical-note profiles now name their variants,
+because Observation and DocumentReference have several APIs each.
+
+| API (id) | Variant | Recognised by | Notes |
+|---|---|---|---|
+| Lines, Drains, Airways (962) | `lines-drains-airways` | category `LDA` | open encounter only; final; code as given (a flowsheet id is organisation-specific); the sequelTo parent is a source id and is dropped; note ≤ 254 |
+| DICOM Image Characteristics (11224) | `dicom-image-characteristics` | category `imaging` + LOINC 96914-7 | `focus` = the imaging DiagnosticReport **in the target**; components 96912-1 / 96913-9 only |
+| Radiotherapy Volume (11040) | `radiotherapy-volume` | CodeX profile or a `urn:dicom:uid` identifier | ≥ 2 identifiers with `use`; `meta.lastUpdated` from the source (never "now": the content hash must not change) |
+| External Radiotherapy Summary, Procedure (11048) / ServiceRequest (11044) | `external-radiotherapy-summary` | SNOMED 1287742003 + a course code | ≥ 2 identifiers, profiles, lastUpdated; mCODE / CodeX extensions kept unless they hold a reference (dose-to-volume names source BodyStructures); plan, Condition, location and requester references dropped; ServiceRequest intent original-order / filler-order |
+| Document Information (10050) | `document-information` | category `document-information` | identifier, type, patient, date, description, service period; scanning user dropped; Epic accepts it only inside the Hyperdrive scan workflow |
+| Non-Patient Document Information (10303) | `non-patient-document` | category `nonpatient-document-information` | no patient; `context.related` = a Group / Account / Communication / Organization / Contract **in the target** |
+| Community Resource Communication (10090) | `community-resource-message` | `basedOn` a ServiceRequest | in-progress only; basedOn, sender, recipient **in the target**; patient and encounter bound; text or attachment payload |
+| Patient-Entered Questionnaires (10023) | `patient-entered-questionnaire` | — | no patient: `subject` is the assignment identifier (appointment or questionnaire series); questionnaire and linkIds are **Epic ids**; integers sent as decimals; 59159 = an answer failed validation |
+
+The four marked **in the target** carry ids only the target EHR knows, so their capability has
+`RequiresTargetReferences` and the writer takes them **only from a CSV / SQL Table source** (whose template is written
+for the target); from any other source they are `target-references-unmappable`. Two have `RequiresPatient` false
+(non-patient documents, questionnaires): the writer resolves and binds no patient.
+
+Not built: CriteriaReview.Create (1009) and ReviewCollection.Create (1026) — Epic proprietary utilization-management
+APIs (`IsFhir: false` in Epic's catalog), with no public spec, which a FHIR test server could not take either.
+
+### 14.4 To test a write before going live
+
+1. Start a FHIR server (docker-compose `hapi-fhir`) and add it under Destination Connections → **New** → **FHIR
+   test server**.
+2. Add the EHR's destination tile (Epic, eClinicalWorks or athenahealth), pick the server under **Connection** →
+   **Test servers**, select the types (and tick the extra Epic APIs to try), run.
+3. Read the test-run report, then the server: the records (or, for athena, the `Basic` call records).
+4. Pick the real write connection under **Connection**. With Dry run turned on in System Settings, tick **Dry run**
+   under Options and run once, then untick it. The first live run asks "Write into {EHR} now?".
+
+## 15. Sources
 
 - Sandbox CapabilityStatement: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/metadata
 - Sandbox SMART configuration: https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/.well-known/smart-configuration
 - Interface catalog: https://open.epic.com/Interface/FHIR
 - API specs (page / raw data): `https://fhir.epic.com/Specifications?api=<id>` / `https://fhir.epic.com/Specifications/Api?id=<id>`
-  for ids 945, 949, 1046, 963, 930, 10423, 962, 974, 10050, 10051, 10303, 10023, 10090, 878
+  for ids 945, 949, 1046, 963, 930, 10423, 962, 974, 10050, 10051, 10303, 10023, 10090, 878, and (Phase 7) 11040,
+  11044, 11048, 11224
 - OAuth 2.0 documentation: https://fhir.epic.com/Documentation?docId=oauth2
+
+## 16. Set-up after the source / destination consistency work (2026-10-09)
+
+Full detail in [21](21-source-destination-consistency.md). In short, for this writer:
+
+| Before | Now |
+|---|---|
+| Access (Read / Write / Read & Write) on a source connection form | Gone from source forms; write connections are made under Destination Connections; `?access=read\|write` lists each side |
+| Athena department only on the node (`dest_targetDepartmentId`) | Also on the write connection (`SourceConnection.DepartmentId`); the node's value wins |
+| One "EHR Write-Back" tile | An EHR heading with Epic, eClinicalWorks and athenahealth tiles (the FHIR server tile was removed in `f84029f3`); saved nodes keep `dest-ehr-writeback` |
+| Dry run checkbox + Test as dropdown | One Connection dropdown: an EHR connection is live, a test server is a test run; Dry run is a checkbox under Options when the System Setting is on (`dest_dryRun`, `dest_testAsVendor`) |
+| Destination chose any type | Source declares its types; the destination picks a subset (refused on save otherwise); types the EHR cannot take are greyed with the reason, and a type that only needs an option stays tickable with a note and holds Options' Next until that option is on |
+| Test-run report read "Live run to …" | The report dialog is titled "Test-run report" with a "Test run" badge (dry run: "Dry-run report" / "Dry run"; live: "Write-back report" / "Live"); the Copy report text says "Test run" |
+
+The writer's rules (profiles, patient resolution, ledger, report reasons) did not change in this work. The executor
+gained the department fallback, and the stored run report now carries `TestRun`.

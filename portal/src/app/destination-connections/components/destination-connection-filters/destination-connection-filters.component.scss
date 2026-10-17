@@ -1,0 +1,6 @@
+@use '../../../connections/connection-filter-select' as *;
+
+// The selects sit directly in the toolbar's filter row.
+:host {
+  display: contents;
+}

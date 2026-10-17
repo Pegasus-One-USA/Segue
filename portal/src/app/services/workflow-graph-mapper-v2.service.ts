@@ -296,6 +296,14 @@ export class WorkflowGraphMapperServiceV2 {
     return source.fields['canvasNodeId'] || source.id;
   }
 
+  /** The displayName a canvas node is saved under (nodeToRequest) — what the server's save-time messages name it by,
+   *  so the builder's own pre-checks can name it the same way. */
+  savedDisplayName(node: CanvasNode): string {
+    const catalog = this.workflowApi.catalog();
+    const transformId = this.catalogSupportedTransformId(this.transformIdForNode(node), node, catalog);
+    return this.displayNameFor(node, this.catalogForTransform(transformId, catalog));
+  }
+
   private nodeToRequest(node: CanvasNode, catalog: WorkflowCatalogItem[]): WorkflowNodeRequest {
     const transformId = this.catalogSupportedTransformId(this.transformIdForNode(node), node, catalog);
     const item = this.catalogForTransform(transformId, catalog);
@@ -373,7 +381,9 @@ export class WorkflowGraphMapperServiceV2 {
       // so matching SOURCES by transformId alone would mislabel those as Epic. __vendorId (see nodeToRequest)
       // is the reliable source for a node saved since it was added; guessVendorId's name-match is the
       // best-effort fallback for anything older.
-      const vendorId = config['__vendorId'] ?? this.guessVendorId(name) ?? transformId;
+      // A CSV / SQL source shows as the tile its tab_kind names (a node saved before the split carries 'tabular').
+      const tabularId = config['tab_kind'] ? (config['tab_kind'] === 'csv' ? 'tabular-csv' : 'tabular-sql') : undefined;
+      const vendorId = tabularId ?? config['__vendorId'] ?? this.guessVendorId(name) ?? transformId;
       const source = SOURCES.find(candidate => candidate.id === vendorId);
       return {
         id: node.id,

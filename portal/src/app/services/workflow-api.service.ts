@@ -106,6 +106,9 @@ export interface WorkflowDefinitionDto {
   isPubliclyLaunchable?: boolean;
   nodes: WorkflowNodeDto[];
   edges: WorkflowEdgeDto[];
+  /** When the definition was first saved, and last re-saved (null until a second save). Sent by GET /workflows/{id}. */
+  createdOnUtc?: string | null;
+  updatedOnUtc?: string | null;
 }
 
 export interface WorkflowValidationResult {
@@ -208,6 +211,8 @@ export interface CreateSourceConnectionRequest {
   retrieval?: SourceRetrievalConfigurationRequest | null;
   /** Read | Write | ReadWrite. Null keeps the saved value (and means Read for a new connection). */
   access?: 'Read' | 'Write' | 'ReadWrite' | null;
+  /** Null keeps the saved value (see CreateSourceConnectionRequest.VendorWriteApisActivated). */
+  vendorWriteApisActivated?: boolean | null;
 }
 
 export interface CreateDestinationConfigurationRequest {
@@ -361,6 +366,9 @@ export interface WorkflowSummary {
   destinationTypes?: string[] | null;
   /** Every FHIR resource type this workflow's source nodes name in their stored configuration. */
   resourceTypes?: string[] | null;
+  /** The EHR vendor codes (Epic, Healow, Athenahealth, GenericFhir) this workflow's EHR Write-Back destinations write
+   *  into for real; empty when every write-back is a test or dry run, or there is none. */
+  liveEhrWriteTargets?: string[] | null;
 }
 
 /** Server-side page of /workflows/summary — items is just this page's rows, totalCount is the full matching-row

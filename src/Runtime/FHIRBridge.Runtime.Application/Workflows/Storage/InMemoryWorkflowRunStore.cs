@@ -37,25 +37,86 @@ public sealed class InMemoryWorkflowRunStore : IWorkflowRunStore
         return Task.FromResult(stale.Count);
     }
 
-    public Task<int> FailInterruptedRunsAsync(
-        WorkflowRunHost host,
-        DateTimeOffset startedBeforeUtc,
+    public Task<WorkflowLeaseRenewal> RenewLeasesAsync(
+        IReadOnlyCollection<Guid> runIds,
+        string owner,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken)
+    {
+        var renewed = new List<Guid>();
+        var cancelRequested = new List<Guid>();
+        var closed = new List<Guid>();
+        foreach (var id in runIds)
+        {
+            if (!_runs.TryGetValue(id, out var run))
+            {
+                continue;
+            }
+
+            if (run.Status == WorkflowRunStatus.Running)
+            {
+                run.HoldLease(owner, expiresAt);
+                renewed.Add(id);
+                if (run.CancellationRequestedAt is not null)
+                {
+                    cancelRequested.Add(id);
+                }
+            }
+            else if (WorkflowRunStatuses.IsTerminal(run.Status))
+            {
+                closed.Add(id);
+            }
+        }
+
+        return Task.FromResult(new WorkflowLeaseRenewal(renewed, cancelRequested, closed));
+    }
+
+    public Task<bool> CancelAbandonedAsync(
+        Guid workflowRunId,
+        DateTimeOffset now,
+        DateTimeOffset legacyStartedBefore,
         string reason,
         CancellationToken cancellationToken)
     {
-        var interrupted = _runs.Values
-            .Where(run => run.Status == WorkflowRunStatus.Running
-                && run.StartedAt < startedBeforeUtc
-                && WorkflowRunHosts.HostOf(run) == host)
-            .ToList();
-
-        var failedAt = DateTimeOffset.UtcNow;
-        foreach (var run in interrupted)
+        if (!_runs.TryGetValue(workflowRunId, out var run)
+            || run.Status != WorkflowRunStatus.Running
+            || !run.IsLeaseExpired(now, now - legacyStartedBefore))
         {
-            run.Fail(reason, failedAt);
+            return Task.FromResult(false);
         }
 
-        return Task.FromResult(interrupted.Count);
+        run.Cancel(reason, now);
+        return Task.FromResult(true);
+    }
+
+    public Task<int> FailExpiredRunsAsync(
+        DateTimeOffset now,
+        DateTimeOffset legacyStartedBefore,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var expired = _runs.Values
+            .Where(run => run.Status == WorkflowRunStatus.Running
+                && (run.LeaseExpiresAt is { } expires ? expires < now : run.StartedAt < legacyStartedBefore))
+            .ToList();
+
+        foreach (var run in expired)
+        {
+            run.Fail(reason, now);
+        }
+
+        return Task.FromResult(expired.Count);
+    }
+
+    public Task<bool> RequestCancellationAsync(Guid workflowRunId, DateTimeOffset requestedAt, CancellationToken cancellationToken)
+    {
+        if (!_runs.TryGetValue(workflowRunId, out var run) || run.Status != WorkflowRunStatus.Running)
+        {
+            return Task.FromResult(false);
+        }
+
+        run.RequestCancellation(requestedAt);
+        return Task.FromResult(true);
     }
 
     public Task<WorkflowRun?> FindValidatedAsync(

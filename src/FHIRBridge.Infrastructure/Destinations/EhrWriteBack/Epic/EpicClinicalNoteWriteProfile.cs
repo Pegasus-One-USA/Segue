@@ -23,6 +23,8 @@ public sealed class EpicClinicalNoteWriteProfile : IEhrWriteProfile
 
     public string ResourceType => "DocumentReference";
 
+    public string? Variant => FHIRBridge.Domain.Fhir.EhrWriteVariants.ClinicalNote;
+
     public EhrShapeResult Shape(JsonObject source, EhrWriteBackRunOptions options)
     {
         var status = String(source, "status");

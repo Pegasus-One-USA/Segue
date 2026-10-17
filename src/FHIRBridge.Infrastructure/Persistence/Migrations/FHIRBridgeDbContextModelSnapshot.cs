@@ -3261,6 +3261,10 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("DepartmentId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -3288,6 +3292,11 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("VendorWriteApisActivated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.HasKey("Id");
 
@@ -3399,6 +3408,51 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_TabularSourceFiles_CreatedOnUtc");
 
                     b.ToTable("TabularSourceFiles", (string)null);
+                });
+
+            modelBuilder.Entity("FHIRBridge.Domain.Entities.TabularSqlConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("CreatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Engine")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("KeyVaultName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SecretName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime>("UpdatedOnUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TabularSqlConnections_Name");
+
+                    b.ToTable("TabularSqlConnections", (string)null);
                 });
 
             modelBuilder.Entity("FHIRBridge.Domain.Entities.Tenant", b =>
@@ -5889,6 +5943,9 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<DateTimeOffset?>("CancellationRequestedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -5909,6 +5966,13 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.Property<string>("ErrorReferenceId")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LeaseOwner")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("RunGroupId")
                         .HasMaxLength(200)
@@ -5948,6 +6012,8 @@ namespace FHIRBridge.Infrastructure.Persistence.Migrations
                     b.HasIndex("CorrelationId");
 
                     b.HasIndex("StartedAt");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("WorkflowDefinitionId");
 

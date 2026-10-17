@@ -13,6 +13,34 @@ export const API_V1_BASE = `${environment.apiBase}/api/v1`;
 // NOT the same as the portal's own origin (e.g. http://localhost:4200).
 export const APP_ORIGIN = environment.apiBase || (typeof window !== 'undefined' ? window.location.origin : '');
 
+/** FHIRBridge's own JWKS endpoint for one source connection, as a path. */
+const HOSTED_JWKS_PATH = /^\/api\/v1\/source-connections\/[^/?#]+\/\.well-known\/jwks\.json$/i;
+
+/**
+ * FHIRBridge's hosted JWKS URL for a source connection whose signing key FHIRBridge generated or imported. Always
+ * absolute: the EHR fetches it from outside, and the JWKS URL field only accepts a full URL. Built from APP_ORIGIN,
+ * never environment.apiBase alone, which is empty in production.
+ */
+export function hostedJwksUrl(sourceConnectionId: string): string {
+  return `${APP_ORIGIN}/api/v1/source-connections/${sourceConnectionId}/.well-known/jwks.json`;
+}
+
+/**
+ * A JWKS URL as it should be shown and saved: a hosted JWKS path saved without its origin (forms that built it from
+ * an empty environment.apiBase did) gets this API's origin; any other value is returned trimmed and unchanged.
+ */
+export function absoluteJwksUrl(url: string | null | undefined): string {
+  const value = (url ?? '').trim();
+  return APP_ORIGIN && HOSTED_JWKS_PATH.test(value) ? `${APP_ORIGIN}${value}` : value;
+}
+
+/** True for FHIRBridge's own hosted JWKS URL for any source connection, with this API's origin or without one. */
+export function isHostedJwksUrl(url: string | null | undefined): boolean {
+  const value = (url ?? '').trim();
+  return HOSTED_JWKS_PATH.test(value)
+    || (!!APP_ORIGIN && value.startsWith(APP_ORIGIN) && HOSTED_JWKS_PATH.test(value.slice(APP_ORIGIN.length)));
+}
+
 /** Default values for the Epic app-registration fields an admin would otherwise have to type in by hand —
  *  always resolved from the actual deployment host, never a hardcoded placeholder domain. */
 export const OAUTH_DEFAULT_URLS = {
@@ -111,6 +139,8 @@ export const SOURCE_CONNECTIONS_ENDPOINTS = {
   // WorkflowEndpoints, not ConfigurationsController — the usage check has to walk every workflow's Source
   // nodes, which only the Runtime workflow store can answer.
   usage: `${API_V1_BASE}/workflows/source-connection-usage`,
+  // Same store, Destination side: the connections EHR write-back nodes and EHR Write-Back destinations write through.
+  writeUsage: `${API_V1_BASE}/workflows/ehr-write-connection-usage`,
   // SourceConnectionsController — not scoped to an existing connection id, since the wizard calls this before
   // a connection is saved.
   generateSigningKey: `${API_V1_BASE}/source-connections/generate-signing-key`,
@@ -196,6 +226,9 @@ export const TABULAR_SOURCE_ENDPOINTS = {
   files: `${API_V1_BASE}/tabular-sources/files`,
   file: (id: string) => `${API_V1_BASE}/tabular-sources/files/${encodeURIComponent(id)}`,
   sqlConnections: `${API_V1_BASE}/tabular-sources/sql-connections`,
+  sqlConnection: (id: string) => `${API_V1_BASE}/tabular-sources/sql-connections/${encodeURIComponent(id)}`,
+  sqlConnectionTest: (id: string) => `${API_V1_BASE}/tabular-sources/sql-connections/${encodeURIComponent(id)}/test`,
+  check: `${API_V1_BASE}/tabular-sources/check`,
   templatePresets: `${API_V1_BASE}/tabular-sources/template-presets`,
   preview: `${API_V1_BASE}/tabular-sources/preview`,
 } as const;

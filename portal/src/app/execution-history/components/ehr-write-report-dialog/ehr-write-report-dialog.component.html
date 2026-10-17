@@ -3,7 +3,7 @@
     <div class="ewr-title-row">
       <mat-icon class="ewr-title-icon" aria-hidden="true">{{ report.DryRun ? 'science' : 'cloud_done' }}</mat-icon>
       <h3 class="ewr-title" id="ewr-title">{{ title }}</h3>
-      <span class="ewr-mode" [class.ewr-mode--live]="!report.DryRun">{{ report.DryRun ? 'Dry run' : 'Live' }}</span>
+      <span class="ewr-mode" [class.ewr-mode--live]="!report.DryRun && !report.TestRun">{{ report.DryRun ? 'Dry run' : report.TestRun ? 'Test run' : 'Live' }}</span>
       @if (report.CloneMode) {
         <span class="ewr-mode ewr-mode--clone" title="Each patient was written as a new synthetic test patient">Clone mode</span>
       }

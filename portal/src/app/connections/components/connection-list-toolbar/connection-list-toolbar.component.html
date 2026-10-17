@@ -1,0 +1,37 @@
+<div class="filter-card">
+  <div class="filter-row">
+
+    <div class="search-wrap">
+      <svg class="search-ico" width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M13.5 13.5 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <input
+        type="search"
+        class="search-input"
+        [attr.data-testid]="testIdPrefix() + '-search'"
+        [placeholder]="placeholder()"
+        [value]="search()"
+        (input)="searchChange.emit($any($event.target).value)"
+      />
+    </div>
+
+    <ng-content />
+
+    <div class="filter-actions">
+      <button class="btn-reset" type="button" (click)="resetClicked.emit()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 2.636-6.364L3 8"></path>
+          <path d="M3 3v5h5"></path>
+        </svg>
+        Reset
+      </button>
+      @if (canCreate()) {
+        <button class="btn-add" type="button" [attr.data-testid]="testIdPrefix() + '-add'" (click)="createClicked.emit()">
+          New
+        </button>
+      }
+    </div>
+
+  </div>
+</div>

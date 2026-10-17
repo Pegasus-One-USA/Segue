@@ -397,11 +397,18 @@ public sealed class EfGovernanceQueryService : IGovernanceQueryService
                 query = query.Where(x => x.Severity != "WorkflowDebug");
             }
 
-            // Informational rows (routine sub-500 rejections captured via CaptureExpectedAsync) are findable
-            // by CorrelationId/ExecutionId/etc. but must stay out of the default Operations → Errors view —
-            // that's the whole point of not routing them through the heavy 5xx CaptureAsync path.
+            // Informational rows (routine sub-500 rejections and partial-success runs captured via
+            // CaptureExpectedAsync) stay out of the default Operations → Errors view — that's the whole point of not
+            // routing them through the heavy 5xx CaptureAsync path — but a search by one of their own ids finds them:
+            // a partial-success run links to its reference, which must not come back "No errors".
             // "Information" is excluded too, so this list and the export agree with the dashboard counts.
-            query = query.Where(x => x.Severity != "Informational" && x.Severity != "Information");
+            var searchedByOwnId = !string.IsNullOrWhiteSpace(search.ErrorReferenceId)
+                || !string.IsNullOrWhiteSpace(search.CorrelationId)
+                || !string.IsNullOrWhiteSpace(search.ExecutionId);
+            if (!searchedByOwnId)
+            {
+                query = query.Where(x => x.Severity != "Informational" && x.Severity != "Information");
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(search.Category))

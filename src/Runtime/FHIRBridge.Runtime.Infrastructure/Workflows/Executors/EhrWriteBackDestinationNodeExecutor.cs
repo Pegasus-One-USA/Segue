@@ -26,6 +26,11 @@ namespace FHIRBridge.Runtime.Infrastructure.Workflows.Executors;
 ///
 /// <para>The upstream source dependencies are passed to the base too, so the writer can fetch a record's patient from
 /// the source when the batch does not carry it: <c>Patient/$match</c> needs the full demographics.</para>
+///
+/// <para><b>Test runs.</b> <c>dest_testAsVendor</c> names the vendor a Generic FHIR connection stands in for. The
+/// channel is then the TESTED vendor's, built over the test server's connection, so the writer shapes and sends exactly
+/// what it would for the vendor; only the connection's own settings (its audience, its scopes) are the test
+/// server's.</para>
 /// </summary>
 public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecutor
 {
@@ -96,18 +101,34 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
         if (!connection.Access.AllowsWrite())
         {
             throw new InvalidOperationException(
-                $"The EHR connection '{connection.Name}' is read-only. Set its Access to Write or Read & Write.");
+                $"The EHR connection '{connection.Name}' is read-only. Choose a write connection listed under Destination Connections.");
         }
 
         var vendor = EhrWriteCapabilities.VendorProfile(connection.SourceSystemType)
             ?? throw new InvalidOperationException($"{connection.SourceSystemType} does not accept EHR write-back.");
 
+        var options = ReadOptions(node, connection.DepartmentId);
+        if (options.TestAsVendor is { } tested && connection.SourceSystemType != EhrWriteCapabilities.TestServerType)
+        {
+            // A test run must never reach a real EHR: only a Generic FHIR connection can be the test server.
+            throw new InvalidOperationException(
+                $"The EHR Write-Back node tests as {tested}, which needs a Generic FHIR connection as the test server; " +
+                $"'{connection.Name}' is a {connection.SourceSystemType} connection.");
+        }
+
+        var writeVendor = options.TestAsVendor ?? connection.SourceSystemType;
+
+        // What the run writes as: the tested vendor on a test run, so the rehearsal accepts only a connection that
+        // vendor would accept. The token request below stays the connection's own (see there).
+        var writeProfile = EhrWriteCapabilities.VendorProfile(writeVendor)
+            ?? throw new InvalidOperationException($"{writeVendor} does not accept EHR write-back.");
+
         // A null application type is a legacy Backend row.
         var applicationType = connection.ApplicationType ?? FHIRBridge.SharedKernel.Enums.ApplicationType.Backend;
-        if (!vendor.Capabilities.Any(capability => capability.AllowedApplicationTypes.Contains(applicationType)))
+        if (!writeProfile.Capabilities.Any(capability => capability.AllowedApplicationTypes.Contains(applicationType)))
         {
             throw new InvalidOperationException(
-                $"The EHR connection '{connection.Name}' uses the {applicationType} audience; {connection.SourceSystemType} write-back needs a Backend System connection.");
+                $"The EHR connection '{connection.Name}' uses the {applicationType} audience; {writeVendor} write-back needs a Backend System connection.");
         }
 
         var source = await _sourceConnectionResolver!.ResolveAsync(targetId, null, null, cancellationToken)
@@ -115,7 +136,10 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
 
         // The write connection is never searched the way a source is, so none of the source-side search settings
         // apply. A vendor that ignores requested scopes (Epic) gets no scope at all; the granted scope is checked
-        // instead.
+        // instead. The token comes from the connection's own authorization server, so its profile decides what is
+        // asked for: on a test run that is the test server, which grants no vendor scope (athena's
+        // athena/service/Athenanet.MDP.* included), and asking it for one could only fail the rehearsal for a reason
+        // the vendor itself would not have.
         source = source with
         {
             SearchParameters = null,
@@ -124,7 +148,7 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
             PatientSearchCriteria = null,
             SearchCriteriaByResourceType = null,
             OmitScopeParameter = !vendor.RequestsScopeOnTokenRequest,
-            Scopes = vendor.RequestsScopeOnTokenRequest ? source.Scopes : [],
+            Scopes = vendor.RequestsScopeOnTokenRequest ? EhrWriteChannels.WriteScopes(source.Scopes, vendor.ProprietaryApiScope) : [],
         };
 
         if (_sourceClientFactory!.Create(source.SourceType) is not IFhirWriteClient writeClient)
@@ -132,27 +156,34 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
             throw new InvalidOperationException($"The {source.SourceType} connector cannot send writes.");
         }
 
+        if (options.TestAsVendor is { } testedVendor)
+        {
+            writeClient = EhrWriteChannels.TestClient(testedVendor, writeClient, source);
+        }
+
         Guid? destinationId = Guid.TryParse(ReadStringConfiguration(node, "destinationId"), out var parsedDestinationId)
             && parsedDestinationId != Guid.Empty
                 ? parsedDestinationId
                 : null;
 
-        var channel = new FhirClientEhrWriteChannel(
+        var fhirChannel = new FhirClientEhrWriteChannel(
             writeClient,
             source,
             _accessTokenProvider,
             targetId,
-            connection.SourceSystemType,
+            writeVendor,
             destinationId,
-            ReadOptions(node));
+            options,
+            connection.VendorWriteApisActivated);
 
-        return writeContext with { EhrWriteChannel = channel };
+        return writeContext with { EhrWriteChannel = EhrWriteChannels.For(writeVendor, fhirChannel) };
     }
 
     /// <summary>The node's write-back settings. The portal stores every value as a string. Anything missing or
-    /// unparseable falls to the safe side: a dry run, no patient creation, no clone mode, the default cap,
-    /// preliminary notes. Clone mode is checked against its system setting by the writer.</summary>
-    private static EhrWriteBackRunOptions ReadOptions(WorkflowNode node)
+    /// unparseable falls to the safe side: a dry run, no patient creation, no clone mode, no holder encounters, the
+    /// default cap, preliminary notes. Clone mode is checked against its system setting by the writer. The department
+    /// is the node's own <c>dest_targetDepartmentId</c> when set, else the write connection's.</summary>
+    private static EhrWriteBackRunOptions ReadOptions(WorkflowNode node, string? connectionDepartmentId)
     {
         var dryRun = !bool.TryParse(ReadStringConfiguration(node, "dest_dryRun"), out var parsedDryRun) || parsedDryRun;
         var createPatient = bool.TryParse(ReadStringConfiguration(node, "dest_createPatientIfMissing"), out var parsedCreate) && parsedCreate;
@@ -168,7 +199,33 @@ public sealed class EhrWriteBackDestinationNodeExecutor : DestinationNodeExecuto
             .ToList();
 
         var cloneMode = bool.TryParse(ReadStringConfiguration(node, "dest_cloneMode"), out var parsedClone) && parsedClone;
+        var holderEncounter = bool.TryParse(ReadStringConfiguration(node, "dest_createHolderEncounter"), out var parsedHolder) && parsedHolder;
+        var providerId = ReadStringConfiguration(node, "dest_targetProviderId") is { } provider && !string.IsNullOrWhiteSpace(provider) ? provider.Trim() : null;
+        var departmentId = ReadStringConfiguration(node, "dest_targetDepartmentId") is { } department && !string.IsNullOrWhiteSpace(department)
+            ? department.Trim()
+            : string.IsNullOrWhiteSpace(connectionDepartmentId) ? null : connectionDepartmentId.Trim();
+        var variants = (ReadStringConfiguration(node, "dest_enabledVariants") ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
-        return new EhrWriteBackRunOptions(dryRun, createPatient, maxWrites, docStatus, resources, cloneMode);
+        return new EhrWriteBackRunOptions(
+            dryRun, createPatient, maxWrites, docStatus, resources, cloneMode, holderEncounter, providerId, departmentId,
+            ReadTestAsVendor(node), variants);
+    }
+
+    /// <summary>The vendor a test run stands in for, or null for a real write. A value that names no testable vendor
+    /// fails the run rather than writing for real.</summary>
+    private static SourceSystemType? ReadTestAsVendor(WorkflowNode node)
+    {
+        var raw = ReadStringConfiguration(node, "dest_testAsVendor");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        return EhrWriteCapabilities.TryParseVendor(raw, out var vendor) && EhrWriteCapabilities.TestableVendors.Contains(vendor)
+            ? vendor
+            : throw new InvalidOperationException($"The EHR Write-Back node tests as '{raw}', which is not a vendor that can be tested.");
     }
 }

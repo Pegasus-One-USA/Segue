@@ -60,6 +60,25 @@ public sealed class FhirWriteClientTests
         FhirSourceConnectorBase.ParseLocation(uri, "Observation").Should().Be((id, version));
     }
 
+    // PR #244 review: athenaOne puts the patient's chart id in the path, so a logged raw-request URL has its ids
+    // replaced, not only its query dropped.
+    [Theory]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/chart/12345/problems", "https://api.platform.athenahealth.com/v1/{id}/chart/{patientid}/problems")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/patients/12345", "https://api.platform.athenahealth.com/v1/{id}/patients/{patientid}")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/patients/abc/documents/labresult", "https://api.platform.athenahealth.com/v1/{id}/patients/{patientid}/documents/labresult")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/chart/12345/encounters?departmentid=1&showallstatuses=true", "https://api.platform.athenahealth.com/v1/{id}/chart/{patientid}/encounters?[redacted]")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/chart/encounter/678/vitals", "https://api.platform.athenahealth.com/v1/{id}/chart/encounter/{encounterid}/vitals")]
+    [InlineData("https://api.platform.athenahealth.com/v1/195900/reference/allergies?searchvalue=Penicillin", "https://api.platform.athenahealth.com/v1/{id}/reference/allergies?[redacted]")]
+    [InlineData("https://fhir.example.com/R4/Patient/eXyz-1.a", "https://fhir.example.com/R4/Patient/{id}")]
+    [InlineData("https://fhir.example.com/R4/Patient/$match", "https://fhir.example.com/R4/Patient/$match")]
+    [InlineData("https://host/api/FHIR/R4/Observation", "https://host/api/FHIR/R4/Observation")]
+    [InlineData("https://host/api/FHIR/R4/Observation/eAbc123", "https://host/api/FHIR/R4/Observation/{id}")]
+    [InlineData("https://host/api/FHIR/STU3/Observation", "https://host/api/FHIR/STU3/Observation")]
+    [InlineData("https://host/api/FHIR/DSTU2/Patient/eAbc", "https://host/api/FHIR/DSTU2/Patient/{id}")]
+    [InlineData("https://host/fhir/R4B/Patient/1", "https://host/fhir/R4B/Patient/{id}")]
+    public void A_logged_raw_request_url_carries_no_ids(string url, string logged) =>
+        FhirSourceConnectorBase.LoggedRequestUrl(url).Should().Be(logged);
+
     [Theory]
     [InlineData(HttpStatusCode.InternalServerError)]
     [InlineData(HttpStatusCode.BadGateway)]
@@ -228,6 +247,83 @@ public sealed class FhirWriteClientTests
         handler.Requests[0].Uri.Should().Be("https://fhir.example.com/R4/Patient?identifier=urn%3Aoid%3A1.2.3%7CMRN%201");
     }
 
+    // ---- PR #240 review ----
+
+    private static HttpResponseMessage Bundle(string ids, string? next) => new(HttpStatusCode.OK)
+    {
+        Content = new StringContent(
+            "{\"resourceType\":\"Bundle\",\"link\":[" + (next is null ? "" : "{\"relation\":\"next\",\"url\":\"" + next + "\"}") + "],\"entry\":["
+            + string.Join(",", ids.Split(',').Select(id => "{\"resource\":{\"resourceType\":\"Encounter\",\"id\":\"" + id + "\"}}")) + "]}"),
+    };
+
+    [Fact]
+    public async Task A_patient_search_follows_next_links_so_a_later_open_encounter_is_found()
+    {
+        var handler = new ScriptedHandler(request => request.RequestUri!.Query.Contains("page=2", StringComparison.Ordinal)
+            ? Bundle("e3", next: null)
+            : Bundle("e1,e2", next: "https://fhir.example.com/R4/Encounter?patient=p1&page=2"));
+
+        var page = await Client(handler).SearchForPatientAsync("Encounter", "p1", Source(), CancellationToken.None);
+
+        page.Succeeded.Should().BeTrue();
+        page.Resources.Should().HaveCount(3);
+        handler.Requests.Should().HaveCount(2);
+        handler.Requests[0].Uri.Should().Be("https://fhir.example.com/R4/Encounter?patient=p1&_count=100");
+    }
+
+    [Theory]
+    [InlineData("https://elsewhere.example.org/R4/Encounter?page=2")]
+    [InlineData("https://fhir.example.com/R4/Encounter?patient=p1&_count=100")]
+    public async Task A_next_link_to_another_host_or_back_to_the_same_page_is_not_followed(string next)
+    {
+        var handler = new ScriptedHandler(_ => Bundle("e1", next));
+
+        var page = await Client(handler).SearchForPatientAsync("Encounter", "p1", Source(), CancellationToken.None);
+
+        page.Resources.Should().ContainSingle();
+        handler.Requests.Should().ContainSingle(because: "the token is never sent to another host, and a page that repeats ends paging");
+    }
+
+    [Fact]
+    public async Task A_create_cancelled_before_it_is_sent_is_a_refusal_not_an_unknown_outcome()
+    {
+        var handler = new ScriptedHandler(_ => new HttpResponseMessage(HttpStatusCode.Created));
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new CancellationAwareTokenProvider(), Options.Create(new EpicFhirClientOptions
+        {
+            MinimumMillisecondsBetweenRequestsPerSource = 0,
+        }));
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        var result = await client.CreateAsync("AllergyIntolerance", "{}", false, Source(), cancelled.Token);
+
+        result.Kind.Should().Be(FhirWriteOutcomeKind.Rejected);
+        result.Issues.Single().DetailCodes.Should().Equal(FHIRBridge.Application.Abstractions.Destinations.EhrWriteOutcomeCodes.CancelledBeforeSend);
+        handler.Requests.Should().BeEmpty();
+    }
+
+    // PR #244 review, round 2: the eCW and athenaOne channels write through SendAsync, which must stop the same way.
+    [Fact]
+    public async Task A_raw_write_cancelled_before_it_is_sent_is_a_refusal_not_an_unknown_outcome_or_a_throw()
+    {
+        var handler = new ScriptedHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new EpicFhirSourceClient(new HttpClient(handler), new CancellationAwareTokenProvider(), Options.Create(new EpicFhirClientOptions
+        {
+            MinimumMillisecondsBetweenRequestsPerSource = 0,
+        }));
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        var result = await client.SendAsync(
+            new FhirRawWriteRequest("POST", "https://api.example.com/v1/1/chart/12/problems", Idempotent: false, AddSourceQueryParameters: false),
+            Source(),
+            cancelled.Token);
+
+        result.Kind.Should().Be(FhirWriteOutcomeKind.Rejected);
+        result.Issues.Single().DetailCodes.Should().Equal(FHIRBridge.Application.Abstractions.Destinations.EhrWriteOutcomeCodes.CancelledBeforeSend);
+        handler.Requests.Should().BeEmpty();
+    }
+
     private sealed record CapturedRequest(HttpMethod Method, string Uri, string? Prefer, string? ContentType, string? Body);
 
     private sealed class ScriptedHandler : HttpMessageHandler
@@ -258,5 +354,14 @@ public sealed class FhirWriteClientTests
     {
         public Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken) =>
             Task.FromResult("token");
+    }
+
+    private sealed class CancellationAwareTokenProvider : IFhirAccessTokenProvider
+    {
+        public Task<string> GetAccessTokenAsync(FhirSourceConfiguration source, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult("token");
+        }
     }
 }

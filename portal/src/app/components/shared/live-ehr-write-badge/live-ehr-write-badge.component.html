@@ -1,0 +1,9 @@
+@if (ehr()) {
+  <span
+    class="badge badge-suspended"
+    data-testid="live-ehr-write-badge"
+    [title]="'Every run of this workflow writes records into ' + ehr() + '.'"
+  >
+    Writes to {{ ehr() }}
+  </span>
+}

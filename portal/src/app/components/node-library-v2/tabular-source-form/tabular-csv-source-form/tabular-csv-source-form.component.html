@@ -1,0 +1,60 @@
+<div class="tab-form" [formGroup]="form">
+  <!-- Step 1: the files the rows come from -->
+  <app-tabular-csv-files [files]="files()" (uploaded)="onFileUploaded($event)" />
+
+  <div class="tab-field">
+    <label class="tab-label" for="tab-name">Name</label>
+    <input id="tab-name" class="tab-input" type="text" formControlName="name" (input)="onNameInput()" placeholder="Filled in from the first file" />
+  </div>
+
+  <!-- Step 2: resource types to read -->
+  <div class="tab-field">
+    <span class="tab-label">Resource types to read <span class="tab-req">*</span></span>
+    <div class="tab-checks">
+      @for (type of types(); track type) {
+        <label>
+          <input type="checkbox" [checked]="selectedTypes().includes(type)" (change)="toggleType(type, $any($event.target).checked)" />
+          {{ type }}
+        </label>
+      }
+    </div>
+    <p class="tab-hint">For EHR write-back, include Patient, and give every resource an id column.</p>
+  </div>
+
+  <!-- Step 3: one file, and one template, per type -->
+  @for (entry of entries(); track entry.resourceType; let i = $index) {
+    <app-tabular-stream-card
+      [entry]="entry"
+      [index]="i"
+      [kind]="kind()"
+      [files]="files()"
+      [check]="checkFor(i)"
+      (changed)="updateEntry(i, $event)"
+      (resetTemplate)="resetTemplate(i)" />
+  }
+
+  <div class="tab-field" [class.tab-field--error]="form.controls.maxRows.invalid">
+    <label class="tab-label" for="tab-max">Max rows per resource type per run</label>
+    <input id="tab-max" class="tab-input tab-narrow" type="text" inputmode="numeric" formControlName="maxRows" />
+  </div>
+
+  <div class="tab-actions">
+    <button type="button" class="tab-btn" (click)="check(false)" [disabled]="!!busy() || entries().length === 0">Check</button>
+    <button type="button" class="tab-btn tab-btn--ghost" (click)="check(true)" [disabled]="!!busy() || entries().length === 0">
+      Check and preview first rows
+    </button>
+    @if (busy()) { <span class="tab-hint">Working…</span> }
+    @if (isChecked() && result(); as r) {
+      <span [class]="r.allPassed ? 'tab-ok' : 'tab-warn'">
+        {{ r.allPassed ? 'Every resource type passed.' : 'Some resource types need fixing.' }}
+      </span>
+    }
+  </div>
+  <p class="tab-hint">Check makes sure each file has the columns its template reads. Saving needs a passed check.</p>
+
+  <app-tabular-dataset-identity [control]="form.controls.datasetKey" [open]="advancedOpen()" (edited)="onKeyEdited()" />
+
+  @if (error(); as message) {
+    <p class="tab-error-banner" role="alert">{{ message }}</p>
+  }
+</div>

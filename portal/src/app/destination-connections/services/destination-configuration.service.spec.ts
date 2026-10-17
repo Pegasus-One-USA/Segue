@@ -63,3 +63,40 @@ describe('DestinationConfigurationService.setDeIdentificationProfile', () => {
       .toContain('/deidentification-profile');
   });
 });
+
+/** The Destination Connections page merges every destination with the EHR write connections and pages them itself. */
+describe('DestinationConfigurationService.getAllPages', () => {
+  it('reads every page of the paged list, in order', () => {
+    TestBed.configureTestingModule({
+      providers: [DestinationConfigurationService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    const service = TestBed.inject(DestinationConfigurationService);
+    const http = TestBed.inject(HttpTestingController);
+    let received: unknown;
+
+    service.getAllPages(2).subscribe(list => (received = list));
+    const first = http.expectOne(r => r.url === DESTINATION_ENDPOINTS.paged && r.params.get('page') === '1');
+    expect(first.request.params.get('pageSize')).toBe('2');
+    first.flush({ items: [{ id: 'd1' }, { id: 'd2' }], totalCount: 3, page: 1, pageSize: 2 });
+    http.expectOne(r => r.url === DESTINATION_ENDPOINTS.paged && r.params.get('page') === '2')
+      .flush({ items: [{ id: 'd3' }], totalCount: 3, page: 2, pageSize: 2 });
+
+    expect(received).toEqual([{ id: 'd1' }, { id: 'd2' }, { id: 'd3' }]);
+    http.verify();
+  });
+
+  it('stops after one request when everything fits', () => {
+    TestBed.configureTestingModule({
+      providers: [DestinationConfigurationService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    const service = TestBed.inject(DestinationConfigurationService);
+    const http = TestBed.inject(HttpTestingController);
+    let received: unknown;
+
+    service.getAllPages().subscribe(list => (received = list));
+    http.expectOne(r => r.url === DESTINATION_ENDPOINTS.paged).flush({ items: [], totalCount: 0, page: 1, pageSize: 100 });
+
+    expect(received).toEqual([]);
+    http.verify();
+  });
+});
