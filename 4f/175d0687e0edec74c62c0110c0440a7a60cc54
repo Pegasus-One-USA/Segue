@@ -1,0 +1,54 @@
+tests/FHIRBridge.UnitTests/Tabular/TabularSqlServerReadOnlyCheckTests.cs
+  s_0121045dc9abeb::t_71ee955044a4cc 1-142
+src/FHIRBridge.Infrastructure/Tabular/TabularSqlGuard.cs
+  s_0121045dc9abeb::t_61d8a807daec7c 157-160,163-168,170-171,173,176-177
+  s_0121045dc9abeb::t_88a0eff19da890 136-143,145,147-156,162,169,172,174-175
+  s_0121045dc9abeb::t_cac9ede2f7ddd1 102-103,105
+  s_0121045dc9abeb::t_3f65e9dfe21451 300
+  s_0121045dc9abeb::t_46049192d4db83 210-211
+  s_0121045dc9abeb::t_8248250529ef6f 430-433
+  s_0121045dc9abeb::t_0b2fc108eee824 296-299,302,304,307-308,310-318,320-321
+  s_0121045dc9abeb::t_2182c27d21775c 284-295,301,303,305-306,309,319,322
+  s_0121045dc9abeb::t_c7ca802e864dd8 87-88
+  s_0121045dc9abeb::t_648f37d32195e7 241-263
+  s_0121045dc9abeb::t_c7b14a7bd570db 264-280
+  s_0121045dc9abeb::t_0356101cd33769 161
+  s_e2329fef2275f0::t_5f6155bf7ab8e6 323
+tests/FHIRBridge.UnitTests/Tabular/TabularSqlGuardBypassTests.cs
+  s_0121045dc9abeb::t_140c39cc3b6a3f 81-82
+  s_0121045dc9abeb::t_dc484fa22b040e 110-111
+  s_0121045dc9abeb::t_b0e5e1a6ebe8db 105-109,114-123,129-159
+  s_0121045dc9abeb::t_996c81682606ad 1-80,83-94,96-104,112-113,124-128,160-161
+  s_0121045dc9abeb::t_e92b28c1951ae6 95
+src/FHIRBridge.Infrastructure/Tabular/TabularRowReader.cs
+  s_0121045dc9abeb::t_0a0ff3db1ed6fb 329
+  s_0121045dc9abeb::t_378d557e3ae77c 55-57
+  s_0121045dc9abeb::t_3e7736f952d350 82
+  s_0121045dc9abeb::t_b65e81299fdc87 65-79,81,83-84,99-100,102-104
+  s_0121045dc9abeb::t_272f793a6f4ca2 113
+  s_0121045dc9abeb::t_48480fb11c028d 54,58-64,80,85-98,101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4f175d0687e0edec74c62c0110c0440a7a60cc54",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    },
+    "s_e2329fef2275f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26c43641-c0f6-45d6-bd2a-e22c57204249",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
