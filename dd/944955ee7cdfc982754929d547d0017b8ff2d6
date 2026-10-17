@@ -1,0 +1,55 @@
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/MappedEhrWriteBackDestinationWriter.cs
+  s_0121045dc9abeb::t_4773ed316f904e 478-485
+  s_0121045dc9abeb::t_cb480ea4015142 626-631,633,636-637
+  s_0121045dc9abeb::t_de7a95c613f641 667
+  s_0121045dc9abeb::t_7448010fd92c89 440-445
+  s_0121045dc9abeb::t_5d8e5353b4ffd7 486
+  s_0121045dc9abeb::t_3a68b111fe1dbc 638
+tests/FHIRBridge.UnitTests/EhrWriteBack/MappedEhrWriteBackDestinationWriterTests.cs
+  s_0121045dc9abeb::t_bb267f9476cb73 695
+  s_0121045dc9abeb::t_e898460e04eda0 675-694,696-729
+tests/FHIRBridge.UnitTests/EhrWriteBack/EpicOptInWriteProfileTests.cs
+  s_0121045dc9abeb::t_ed231d0b0b02aa 230
+  s_0121045dc9abeb::t_f389528dea6ae1 306-337,380-409
+  s_0121045dc9abeb::t_8c2bc9f113314c 338-379
+  s_0121045dc9abeb::t_cd45d68d703133 229,231-271
+  s_0121045dc9abeb::t_6f8e396e36b6dc 410
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/Epic/EpicOptInWriteProfiles.cs
+  s_0121045dc9abeb::t_3ff05b8af657df 955-974,980-1043,1045,1047-1055
+  s_0121045dc9abeb::t_3bfadcf97589c2 1044,1046
+  s_0121045dc9abeb::t_f6f0eecfebdafa 894-895
+  s_0121045dc9abeb::t_ede28dd1ea1329 975-979
+  s_0121045dc9abeb::t_314cf6963eb8ed 926-929,931
+tests/FHIRBridge.UnitTests/EhrWriteBack/HealowWriteBackTests.cs
+  s_0121045dc9abeb::t_cb330c0fda9a96 319-358
+  s_0121045dc9abeb::t_de4e21130d4c7c 408-409,411
+src/FHIRBridge.Infrastructure/Destinations/EhrWriteBack/GenericFhir/GenericFhirWriteProfile.cs
+  s_0121045dc9abeb::t_b18af7ad4012a6 235
+  s_0121045dc9abeb::t_121089374f9298 23-27
+  s_0121045dc9abeb::t_a6d777ff7b539a 112-114
+  s_0121045dc9abeb::t_85b26b3d3a768a 144-147,149-151,161-164,170-185,187-200,206-223,233-234
+  s_0121045dc9abeb::t_1fd6999089bd31 90-95,148
+  s_0121045dc9abeb::t_0f21c80eda7a79 248,250,255,258
+  s_0121045dc9abeb::t_03a137499d872d 22
+  s_0121045dc9abeb::t_78a69e427ca20e 152-160,165-169
+  s_0121045dc9abeb::t_d6c33d4531aee6 110-111,115-117
+  s_0121045dc9abeb::t_dc6b6184c5988e 61-65
+  s_0121045dc9abeb::t_fc46ed690049d7 186,201-205
+  s_0121045dc9abeb::t_8ed895814743b0 236-237
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dd944955ee7cdfc982754929d547d0017b8ff2d6",
+  "prompts": {},
+  "sessions": {
+    "s_0121045dc9abeb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "73818f51-5216-4b69-806d-0c342c55641b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Manzoor Ahmed Agharia <manzoor.ahmed.agharia@growthzone.com>"
+    }
+  }
+}
